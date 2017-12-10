@@ -118,16 +118,24 @@
 static inline int
 hpcrun_safe_enter(void)
 {
+#if 0
   thread_data_t *td;
+#endif
   int prev;
-
+#if 0
   if (! hpcrun_is_initialized() || ! hpcrun_td_avail()) {
     return 0;
   }
   td = hpcrun_get_thread_data();
   prev = td->inside_hpcrun;
   td->inside_hpcrun = 1;
-
+#else
+  if (! hpcrun_is_initialized()) {
+    return 0;
+  }
+  prev = inside_hpcrun;
+  inside_hpcrun = 1;
+#endif
   return (prev == 0);
 }
 
@@ -144,9 +152,12 @@ hpcrun_safe_enter(void)
 static inline int
 hpcrun_safe_enter_async(void *pc)
 {
+#if 0
   thread_data_t *td;
+#endif
   int prev;
 
+#if 0
   if (hpcrun_trampoline_interior(pc) || hpcrun_trampoline_at_entry(pc)
       || ! hpcrun_td_avail()) {
     return 0;
@@ -155,7 +166,12 @@ hpcrun_safe_enter_async(void *pc)
   td = hpcrun_get_thread_data();
   prev = td->inside_hpcrun;
   td->inside_hpcrun = 1;
-
+#else
+  if (hpcrun_trampoline_interior(pc) || hpcrun_trampoline_at_entry(pc))
+    return 0;
+  prev = inside_hpcrun;
+  inside_hpcrun = 1;
+#endif
   return (prev == 0);
 }
 
@@ -167,9 +183,13 @@ hpcrun_safe_enter_async(void *pc)
 static inline void
 hpcrun_safe_exit(void)
 {
+#if 0
   thread_data_t *td = hpcrun_get_thread_data();
 
   td->inside_hpcrun = 0;
+#else
+  inside_hpcrun = 0;
+#endif
 }
 
 

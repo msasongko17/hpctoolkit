@@ -82,11 +82,12 @@
 namespace Prof {
 
 
-LoadMap::LoadMap(uint sz)
+LoadMap::LoadMap(uint sz) : m_unUsedId(1024) //TODO: use max id instead of this hard coded 1024 value.
 {
   m_lm_byId.reserve(sz);
 
   LM* nullLM = new LM(Prof::Struct::Tree::UnknownLMNm);
+  nullLM->id(LoadMap::LMId_NULL);
   lm_insert(nullLM);
   DIAG_Assert(nullLM->id() == LoadMap::LMId_NULL, "LoadMap::LoadMap");
 }
@@ -94,9 +95,8 @@ LoadMap::LoadMap(uint sz)
 
 LoadMap::~LoadMap()
 {
-  for (LMId_t i = LoadMap::LMId_NULL; i <= size(); ++i) {
-    LoadMap::LM* lm = this->lm(i);
-    delete lm;
+  for(std::unordered_map<LMId_t, LM*>::iterator it = m_lm_byId.begin(); it != m_lm_byId.end(); it++){
+    delete it->second;
   }
   m_lm_byId.clear();
   m_lm_byName.clear();
@@ -106,9 +106,7 @@ LoadMap::~LoadMap()
 void
 LoadMap::lm_insert(LoadMap::LM* x)
 {
-  m_lm_byId.push_back(x);
-  x->id(m_lm_byId.size() - 1); // id is the last slot used
- 
+  m_lm_byId[x->id()] = (x);
   std::pair<LMSet_nm::iterator, bool> ret = m_lm_byName.insert(x);
   DIAG_Assert(ret.second, "LoadMap::lm_insert(): conflict inserting: "
 	      << x->toString());
@@ -134,7 +132,8 @@ LoadMap::merge(const LoadMap& y)
   
   LoadMap& x = *this;
 
-  for (LMId_t i = LoadMap::LMId_NULL; i <= y.size(); ++i) {
+  for (LMMap::const_iterator it=y.lm_begin_id(); it != y.lm_end_id(); ++it) {
+    LMId_t i = it->second->id();
     LoadMap::LM* y_lm = y.lm(i);
     
     LMSet_nm::iterator x_fnd = x.lm_find(y_lm->name());
@@ -144,6 +143,12 @@ LoadMap::merge(const LoadMap& y)
     if (!x_lm) {
       // Create x_lm for y_lm.
       x_lm = new LoadMap::LM(y_lm->name());
+      // Milind if y_lm id is unused in x_lm, give it that id
+      if(!has_id(y_lm->id())) {
+	 x_lm->set_id(y_lm->id());
+      } else {
+      	x_lm->set_id(get_unUsedId());
+      }
       lm_insert(x_lm);
     }
 
@@ -174,7 +179,9 @@ LoadMap::dump(std::ostream& os) const
   std::string pre = "  ";
 
   os << "{ Prof::LoadMap\n";
-  for (LMId_t i = LoadMap::LMId_NULL; i <= size(); ++i) {
+  for(LMMap::const_iterator it=lm_begin_id(); it != lm_end_id(); ++it) {
+  // Milind for (LMId_t i = LoadMap::LMId_NULL; i <= size(); ++i) {
+    LMId_t i = it->second->id();
     LoadMap::LM* lm = this->lm(i);
     os << pre << i << " : " << lm->toString() << std::endl;
   }

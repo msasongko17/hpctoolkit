@@ -428,6 +428,54 @@ hpcrun_cct_insert_addr(cct_node_t* node, cct_addr_t* frm)
   return new;
 }
 
+// Insert a synthetic function node.
+cct_node_t*
+hpcrun_insert_special_node(cct_node_t *root, const void *addr)
+{
+  ip_normalized_t tmp_ip = hpcrun_normalize_ip((void *) addr, NULL);
+  // plus 1 make sure lm_ip points to the correct callsite
+  cct_addr_t tmp = ADDR2(tmp_ip.lm_id, tmp_ip.lm_ip+1);
+  return hpcrun_cct_insert_addr(root, &tmp);
+}
+
+// Append two call paths: 
+// INPUT: path pointing to B()->A()->main()->NULL
+// INPUT: root pointing to N()->M()->main()->NULL
+// OUTPUT: a pointer pointing to B()->A()->main()->N()->M()->main()->NULL
+// The chain "root" will be modified in the process and 
+// The chain "path" will be unmodified in the process.
+cct_node_t*
+hpcrun_cct_insert_path_return_leaf(cct_node_t *path, cct_node_t *root)
+{
+  if (!path || !path->parent) return root;
+  root = hpcrun_cct_insert_path_return_leaf(path->parent, root);
+  return hpcrun_cct_insert_addr(root, &(path->addr));
+}
+
+// Same as hpcrun_cct_insert_path_return_leaf except no check for parent
+cct_node_t*
+hpcrun_cct_insert_path_return_leaf_mod(cct_node_t *path, cct_node_t *root)
+{
+  if (!path) return root;
+  root = hpcrun_cct_insert_path_return_leaf(path->parent, root);
+  return hpcrun_cct_insert_addr(root, &(path->addr));
+}
+
+// Append two call paths: 
+// INPUT: addr_array is an array of return addresses C=<im_id0, im_ip0>, B=<im_id1, im_ip1>, A=<im_id2, im_ip2>, <0, 0>
+// INPUT: root pointing to N()->M()->main()->NULL
+// OUTPUT: a pointer pointing to C->B->A->N()->M()->main()->NULL
+// The chain "root" will be modified in the process and 
+// The array "addr_array" will be unmodified in the process.
+cct_node_t*
+hpcrun_cct_insert_array_path_return_leaf(cct_addr_t *addr_array, cct_node_t *root)
+{
+  // need to check whether both fields are 0 is the termination condition
+  if (!addr_array || (addr_array->ip_norm.lm_id == 0 && addr_array->ip_norm.lm_ip == 0)) return root;
+  root = hpcrun_cct_insert_array_path_return_leaf(addr_array+1, root);
+  return hpcrun_cct_insert_addr(root, addr_array);
+}
+
 //
 // 2nd fundamental mutator: mark a node as "terminal". That is,
 //   it is the last node of a path

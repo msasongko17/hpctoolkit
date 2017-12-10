@@ -478,6 +478,48 @@ hpcrun_metric_std_set(int metric_id, metric_set_t* set,
   hpcrun_metric_std(metric_id, set, '=', value);
 }
 
+//
+// Given two metrics, metric_id1 and metric_id2, 
+// bump up metric_id2 to reach metric_id1 and return 
+// the difference between them multiplied by the period.
+//
+int
+hpcrun_get_weighted_metric_diff(int metric_id1, int metric_id2, 
+                                metric_set_t* set, cct_metric_data_t * diff, 
+                                cct_metric_data_t * diffWithPeriod)
+{
+    metric_desc_t* minfo1 = hpcrun_id2metric(metric_id1);
+    if (!minfo1) {
+        return -1;
+    }
+
+    metric_desc_t* minfo2 = hpcrun_id2metric(metric_id2);
+    if (!minfo2) {
+        return -1;
+    }
+
+    hpcrun_metricVal_t* loc1 = hpcrun_metric_set_loc(set, metric_id1);
+    hpcrun_metricVal_t* loc2 = hpcrun_metric_set_loc(set, metric_id2);
+
+    assert(minfo1->flags.fields.valFmt == minfo2->flags.fields.valFmt);
+    switch (minfo1->flags.fields.valFmt) {
+        case MetricFlags_ValFmt_Int:
+            assert(loc1->i >= loc2->i);
+            diffWithPeriod->i = (loc1->i - loc2->i) * minfo1->period;
+            diff->i = (loc1->i - loc2->i);
+            break;
+        case MetricFlags_ValFmt_Real:
+            assert(loc1->r >= loc2->r);
+            diff->r = (loc1->r - loc2->r);
+            diffWithPeriod->r = (loc1->r - loc2->r) * minfo1->period;
+            break;
+        default:
+            assert(false);
+    }
+    return 0;
+}
+
+
 // increasing the value of metric
 //
 void

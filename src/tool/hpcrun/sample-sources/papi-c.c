@@ -109,7 +109,10 @@
 /******************************************************************************
  * forward declarations 
  *****************************************************************************/
-static void papi_event_handler(int event_set, void *pc, long long ovec, void *context);
+static void papi_event_handler(int event_set, void *pc, void *data_addr,
+                   unsigned long cpu, unsigned long tid, unsigned long time,
+                   unsigned long weight, unsigned long src, unsigned long tran,
+                   long long ovec, void *context);
 static int  event_is_derived(int ev_code);
 static void event_fatal_error(int ev_code, int papi_ret);
 
@@ -855,8 +858,10 @@ event_fatal_error(int ev_code, int papi_ret)
 }
 
 static void
-papi_event_handler(int event_set, void *pc, long long ovec,
-                   void *context)
+papi_event_handler(int event_set, void *pc, void *data_addr,
+                   unsigned long cpu, unsigned long tid, unsigned long time,
+                   unsigned long weight, unsigned long src, unsigned long tran,
+                   long long ovec, void *context)
 {
   sample_source_t *self = &obj_name();
   long long values[MAX_EVENTS];
@@ -950,6 +955,7 @@ papi_event_handler(int event_set, void *pc, long long ovec,
 			(hpcrun_metricVal_t) {.i=metricIncrement},
 			0/*skipInner*/, 0/*isSync*/, NULL);
 
+    cct_node_t *node = sv.sample_node;
     blame_shift_apply(metric_id, sv.sample_node, 1 /*metricIncr*/);
   }
 

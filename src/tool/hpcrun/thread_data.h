@@ -161,6 +161,7 @@ typedef struct memory_data_s {
 
 
 typedef struct thread_data_t {
+  void *precise_pc;
   int idle; // indicate whether the thread is idle
 
   // ----------------------------------------
@@ -274,6 +275,7 @@ typedef struct thread_data_t {
 
 static const size_t HPCRUN_TraceBufferSz = HPCIO_RWBufferSz;
 
+extern __thread int inside_hpcrun;
 
 void hpcrun_init_pthread_key(void);
 void hpcrun_set_thread0_data(void);

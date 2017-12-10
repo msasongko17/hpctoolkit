@@ -248,6 +248,12 @@ typedef struct loadmap_notify_t {
 
 void hpcrun_loadmap_notify_register(loadmap_notify_t *n);
 
+// If set, all processes runnning on a node will get 
+// the same load module id. This is used in sharing call paths
+// between processes via shared memory.
+extern void hpcrun_set_ipc_load_map(bool);
+extern bool hpcrun_get_ipc_load_map();
+
 //***************************************************************************
 
 #endif // LOADMAP_H

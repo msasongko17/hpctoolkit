@@ -170,6 +170,11 @@ extern cct_node_t* hpcrun_cct_insert_node(cct_node_t* target, cct_node_t* src);
 
 extern void hpcrun_cct_insert_path(cct_node_t ** root, cct_node_t* path);
 
+extern cct_node_t* hpcrun_insert_special_node(cct_node_t *root, const void *addr);
+extern cct_node_t* hpcrun_cct_insert_path_return_leaf(cct_node_t *path, cct_node_t *root);
+extern cct_node_t* hpcrun_cct_insert_path_return_leaf_mod(cct_node_t *path, cct_node_t *root);
+extern cct_node_t* hpcrun_cct_insert_array_path_return_leaf(cct_addr_t *addr_array, cct_node_t *root);
+
 // special mutator to support tracing
 extern void hpcrun_cct_persistent_id_trace_mutate(cct_node_t* x);
 

@@ -68,6 +68,7 @@
 
 #include <vector>
 #include <set>
+#include <unordered_map>
 
 #include <algorithm>
 
@@ -160,6 +161,10 @@ public:
     void
     ddump() const;
 
+    void
+    set_id(LMId_t x)
+    { m_id = x; }
+
   private:
     void
     id(LMId_t x)
@@ -184,7 +189,8 @@ public:
 
   //*************************************************************************
 
-  typedef std::vector<LM*> LMVec;
+  //typedef std::vector<LM*> LMVec;
+  typedef std::unordered_map<LMId_t, LM*> LMMap;
 
   struct lt_LM_nm
   {
@@ -228,8 +234,34 @@ public:
   // N.B.: LMId_t's are 1-based since 0 is a NULL value
   LM*
   lm(LMId_t id) const
-  { return m_lm_byId[id]; }
+  { std::unordered_map<LMId_t, LM*>::const_iterator it = m_lm_byId.find(id); 
+    if (it == m_lm_byId.end()) {
+    std::cout << "\n NOT FOUND!" << id;
+	 return m_lm_byId.find(HPCRUN_FMT_LMId_NULL)->second;
+    }
+    return it->second;
+  }
+  // ------------------------------------------------------------
+  // Access by id
+  // ------------------------------------------------------------
 
+  bool
+  has_id(LMId_t fId) const { return m_lm_byId.find(fId) != m_lm_byId.end();}
+  LMMap::iterator
+  lm_begin_id()
+  { return m_lm_byId.begin(); }
+
+  LMMap::const_iterator
+  lm_begin_id() const
+  { return m_lm_byId.begin(); }
+
+  LMMap::iterator
+  lm_end_id()
+  { return m_lm_byId.end(); }
+
+  LMMap::const_iterator
+  lm_end_id() const
+  { return m_lm_byId.end(); }
 
   // ------------------------------------------------------------
   // Access by name
@@ -279,8 +311,13 @@ public:
   void
   ddump() const;
 
+  LMId_t
+  get_unUsedId()
+  { return m_unUsedId++; }
+
 protected:
-  LMVec m_lm_byId;
+  uint16_t m_unUsedId;
+  LMMap m_lm_byId;
   LMSet_nm m_lm_byName;
 };
 

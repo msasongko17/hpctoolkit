@@ -52,6 +52,44 @@
 void hpcrun_stats_reinit(void);
 
 //-----------------------------
+// watchpoint 
+//-----------------------------
+void hpcrun_stats_num_samples_imprecise_inc(long val);
+long hpcrun_stats_num_samples_imprecise(void);
+void hpcrun_stats_num_watchpoints_set_inc(long val);
+long hpcrun_stats_num_watchpoints_set(void);
+void hpcrun_stats_num_watchpoints_triggered_inc(long val);
+long hpcrun_stats_num_watchpoints_triggered(void);
+void hpcrun_stats_num_watchpoints_dropped_inc(long val);
+long hpcrun_stats_num_watchpoints_dropped(void);
+void hpcrun_stats_num_watchpoints_imprecise_inc(long val);
+long hpcrun_stats_num_watchpoints_imprecise(void);
+void hpcrun_stats_num_watchpoints_imprecise_address_inc(long val);
+long hpcrun_stats_num_watchpoints_imprecise_address(void);
+void hpcrun_stats_num_watchpoints_imprecise_address_8_byte_inc(long val);
+long hpcrun_stats_num_watchpoints_imprecise_address_8_byte(void);
+void hpcrun_stats_num_sample_triggering_watchpoints_inc(long val);
+long hpcrun_stats_num_sample_triggering_watchpoints(void);
+void hpcrun_stats_num_insane_ip_inc(long val);
+long hpcrun_stats_num_insane_ip(void);
+void hpcrun_stats_num_falseWWIns_inc(long val);
+void hpcrun_stats_num_falseRWIns_inc(long val);
+void hpcrun_stats_num_falseWRIns_inc(long val);
+void hpcrun_stats_num_trueWWIns_inc(long val);
+void hpcrun_stats_num_trueRWIns_inc(long val);
+void hpcrun_stats_num_trueWRIns_inc(long val);
+void hpcrun_stats_num_accessedIns_inc(long val);
+void hpcrun_stats_num_writtenBytes_inc(long val);
+void hpcrun_stats_num_usedBytes_inc(long val);
+void hpcrun_stats_num_deadBytes_inc(long val);
+void hpcrun_stats_num_newBytes_inc(long val);
+void hpcrun_stats_num_oldBytes_inc(long val);
+void hpcrun_stats_num_oldAppxBytes_inc(long val);
+void hpcrun_stats_num_reuse_inc(long val);
+void hpcrun_stats_num_loadedBytes_inc(long val);
+
+
+//-----------------------------
 // samples total 
 //-----------------------------
 

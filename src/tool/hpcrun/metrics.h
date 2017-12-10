@@ -147,6 +147,15 @@ void hpcrun_set_metric_name(int metric_id, char* name);
 
 // metric set operations
 
+//
+// Given two metrics, metric_id1 and metric_id2, 
+// bump up metric_id2 to reach metric_id1 and return 
+// the difference between them multiplied by the period.
+//
+extern int
+hpcrun_get_weighted_metric_diff(int metric_id1, int metric_id2, 
+                                metric_set_t* set, cct_metric_data_t * diff, 
+                                cct_metric_data_t * diffWithPeriod);
 extern metric_set_t* hpcrun_metric_set_new(void);
 extern cct_metric_data_t* hpcrun_metric_set_loc(metric_set_t* s, int id);
 extern void hpcrun_metric_std_set(int metric_id, metric_set_t* set,

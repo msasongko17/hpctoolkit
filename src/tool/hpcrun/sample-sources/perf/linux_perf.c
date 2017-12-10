@@ -88,6 +88,7 @@
 #include "sample-sources/simple_oo.h"
 #include "sample-sources/sample_source_obj.h"
 #include "sample-sources/common.h"
+#include "sample-sources/watchpoint_support.h"
 
 #include <hpcrun/cct_insert_backtrace.h>
 #include <hpcrun/hpcrun_stats.h>
@@ -284,7 +285,22 @@ perf_init()
   sigemptyset(&sig_mask);
   sigaddset(&sig_mask, PERF_SIGNAL);
 
-  monitor_sigaction(PERF_SIGNAL, &perf_event_handler, 0, NULL);
+  // Setup the signal handler
+  sigset_t block_mask;
+  sigfillset(&block_mask);
+
+  struct sigaction sa1 = {
+      .sa_sigaction = perf_event_handler,
+      .sa_mask = block_mask,
+      //.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER | SA_ONSTACK
+      .sa_flags =  SA_ONSTACK
+  };
+
+  if(monitor_sigaction(PERF_SIGNAL, perf_event_handler, 0 /*flags*/, &sa1) == -1) {
+      fprintf(stderr, "Failed to set PERF_SIGNAL handler: %s\n", strerror(errno));
+      monitor_real_abort();
+  }
+
   monitor_real_pthread_sigmask(SIG_UNBLOCK, &sig_mask, NULL);
 }
 
@@ -407,7 +423,6 @@ get_fd_index(int nevents, int fd, event_thread_t *event_thread)
   return NULL; 
 }
 
-
 static sample_val_t*
 record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     void* context, sample_val_t* sv)
@@ -465,10 +480,47 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
   // ----------------------------------------------------------------------------
   sampling_info_t info = {.sample_clock = 0, .sample_data = mmap_data};
 
+    // hpcrun_sample_callpath will use the precise pc, if available
+    // Note: if precise_pc and context_pc are in different function
+    // the leaft of generated call paths will look odd.
+    // I am making this choice to have atleast the leaf correct.
+    if(WatchpointClientActive() && (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)){
+        td->precise_pc = (void  *) mmap_data->ip;
+    } else {
+        td->precise_pc = 0;
+    }
+    
   *sv = hpcrun_sample_callpath(context, current->event->metric,
         (hpcrun_metricVal_t) {.r=counter},
         0/*skipInner*/, 0/*isSync*/, &info);
 
+  // no need to reset the precise_pc; hpcrun_sample_callpath does so
+  // td->precise_pc = 0;
+
+#if 0
+    //TODO: Delete me
+    hpcrun_set_handling_sample(td);
+    sigjmp_buf_t* it = &(td->bad_unwind);
+    int ljmp = sigsetjmp(it->jb, 1);
+    if (ljmp == 0){
+    volatile int i;
+    void * addr = mmap_data->addr;
+    if(mmap_data->ip && addr &&
+       ((addr && !(((unsigned long)addr) & 0xF0000000000000)))
+       )
+        i += *(char*)(mmap_data->addr);
+    } else {
+        // ok
+    }
+    hpcrun_clear_handling_sample(td);
+#endif
+    
+  if(WatchpointClientActive()){
+    OnSample(mmap_data,
+             hpcrun_context_pc(context),
+             sv->sample_node,
+             current->event->metric);
+  }
   return sv;
 }
 
@@ -800,6 +852,9 @@ METHOD_FN(process_event_list, int lush_metrics)
       m->is_frequency_metric = (event_desc[i].attr.freq == 1);
     }
     event_desc[i].metric_desc = m;
+        extern void SetupWatermarkMetric(int);
+        // Watchpoint
+        SetupWatermarkMetric(event_desc[i].metric);
   }
 
   if (num_events > 0)

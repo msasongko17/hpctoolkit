@@ -44,29 +44,17 @@
 //
 // ******************************************************* EndRiceCopyright *
 
-/* the xed include files used in the x86 family of functions define a lot of static functions. 
- * to avoid replicated copies, we should include xed only once. since each of the x86 family 
- * of files includes xed, we do the next best thing - we compile all of our xed-based source 
- * files into a single object file.
- */
+#ifndef x86_misc_h
+#define x86_misc_h
 
-#include <stdbool.h>
+#include "x86-unwind-analysis.h"
+#include "x86-interval-arg.h"
 
+bool get_mem_access_length_and_type_address(void * ip, uint32_t *accessLen, AccessType *accessType, FloatType * floatType, void * context, void** address);
+bool get_mem_access_length_and_type(void * ip, uint32_t *accessLen, AccessType *accessType);
+unsigned int get_float_operation_length(void *ip, uint8_t op_idx);
+void * get_previous_instruction(void *ins, void **pip, void ** excludeList, int numExcludes);
+FunctionType is_same_function(void *ins1, void* ins2);
 
-#include "x86-addsub.c"
-#include "x86-and.c"
-#include "x86-build-intervals.c"
-#include "x86-call.c"
-#include "x86-canonical.c"
-#include "x86-debug.c"
-#include "x86-decoder.c"
-#include "x86-enter.c"
-#include "x86-jump.c"
-#include "x86-lea.c"
-#include "x86-leave.c"
-#include "x86-move.c"
-#include "x86-process-inst.c"
-#include "x86-push.c"
-#include "x86-return.c"
-#include "x86-misc.c"
+#endif
 

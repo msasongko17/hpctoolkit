@@ -91,7 +91,7 @@ using std::string;
 #include <lib/profxml/PGMReader.hpp>
 
 #include <lib/prof-lean/hpcrun-metric.h>
-
+#include <lib/prof/LoadMap.hpp>
 #include <lib/binutils/LM.hpp>
 #include <lib/binutils/VMAInterval.hpp>
 
@@ -342,8 +342,10 @@ overlayStaticStructureMain(Prof::CallPath::Profile& prof,
   // Overlay static structure. N.B. To process spurious samples,
   // iteration includes LoadMap::LMId_NULL
   // -------------------------------------------------------
-  for (Prof::LoadMap::LMId_t i = Prof::LoadMap::LMId_NULL;
-       i <= loadmap->size(); ++i) {
+  for(std::unordered_map<uint, Prof::LoadMap::LM*>::const_iterator it=loadmap->lm_begin_id(); 
+    it != loadmap->lm_end_id(); ++it) {
+
+    uint i = it->second->id();
     Prof::LoadMap::LM* lm = loadmap->lm(i);
     if (lm->isUsed()) {
       try {

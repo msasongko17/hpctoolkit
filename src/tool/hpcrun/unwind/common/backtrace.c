@@ -268,8 +268,23 @@ hpcrun_generate_backtrace_no_trampoline(backtrace_info_t* bt,
   TMSG(FENCE, "backtrace generation detects fence = %s", fence_enum_name(bt->fence));
 
   frame_t* bt_beg  = td->btbuf_beg;      // innermost, inclusive
-  frame_t* bt_last = td->btbuf_cur - 1; // outermost, inclusive
+  frame_t* bt_last = td->btbuf_cur - 1; // outermost, inclusive 
 
+  // Precise PC of the leaf.
+  // If a precise PC is given, use it.
+  // If no precise PC is given, use the ContextPC (in accurate).
+  if (td->precise_pc) {
+    ip_normalized_t norm_ip = hpcrun_normalize_ip(td->precise_pc, NULL);
+    if(norm_ip.lm_id != HPCRUN_FMT_LMId_NULL) {
+      bt_beg->ip_norm = norm_ip;
+    }
+    td->precise_pc = NULL;
+  } else {
+    // nop
+    // Once could have done bt_beg->ip_norm.lm_ip-- but that is quite inaccurate
+  }
+
+  
   if (skipInner) {
     if (ENABLED(USE_TRAMP)){
       //

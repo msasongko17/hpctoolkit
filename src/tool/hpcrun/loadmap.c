@@ -66,12 +66,20 @@ static hpcrun_loadmap_t  s_loadmap;
 static hpcrun_loadmap_t* s_loadmap_ptr = NULL;
 
 static dso_info_t* s_dso_free_list = NULL;
+static bool ipc_load_map = false;
 
 
 /* locking functions to ensure that loadmaps are consistent */
 static spinlock_t loadmap_lock = SPINLOCK_UNLOCKED;
 
 static loadmap_notify_t *notification_recipients = NULL;
+
+void hpcrun_set_ipc_load_map(bool val){
+    ipc_load_map = val;
+}
+bool hpcrun_get_ipc_load_map(){
+    return ipc_load_map;
+}
 
 void
 hpcrun_loadmap_notify_register(loadmap_notify_t *n)
@@ -202,7 +210,13 @@ hpcrun_loadModule_new(const char* name)
 
   //memset(x, 0, sizeof(*x));
 
-  x->id = ++(s_loadmap_ptr->size); // largest id = size
+  if(ENABLED(IPCSHAREDMEM) || hpcrun_get_ipc_load_map()) {
+    extern uint16_t GetOrCreateIPCSharedLMEntry(const char * realPath);
+    x->id = GetOrCreateIPCSharedLMEntry(name);
+    ++(s_loadmap_ptr->size);
+  } else {
+    x->id = ++(s_loadmap_ptr->size); // largest id = size
+  }
 
   int namelen = strlen(name) + 1;
   x->name = (char*) hpcrun_malloc(namelen);

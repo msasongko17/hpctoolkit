@@ -1286,9 +1286,10 @@ Profile::fmt_epoch_fread(Profile* &prof, FILE* infs, uint rFlags,
     RealPathMgr::singleton().realpath(nm);
 
     LoadMap::LM* lm = new LoadMap::LM(nm);
+    lm->set_id(loadmap_tbl.lst[i].id);
     loadmap.lm_insert(lm);
     
-    DIAG_Assert(lm->id() == i + 1, "Profile::fmt_epoch_fread: Currently expect load module id's to be in dense ascending order.");
+    //DIAG_Assert(lm->id() == i + 1, "Profile::fmt_epoch_fread: Currently expect load module id's to be in dense ascending order.");
   }
 
   DIAG_MsgIf(DBG, loadmap.toString());
@@ -1781,7 +1782,7 @@ cct_makeNode(Prof::CallPath::Profile& prof,
   VMA lmIP = (VMA)nodeFmt.lm_ip; // FIXME:tallent: Use ISA::convertVMAToOpVMA
   ushort opIdx = 0;
 
-  if (! (lmId <= loadmap.size() /*1-based*/) ) {
+  if (!loadmap.has_id(lmId)) {
     DIAG_WMsg(1, ctxtStr << ": CCT node " << nodeId
 	      << " has invalid load module: " << lmId);
     lmId = LoadMap::LMId_NULL;
@@ -1793,6 +1794,7 @@ cct_makeNode(Prof::CallPath::Profile& prof,
   // ----------------------------------------
   // normalized lip
   // ----------------------------------------
+  // TODO: Milind: not handling lush yet.
   lush_lip_t* lip = NULL;
   if (!lush_lip_eq(&nodeFmt.lip, &lush_lip_NULL)) {
     lip = CCT::ADynNode::clone_lip(&nodeFmt.lip);

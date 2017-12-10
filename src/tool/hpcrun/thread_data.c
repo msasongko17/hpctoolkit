@@ -89,7 +89,7 @@ __thread int monitor_tid = -1;
 static thread_data_t _local_td;
 static pthread_key_t _hpcrun_key;
 static int use_getspecific = 0;
-
+__thread int inside_hpcrun = 0;
 
 void
 hpcrun_init_pthread_key(void)
