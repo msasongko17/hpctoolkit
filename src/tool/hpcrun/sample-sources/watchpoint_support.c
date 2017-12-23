@@ -992,7 +992,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     if(location == -1) {
         EMSG("\n WP trigger did not match any known active WP\n");
         //monitor_real_abort();
-        //hpcrun_safe_exit();
+        hpcrun_safe_exit();
         //fprintf("\n WP trigger did not match any known active WP\n");
         return 0;
     }
