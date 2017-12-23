@@ -936,6 +936,20 @@ restart_perf_event(int fd)
 
 #include "sample-sources/ss_obj.h"
 
+void linux_perf_events_pause(){
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+  int nevents = self->evl.nevents;
+  perf_stop_all(nevents, event_thread);
+}
+
+void linux_perf_events_resume(){
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+  int nevents = self->evl.nevents;
+  perf_start_all(nevents, event_thread);
+}
+
 // ---------------------------------------------
 // signal handler
 // ---------------------------------------------

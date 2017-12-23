@@ -974,7 +974,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     void* pc = hpcrun_context_pc(context);
     if (!hpcrun_safe_enter_async(pc)) return 0;
     
-    //    hpcrun_all_sources_stop();
+    linux_perf_events_pause();
     
     tData.numWatchpointTriggers++;
     //fprintf(stderr, " numWatchpointTriggers = %lu, \n", tData.numWatchpointTriggers);
@@ -993,6 +993,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         EMSG("\n WP trigger did not match any known active WP\n");
         //monitor_real_abort();
         hpcrun_safe_exit();
+        linux_perf_events_resume();
         //fprintf("\n WP trigger did not match any known active WP\n");
         return 0;
     }
@@ -1062,6 +1063,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
     }
     //    hpcrun_all_sources_start();
+    linux_perf_events_resume();
     hpcrun_safe_exit();
     return 0;
 }

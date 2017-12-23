@@ -175,4 +175,7 @@ perf_attr_init(
   u64  sampletype
 );
 
+extern void linux_perf_events_pause();
+extern void linux_perf_events_resume();
+
 #endif
