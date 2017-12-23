@@ -194,7 +194,7 @@ static void InitConfig(){
     CHECK(close(fd));
     
     
-#if defined(PERF_EVENT_IOC_UPDATE_BREAKPOINT)
+#if defined(PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
     wpConfig.isWPModifyEnabled = true;
 #else
     wpConfig.isWPModifyEnabled = false;
@@ -402,13 +402,13 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         default: pe.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R;
     }
     
-#if defined(PERF_EVENT_IOC_UPDATE_BREAKPOINT)
+#if defined(PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
     if(modify) {
         // modification
         assert(wpi->fileHandle != -1);
         assert(wpi->mmapBuffer != 0);
         //DisableWatchpoint(wpi);
-        CHECK(ioctl(wpi->fileHandle, PERF_EVENT_IOC_UPDATE_BREAKPOINT, (unsigned long) (&pe)));
+        CHECK(ioctl(wpi->fileHandle, PERF_EVENT_IOC_MODIFY_ATTRIBUTES, (unsigned long) (&pe)));
         //if(wpi->isActive == false) {
         //EnableWatchpoint(wpi->fileHandle);
         //}
