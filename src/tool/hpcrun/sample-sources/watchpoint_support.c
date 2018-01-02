@@ -31,7 +31,8 @@
 #include <math.h>
 #include <assert.h>
 #include <strings.h>
-
+#include <asm/prctl.h>
+#include <sys/prctl.h>
 
 #include "common.h"
 #include <hpcrun/main.h>
@@ -100,6 +101,8 @@ WPConfig_t wpConfig;
 typedef struct ThreadData{
     int lbrDummyFD __attribute__((aligned(CACHE_LINE_SZ)));
     stack_t ss;
+    void * fs_reg_val;
+    void * gs_reg_val;
     uint64_t samplePostFull;
     long numWatchpointTriggers;
     long numWatchpointImpreciseIP;
@@ -117,11 +120,23 @@ typedef struct ThreadData{
 static __thread ThreadData_t tData;
 
 bool IsAltStackAddress(void *addr){
-    if(addr >= tData.ss.ss_sp && addr < tData.ss.ss_sp + tData.ss.ss_size)
+    if((addr >= tData.ss.ss_sp) && (addr < tData.ss.ss_sp + tData.ss.ss_size))
         return true;
     return false;
 }
 
+bool IsFSorGS(void * addr) {
+    if (tData.fs_reg_val == (void *) -1) {
+        syscall(SYS_arch_prctl, ARCH_GET_FS, &tData.fs_reg_val);
+        syscall(SYS_arch_prctl, ARCH_GET_GS, &tData.gs_reg_val);
+    }
+    // 4096 smallest one page size
+    if ( (tData.fs_reg_val <= addr) && (addr < tData.fs_reg_val + 4096))
+	return true;
+    if ( (tData.gs_reg_val  <= addr) && (addr < tData.gs_reg_val  + 4096))
+	return true;
+    return false;
+}
 
 
 /********* OS SUPPORT ****************/
@@ -367,8 +382,6 @@ void SpatialReuseWPConfigOverride(void *v){
     wpConfig.dontDisassembleWPAddress = true;
 }
 
-
-
 static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, bool modify) {
     // Perf event settings
     struct perf_event_attr pe = {
@@ -537,6 +550,8 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
     
     tData.lbrDummyFD = -1;
     tData.fptr = func;
+    tData.fs_reg_val = (void*)-1;
+    tData.gs_reg_val = (void*)-1;
     srand48_r(time(NULL), &tData.randBuffer);
     tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
     tData.numWatchpointTriggers = 0;
@@ -571,6 +586,8 @@ void WatchpointThreadTerminate(){
         CloseDummyHardwareEvent(tData.lbrDummyFD);
         tData.lbrDummyFD = -1;
     }
+    tData.fs_reg_val = (void*)-1;
+    tData.gs_reg_val = (void*)-1;
     
     hpcrun_stats_num_watchpoints_triggered_inc(tData.numWatchpointTriggers);
     hpcrun_stats_num_watchpoints_imprecise_inc(tData.numWatchpointImpreciseIP);

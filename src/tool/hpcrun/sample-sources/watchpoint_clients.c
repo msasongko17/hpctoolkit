@@ -1493,7 +1493,9 @@ static inline bool IsValidAddress(void * addr, void * pc){
         return false;
     if(IsAltStackAddress(addr))
         return false;
-    
+    if(IsFSorGS(addr))
+        return false;   
+ 
     if(IsBlackListedWatchpointAddress(addr) || IsBlackListedWatchpointAddress(pc)){
         return false;
     }
