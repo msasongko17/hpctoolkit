@@ -80,6 +80,14 @@
 #endif
 
 
+#if defined(PERF_EVENT_IOC_UPDATE_BREAKPOINT)
+#define FAST_BP_IOC_FLAG (PERF_EVENT_IOC_UPDATE_BREAKPOINT)
+#elif defined(PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
+#define FAST_BP_IOC_FLAG (PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
+#else
+#endif
+
+
 #define CHECK(x) ({int err = (x); \
 if (err) { \
 EMSG("%s: Failed with %d on line %d of file %s\n", strerror(errno), err, __LINE__, __FILE__); \
@@ -209,7 +217,7 @@ static void InitConfig(){
     CHECK(close(fd));
     
     
-#if defined(PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
+#if defined(FAST_BP_IOC_FLAG)
     wpConfig.isWPModifyEnabled = true;
 #else
     wpConfig.isWPModifyEnabled = false;
@@ -415,13 +423,13 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         default: pe.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R;
     }
     
-#if defined(PERF_EVENT_IOC_MODIFY_ATTRIBUTES)
+#if defined(FAST_BP_IOC_FLAG)
     if(modify) {
         // modification
         assert(wpi->fileHandle != -1);
         assert(wpi->mmapBuffer != 0);
         //DisableWatchpoint(wpi);
-        CHECK(ioctl(wpi->fileHandle, PERF_EVENT_IOC_MODIFY_ATTRIBUTES, (unsigned long) (&pe)));
+        CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
         //if(wpi->isActive == false) {
         //EnableWatchpoint(wpi->fileHandle);
         //}
