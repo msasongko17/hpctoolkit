@@ -468,13 +468,15 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 #endif
 
   // check whether we can get the ra_loc in each frame
-  for (frame_t* f = td->btbuf_beg; f < td->btbuf_cur; f++) {
-    if (f->ra_loc)
-      TMSG(RALOC, "frame ra_loc = %p, ra@loc = %p", f->ra_loc, *((void**) f->ra_loc));
-    else
-      TMSG(RALOC, "frame ra_loc = %p", f->ra_loc);
+  if (ENABLED(RALOC)) {
+    for (frame_t* f = td->btbuf_beg; f < td->btbuf_cur; f++) {
+      if (f->ra_loc)
+        TMSG(RALOC, "frame ra_loc = %p, ra@loc = %p", f->ra_loc, *((void**) f->ra_loc));
+      else
+        TMSG(RALOC, "frame ra_loc = %p", f->ra_loc);
+    }
+    TMSG(RALOC, "--------------------------");
   }
-  TMSG(RALOC, "--------------------------");
 
     
   if(WatchpointClientActive()){
