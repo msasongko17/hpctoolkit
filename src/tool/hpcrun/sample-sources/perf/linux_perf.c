@@ -9,7 +9,7 @@
 // HPCToolkit is at 'hpctoolkit.org' and in 'README.Acknowledgments'.
 // --------------------------------------------------------------------------
 //
-// Copyright ((c)) 2002-2017, Rice University
+// Copyright ((c)) 2002-2018, Rice University
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
@@ -194,7 +194,9 @@ perf_event_handler( int sig, siginfo_t* siginfo, void* context);
 //******************************************************************************
 
 #ifndef ENABLE_PERFMON
-static const char *event_name = "CPU_CYCLES";
+static const char *event_name    = "CPU_CYCLES";
+static const uint64_t event_code = PERF_COUNT_HW_CPU_CYCLES;
+static const uint64_t event_type = PERF_TYPE_HARDWARE;
 #endif
 
 //******************************************************************************
@@ -245,6 +247,19 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
   }
 }
 
+static int
+perf_get_pmu_support(const char *name, struct perf_event_attr *event_attr)
+{
+  int isPMU = 0;
+#ifdef ENABLE_PERFMON
+  isPMU = pfmu_getEventAttribute(name, event_attr);
+#else
+  memset(event_attr, 0, sizeof(struct perf_event_attr));
+  event_attr->config = event_code;
+  event_attr->type   = event_type;
+#endif
+  return isPMU;
+}
 
 //----------------------------------------------------------
 // initialization
@@ -520,6 +535,10 @@ METHOD_FN(init)
 {
   TMSG(LINUX_PERF, "%d: init", self->sel_idx);
 
+  pfmu_init();
+
+  perf_util_init();
+
   // checking the option of multiplexing:
   // the env variable is set by hpcrun or by user (case for static exec)
 
@@ -657,11 +676,6 @@ METHOD_FN(shutdown)
 
   perf_thread_fini(nevents, event_thread);
 
-#ifdef ENABLE_PERFMON
-  // terminate perfmon
-  pfmu_fini();
-#endif
-
   self->state = UNINIT;
   TMSG(LINUX_PERF, "shutdown OK");
 }
@@ -675,11 +689,6 @@ static bool
 METHOD_FN(supports_event, const char *ev_str)
 {
   TMSG(LINUX_PERF, "supports event %s", ev_str);
-
-#ifdef ENABLE_PERFMON
-  // perfmon is smart enough to detect if pfmu has been initialized or not
-  pfmu_init();
-#endif
 
   if (self->state == UNINIT){
     METHOD_CALL(self, init);
@@ -723,8 +732,6 @@ METHOD_FN(process_event_list, int lush_metrics)
   //  automatically. But in practice, it didn't. Not sure why.
 
   for (event = start_tok(evlist); more_tok(); event = next_tok(), num_events++);
-
-  self->evl.nevents = num_events;
   
   // setup all requested events
   // if an event cannot be initialized, we still keep it in our list
@@ -765,13 +772,14 @@ METHOD_FN(process_event_list, int lush_metrics)
       if (event_desc[i].metric_custom->register_fn != NULL) {
     	// special registration for customized event
         event_desc[i].metric_custom->register_fn( &event_desc[i] );
+        METHOD_CALL(self, store_event, event_desc[i].attr.config, threshold);
         continue;
       }
     }
 
     struct perf_event_attr *event_attr = &(event_desc[i].attr);
 
-    int isPMU = pfmu_getEventAttribute(name, event_attr);
+    int isPMU = perf_get_pmu_support(name, event_attr);
     if (isPMU < 0)
       // case for unknown event
       // it is impossible to be here, unless the code is buggy
@@ -816,9 +824,10 @@ METHOD_FN(process_event_list, int lush_metrics)
       m->is_frequency_metric = (event_desc[i].attr.freq == 1);
     }
     event_desc[i].metric_desc = m;
-        extern void SetupWatermarkMetric(int);
-        // Watchpoint
-        SetupWatermarkMetric(event_desc[i].metric);
+    METHOD_CALL(self, store_event, event_attr->config, threshold);
+    extern void SetupWatermarkMetric(int);
+    // Watchpoint
+    SetupWatermarkMetric(event_desc[i].metric);
   }
 
   if (num_events > 0)
@@ -850,7 +859,6 @@ METHOD_FN(gen_event_set, int lush_metrics)
   td->core_profile_trace_data.perf_event_info = aux_info;
   td->ss_info[self->sel_idx].ptr = event_thread;
 
-
   // setup all requested events
   // if an event cannot be initialized, we still keep it in our list
   //  but there will be no samples
@@ -878,10 +886,7 @@ METHOD_FN(display_events)
   display_header(stdout, "Available Linux perf events");
 
 #ifdef ENABLE_PERFMON
-  // perfmon is smart enough to detect if pfmu has been initialized or not
-  pfmu_init();
   pfmu_showEventList();
-  pfmu_fini();
 #else
   printf("Name\t\tDescription\n");
   display_line_single(stdout);
@@ -1081,11 +1086,11 @@ perf_event_handler(
 
   } while (more_data);
 
-  hpcrun_safe_exit();
-
   restart_perf_event(fd);
 
   perf_start_all(nevents, event_thread);
+
+  hpcrun_safe_exit();
 
   return 0; // tell monitor the signal has been handled.
 }
