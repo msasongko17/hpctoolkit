@@ -110,6 +110,7 @@ typedef struct WatchPointInfo{
     int fileHandle;
     bool isActive;
     uint8_t value[MAX_WP_LENGTH]; // value
+    uint64_t samplePostFull; // per watchpoint survival probability
     void * mmapBuffer;
 } WatchPointInfo_t;
 
