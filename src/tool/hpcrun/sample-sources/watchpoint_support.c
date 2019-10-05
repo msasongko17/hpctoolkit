@@ -48,6 +48,7 @@
 #include <hpcrun/sample_sources_registered.h>
 #include <hpcrun/thread_data.h>
 #include <hpcrun/trace.h>
+#include <hpcrun/env.h>
 
 #include <lush/lush-backtrace.h>
 #include <messages/messages.h>
@@ -59,7 +60,10 @@
 
 #include "watchpoint_support.h"
 #include <unwind/x86-family/x86-misc.h>
+//#include "matrix.h"
+//#include <adm_init_fini.h>
 
+//extern int init_adamant;
 
 #define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
@@ -111,6 +115,7 @@ typedef struct ThreadData{
     stack_t ss;
     void * fs_reg_val;
     void * gs_reg_val;
+    uint64_t samplePostFull;
     long numWatchpointTriggers;
     long numWatchpointImpreciseIP;
     long numWatchpointImpreciseAddressArbitraryLength;
@@ -149,9 +154,9 @@ bool IsFSorGS(void * addr) {
 /********* OS SUPPORT ****************/
 
 // perf-util.h has it
-static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags) {
-    return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-}
+//static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid, int cpu, int group_fd, unsigned long flags) {
+//    return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
+//}
 
 static pid_t gettid() {
     return syscall(__NR_gettid);
@@ -188,6 +193,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context);
 
 __attribute__((constructor))
 static void InitConfig(){
+    /*if(!init_adamant) {
+	init_adamant = 1;*/
+    	//adm_initialize();
+    //}
     tData.fptr = NULL;
     
     volatile int dummyWP[MAX_WP_SLOTS];
@@ -278,7 +287,13 @@ static void InitConfig(){
     for (int j = 0 ; j < i; j ++) {
         CHECK(close(wpHandles[j]));
     }
-    wpConfig.maxWP = i;
+    /*int custom_wp_size = atoi(getenv(WATCHPOINT_SIZE));
+    if(custom_wp_size < i)
+        wpConfig.maxWP = custom_wp_size;
+    else
+        wpConfig.maxWP = i;
+   fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);*/
+   wpConfig.maxWP = i;
     
     // Should we get the floating point type in an access?
     wpConfig.getFloatType = false;
@@ -288,9 +303,9 @@ static void InitConfig(){
     if(replacementScheme){
         if(0 == strcasecmp(replacementScheme, "AUTO")) {
             wpConfig.replacementPolicy = AUTO;
-        } else if (0 == strcasecmp(replacementScheme, "OLDEST")) {
+        } if (0 == strcasecmp(replacementScheme, "OLDEST")) {
             wpConfig.replacementPolicy = OLDEST;
-        } else if (0 == strcasecmp(replacementScheme, "NEWEST")) {
+        } if (0 == strcasecmp(replacementScheme, "NEWEST")) {
             wpConfig.replacementPolicy = NEWEST;
         } else {
             // default;
@@ -347,6 +362,11 @@ void LoadSpyWPConfigOverride(void *v){
 
 
 void FalseSharingWPConfigOverride(void *v){
+    // replacement policy is OLDEST forced.
+    wpConfig.replacementPolicy = OLDEST;
+}
+
+void ComDetectiveWPConfigOverride(void *v){
     // replacement policy is OLDEST forced.
     wpConfig.replacementPolicy = OLDEST;
 }
@@ -472,6 +492,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     wpi->va = (void *) pe.bp_addr;
     wpi->sample = *sampleData;
     wpi->startTime = rdtsc();
+    wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
 }
 
 
@@ -523,6 +544,8 @@ static void DisArm(WatchPointInfo_t * wpi){
 
 static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
     // if WP modification is suppoted use it
+    //void * cacheLineBaseAddress = (void *) ((uint64_t)((size_t)sampleData->va) & (~(64-1)));
+
     if(wpConfig.isWPModifyEnabled){
         // Does not matter whether it was active or not.
         // If it was not active, enable it.
@@ -531,7 +554,6 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
             return true;
         }
     }
-    
     // disable the old WP if active
     if(wpi->isActive) {
         DisArm(wpi);
@@ -560,6 +582,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
     tData.fs_reg_val = (void*)-1;
     tData.gs_reg_val = (void*)-1;
     srand48_r(time(NULL), &tData.randBuffer);
+    tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
     tData.numWatchpointTriggers = 0;
     tData.numWatchpointImpreciseIP = 0;
     tData.numWatchpointImpreciseAddressArbitraryLength = 0;
@@ -573,7 +596,6 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
         tData.watchPointArray[i].isActive = false;
         tData.watchPointArray[i].fileHandle = -1;
         tData.watchPointArray[i].startTime = 0;
-        tData.watchPointArray[i].samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
     }
     
     //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
@@ -624,58 +646,38 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
     for(int i = 0; i < wpConfig.maxWP; i++){
         if(!tData.watchPointArray[i].isActive) {
             *location = i;
-
-            // Increase samplePostFull for those who survived.
-            for(int rest = 0; rest < wpConfig.maxWP; rest++){
-                if (tData.watchPointArray[rest].isActive) {
-                    tData.watchPointArray[rest].samplePostFull++;
-                }
-            }
-
             return EMPTY_SLOT;
         }
     }
     switch (policy) {
         case AUTO:{
-	   // Shuffle the visit order
-           int slots[MAX_WP_SLOTS];
-	   for(int i = 0; i < wpConfig.maxWP; i++)
-		slots[i] = i;
-	   // Shuffle
-	   for(int i = 0; i < wpConfig.maxWP; i++){
-		long int randVal;
-		lrand48_r(&tData.randBuffer, &randVal);
-		randVal = randVal % wpConfig.maxWP;
-		int tmp = slots[i];
-		slots[i] = slots[randVal];
-		slots[randVal] = tmp;
-	   }	
-
-	   // attempt to replace each WP with its own probability
-	   for(int i = 0; i < wpConfig.maxWP; i++) {
-		int loc = slots[i];
-		double probabilityToReplace =  1.0/(1.0 + (double)tData.watchPointArray[loc].samplePostFull);
-            	double randValue;
-            	drand48_r(&tData.randBuffer, &randValue);
- 
-	        // update tData.samplePostFull
-                tData.watchPointArray[loc].samplePostFull++;
+            // Equal probability for any data access
             
-                if(randValue <= probabilityToReplace) {
-		    *location = loc;
-                    // TODO: Milind: Not sure whether I should increment samplePostFull of the remainiing slots.
-                    // In Qingsen's experiments, doing this not hurt.
-                    for(int rest = i+1; rest < wpConfig.maxWP; rest++){
-                        tData.watchPointArray[slots[rest]].samplePostFull++;
-                    }
-                    return NON_EMPTY_SLOT;
-                }
-	   }	
-           // this is an indication not to replace, but if the client chooses to force, they can
-	   *location = slots[0] /*random value*/;
-           return NONE_AVAILABLE;
-	}
-	break;
+            
+            // Randomly pick a slot to victimize.
+            long int tmpVal;
+            lrand48_r(&tData.randBuffer, &tmpVal);
+            int rSlot = tmpVal % wpConfig.maxWP;
+            *location = rSlot;
+            
+            // if it is the first sample after full, use wpConfig.maxWP/(wpConfig.maxWP+1) probability to replace.
+            // if it is the second sample after full, use wpConfig.maxWP/(wpConfig.maxWP+2) probability to replace.
+            // if it is the third sample after full, use wpConfig.maxWP/(wpConfig.maxWP+3) probability replace.
+            
+            double probabilityToReplace =  wpConfig.maxWP/((double)wpConfig.maxWP+tData.samplePostFull);
+            double randValue;
+            drand48_r(&tData.randBuffer, &randValue);
+            
+            // update tData.samplePostFull
+            tData.samplePostFull++;
+            
+            if(randValue <= probabilityToReplace) {
+                return NON_EMPTY_SLOT;
+            }
+            // this is an indication not to replace, but if the client chooses to force, they can
+            return NONE_AVAILABLE;
+        }
+            break;
             
         case NEWEST:{
             // Always replace the newest
@@ -1010,7 +1012,7 @@ void DisableWatchpointWrapper(WatchPointInfo_t *wpi){
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 //volatile int x;
 //fprintf(stderr, "OnWatchPoint=%p\n", &x);
-
+    //printf("OnWatchPoint is executed\n");
     // Disable HPCRUN sampling
     // if the trap is already in hpcrun, return
     // If the interrupt came from inside our code, then drop the sample
@@ -1077,8 +1079,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             if(wpi->isActive){
                 DisableWatchpointWrapper(wpi);
             }
-            // Reset per WP probability
-	    wpi->samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+            //reset to tData.samplePostFull
+            tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
         }
         break;
         case DISABLE_ALL_WP: {
@@ -1086,15 +1088,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 if(tData.watchPointArray[i].isActive){
                     DisableWatchpointWrapper(&tData.watchPointArray[i]);
                 }
-                // Reset per WP probability
-	        tData.watchPointArray[i].samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
             }
+            //reset to tData.samplePostFull to SAMPLES_POST_FULL_RESET_VAL
+            tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
         }
         break;
         case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
             assert(wpi->isActive == false);
-            // Reset per WP probability
-            wpi->samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+            tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
         }
         break;
         case RETAIN_WP: { // resurrect this wp
@@ -1178,16 +1179,55 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     
     if(r != NONE_AVAILABLE) {
         // VV IMP: Capture value before arming the WP.
-        if(captureValue)
+        if(captureValue) {
             CaptureValue(sampleData, &tData.watchPointArray[victimLocation]);
+	}
         // I know the error case that we have captured the value but ArmWatchPoint fails.
         // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
-        
+        //printf("and this region\n");
+	//printf("arming watchpoints\n");
         if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
             //LOG to hpcrun log
             EMSG("ArmWatchPoint failed for address %p", sampleData->va);
             return false;
         }
+        return true;
+    }
+    return false;
+}
+
+bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime){
+    if(ValidateWPData(sampleData) == false) {
+        return false;
+    }
+    if(IsOveralpped(sampleData)){
+        return false; // drop the sample if it overlaps an existing address
+    }
+    
+    // No overlap, look for a victim slot
+    int victimLocation = -1;
+    // Find a slot to install WP
+    VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+    
+    if(r != NONE_AVAILABLE) {
+        // VV IMP: Capture value before arming the WP.
+        if(captureValue) {
+            CaptureValue(sampleData, &tData.watchPointArray[victimLocation]);
+	}
+        // I know the error case that we have captured the value but ArmWatchPoint fails.
+        // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
+        //printf("and this region\n");
+	//printf("arming watchpoints\n");
+	if((sampleData->bulletinBoardTimestamp - tData.watchPointArray[victimLocation].bulletinBoardTimestamp) > (curTime - lastTime)) {
+		//printf("watchpoints are armed on address %lx, length: %d\n", sampleData->va, sampleData->accessLength);
+        	if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
+            		//LOG to hpcrun log
+            		EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+            		return false;
+        	}
+	} /*else {
+		printf("watchpoints are not armed because they are still new\n");
+	}*/
         return true;
     }
     return false;

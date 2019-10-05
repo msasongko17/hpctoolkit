@@ -2132,10 +2132,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     void * data_addr = mmap_data->addr;
     void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
     // Filert out address and PC (0 or kernel address will not pass)
+    //fprintf(stderr, "OnSample is called %lx\n", data_addr);
     if (!IsValidAddress(data_addr, precisePC)) {
         goto ErrExit; // incorrect access type
     }
-    
+
     // do not monitor NULL CCT node
     if (node == NULL) {
         goto ErrExit; // incorrect CCT

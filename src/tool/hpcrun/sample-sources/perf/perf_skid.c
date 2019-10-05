@@ -88,7 +88,7 @@
 // -----------------------------------------------------
 
 // ordered in increasing precision
-const int perf_skid_precision[] = {
+/*const int perf_skid_precision[] = {
   PERF_EVENT_SKID_ARBITRARY,
   PERF_EVENT_SKID_CONSTANT,
   PERF_EVENT_SKID_ZERO_REQUESTED,
@@ -96,7 +96,7 @@ const int perf_skid_precision[] = {
 };
 
 const int perf_skid_flavors = sizeof(perf_skid_precision)/sizeof(int);
-
+*/
 // -----------------------------------------------------
 // private methods
 // -----------------------------------------------------
@@ -172,7 +172,7 @@ find_precise_suffix(const char *s, const char *suffix, char allowed)
  * TODO: this method only works on some platforms, and not
  *       general enough on all the platforms.
  */
-int
+/*int
 perf_skid_set_max_precise_ip(struct perf_event_attr *attr)
 {
   // start with the most restrict skid (3) then 2, 1 and 0
@@ -195,7 +195,7 @@ perf_skid_set_max_precise_ip(struct perf_event_attr *attr)
   }
   return 0;
 }
-
+*/
 
 //----------------------------------------------------------
 // find the best precise ip value in this platform

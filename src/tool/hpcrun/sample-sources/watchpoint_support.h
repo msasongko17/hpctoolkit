@@ -76,6 +76,7 @@
 //#define FINE_GRAINED_WP
 
 typedef enum AccessType {LOAD, STORE, LOAD_AND_STORE, UNKNOWN} AccessType;
+typedef enum SampleType {ALL_LOAD, ALL_STORE, UNKNOWN_SAMPLE_TYPE} SampleType;
 typedef enum FunctionType {SAME_FN, DIFF_FN, UNKNOWN_FN} FunctionType;
 typedef enum FloatType {ELEM_TYPE_FLOAT16, ELEM_TYPE_SINGLE, ELEM_TYPE_DOUBLE, ELEM_TYPE_LONGDOUBLE, ELEM_TYPE_LONGBCD, ELEM_TYPE_UNKNOWN} FloatType;
 typedef enum WatchPointType {WP_READ, WP_WRITE, WP_RW, WP_INVALID } WatchPointType;
@@ -88,10 +89,17 @@ typedef enum WPTriggerActionType {DISABLE_WP, ALREADY_DISABLED, DISABLE_ALL_WP, 
 // Data structure that is given by clients to set a WP
 typedef struct SampleData{
     void * va; // access virtual address
+    void * target_va; // access virtual address
     int wpLength; // wp length
     int accessLength; // access length
+    int numFSLocs;
     int sampledMetricId;
+    int first_accessing_tid;
+    int first_accessing_core_id;
+    uint64_t bulletinBoardTimestamp;
     AccessType accessType; // load or store
+    AccessType samplerAccessType;
+    SampleType sampleType;
     union {
         void * node;
         cct_addr_t * bt;
@@ -105,13 +113,15 @@ typedef struct SampleData{
 
 typedef struct WatchPointInfo{
     SampleData_t sample;
+
     void * va; // access virtual address
+    void * cacheline_va;
     int64_t startTime;
     int fileHandle;
     bool isActive;
     uint8_t value[MAX_WP_LENGTH]; // value
-    uint64_t samplePostFull; // per watchpoint survival probability
     void * mmapBuffer;
+    uint64_t bulletinBoardTimestamp;
 } WatchPointInfo_t;
 
 // Data structure that is captured when a WP triggers
@@ -146,6 +156,7 @@ typedef void (*ClientConfigOverrideCall_t)(void *);
 extern void WatchpointThreadInit();
 extern void WatchpointThreadTerminate();
 extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue);
+extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);
@@ -157,6 +168,7 @@ extern void SpatialReuseWPConfigOverride(void*);
 extern void FalseSharingWPConfigOverride(void*);
 extern void TrueSharingWPConfigOverride(void*);
 extern void AllSharingWPConfigOverride(void*);
+extern void ComDetectiveWPConfigOverride(void*);
 extern void IPCFalseSharingWPConfigOverride(void*);
 extern void IPCTrueSharingWPConfigOverride(void*);
 extern void IPCAllSharingWPConfigOverride(void*);
