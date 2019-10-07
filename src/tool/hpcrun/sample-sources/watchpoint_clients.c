@@ -236,6 +236,9 @@ typedef struct SharedData{
 } SharedData_t;
 
 SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = UNKNOWN, .tid = -1, .address = 0};
+
+HashTable_t bulletinBoard = {.counter = 0};
+
 __thread int64_t lastTime = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
