@@ -280,6 +280,7 @@ MY_BASE_FILES =				\
 	hpcrun_options.c		\
 	hpcrun_stats.c			\
 	matrix.c			\
+	mymapping.c			\
 	loadmap.c			\
 	metrics.c			\
 	name.c				\
