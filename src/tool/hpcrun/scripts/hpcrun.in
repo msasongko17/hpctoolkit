@@ -280,6 +280,12 @@ do
 	    shift
 	    ;;
 
+	--mapping )
+            arg_ok "$1" || die "missing argument for $arg"
+            export HPCRUN_THREAD_MAPPING="$1"
+            shift
+            ;;
+
 	--bulletin-board-size )
             arg_ok "$1" || die "missing argument for $arg"
 	    BULLETIN_BOARD_SIZE=$1

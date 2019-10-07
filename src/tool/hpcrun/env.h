@@ -82,6 +82,7 @@
 extern const char* HPCRUN_OPT_LUSH_AGENTS;
 
 extern const char* HPCRUN_OUT_PATH;
+extern const char* HPCRUN_THREAD_MAPPING;
 
 extern const char* BULLETIN_BOARD_SIZE;
 extern const char* WATCHPOINT_SIZE;
