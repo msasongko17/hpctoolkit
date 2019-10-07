@@ -48,6 +48,8 @@
 const char* HPCRUN_OPT_LUSH_AGENTS = "HPCRUN_OPT_LUSH_AGENTS";
 
 const char* HPCRUN_OUT_PATH        = "HPCRUN_OUT_PATH";
+const char* BULLETIN_BOARD_SIZE        = "BULLETIN_BOARD_SIZE";
+const char* WATCHPOINT_SIZE        = "WATCHPOINT_SIZE";
 const char* HPCRUN_TRACE           = "HPCRUN_TRACE";
 
 const char* PAPI_EVENT_LIST        = "PAPI_EVENT_LIST";
