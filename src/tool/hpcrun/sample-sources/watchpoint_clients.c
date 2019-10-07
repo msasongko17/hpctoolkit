@@ -134,6 +134,7 @@
 #include <unwind/x86-family/x86-misc.h>
 #include "perf/perf-util.h"
 #include <hpcrun/handling_sample.h>
+#include "matrix.h"
 
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
@@ -195,6 +196,7 @@ __thread WPStats_t wpStats;
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
 #define WP_TRUE_SHARING_EVENT_NAME "WP_TRUE_SHARING"
 #define WP_ALL_SHARING_EVENT_NAME "WP_ALL_SHARING"
+#define WP_COMDETECTIVE_EVENT_NAME "WP_COMDETECTIVE"
 #define WP_IPC_FALSE_SHARING_EVENT_NAME "WP_IPC_FALSE_SHARING"
 #define WP_IPC_TRUE_SHARING_EVENT_NAME "WP_IPC_TRUE_SHARING"
 #define WP_IPC_ALL_SHARING_EVENT_NAME "WP_IPC_ALL_SHARING"
@@ -207,6 +209,7 @@ typedef enum WP_CLIENT_ID{
     WP_TEMPORAL_REUSE,
     WP_SPATIAL_REUSE,
     WP_FALSE_SHARING,
+    WP_COMDETECTIVE,
     WP_ALL_SHARING,
     WP_TRUE_SHARING,
     WP_IPC_FALSE_SHARING,
@@ -235,7 +238,13 @@ typedef struct SharedData{
 } SharedData_t;
 
 SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = UNKNOWN, .tid = -1, .address = 0};
+
+HashTable_t bulletinBoard = {.counter = 0};
+
+__thread uint64_t prev_timestamp = 0;
+
 __thread int64_t lastTime = 0;
+__thread int64_t storeLastTime = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
 __thread uint64_t usedBytes = 0;
@@ -251,6 +260,16 @@ __thread uint64_t trueWWIns = 0;
 __thread uint64_t trueWRIns = 0;
 __thread uint64_t trueRWIns = 0;
 __thread uint64_t reuse = 0;
+
+// ComDetective stats begin
+__thread uint64_t fs_num = 0;
+__thread uint64_t inter_core_fs_num = 0;
+__thread uint64_t ts_num = 0;
+__thread uint64_t inter_core_ts_num = 0;
+__thread uint64_t as_num = 0;
+__thread uint64_t inter_core_as_num = 0;
+__thread uint64_t line_transfer_num = 0;
+// ComDetective stats end
 
 // Some stats
 __thread long int correct=0;
@@ -289,6 +308,7 @@ static WPTriggerActionType TemporalReuseWPCallback(WatchPointInfo_t *wpi, int st
 static WPTriggerActionType SpatialReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType LoadLoadWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AllSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TrueSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType IPCFalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -352,6 +372,13 @@ static WpClientConfig_t wpClientConfig[] = {
         .wpCallback = AllSharingWPCallback,
         .preWPAction = DISABLE_ALL_WP,
         .configOverrideCallback = AllSharingWPConfigOverride
+    },
+    {    
+        .id = WP_COMDETECTIVE,
+        .name = WP_COMDETECTIVE_EVENT_NAME,
+        .wpCallback = ComDetectiveWPCallback,
+        .preWPAction = DISABLE_ALL_WP,
+        .configOverrideCallback = ComDetectiveWPConfigOverride
     },
     /**** Contention ***/
     {
@@ -545,10 +572,10 @@ static void ClientTermination(){
             hpcrun_stats_num_trueWRIns_inc(trueWRIns);
             break;
         case WP_ALL_SHARING:
-        case WP_IPC_ALL_SHARING: assert(0);
-            assert(0);
+	case WP_COMDETECTIVE:
+        case WP_IPC_ALL_SHARING:
             hpcrun_stats_num_accessedIns_inc(accessedIns);
-            hpcrun_stats_num_falseWRIns_inc(falseWWIns);
+            hpcrun_stats_num_falseWWIns_inc(falseWWIns);
             hpcrun_stats_num_falseRWIns_inc(falseRWIns);
             hpcrun_stats_num_falseWRIns_inc(falseWRIns);
             hpcrun_stats_num_trueWWIns_inc(trueWWIns);
@@ -780,6 +807,8 @@ METHOD_FN(process_event_list, int lush_metrics)
     for(int i = 0; i < WP_MAX_CLIENTS; i++) {
         if (hpcrun_ev_is(event, wpClientConfig[i].name)) {
             theWPConfig  = &wpClientConfig[i];
+	    if(theWPConfig->id == WP_COMDETECTIVE)
+	    	fprintf(stderr, "watchpoint client configuration is retrieved and the id is WP_COMDETECTIVE\n");
             break;
         }
     }
@@ -823,6 +852,7 @@ METHOD_FN(process_event_list, int lush_metrics)
             break;
             
         case WP_ALL_SHARING:
+	case WP_COMDETECTIVE:
         case WP_IPC_ALL_SHARING:
             // must have a canonical load map across processes
             hpcrun_set_ipc_load_map(true);
@@ -881,6 +911,8 @@ METHOD_FN(display_events)
     printf("%s\n", WP_TRUE_SHARING_EVENT_NAME);
     printf("---------------------------------------------------------------------------\n");
     printf("%s\n", WP_ALL_SHARING_EVENT_NAME);
+    printf("---------------------------------------------------------------------------\n");
+    printf("%s\n", WP_COMDETECTIVE_EVENT_NAME);
     printf("---------------------------------------------------------------------------\n");
     printf("%s\n", WP_IPC_FALSE_SHARING_EVENT_NAME);
     printf("---------------------------------------------------------------------------\n");
@@ -1341,6 +1373,117 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
     return ALREADY_DISABLED;
 }
 
+static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+    int metricId = -1;
+    const void* joinNode;
+    int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+    number_of_traps++;
+    int max_thread_num = wpi->sample.first_accessing_tid;
+    if(max_thread_num < TD_GET(core_profile_trace_data.id))
+    {
+	max_thread_num = TD_GET(core_profile_trace_data.id);
+    }
+    if(fs_matrix_size < max_thread_num)
+    {
+	//matrix_size_set(max_thread_num);
+    	fs_matrix_size =  max_thread_num;
+    	ts_matrix_size =  max_thread_num;
+    	as_matrix_size =  max_thread_num;
+    }
+
+    int max_core_num = wpi->sample.first_accessing_core_id;
+
+    if(max_core_num < sched_getcpu())
+    {   
+        max_core_num = sched_getcpu();
+    }
+    if(fs_core_matrix_size < max_core_num)
+    {
+        //core_matrix_size_set(max_core_num);
+        fs_core_matrix_size =  max_core_num;
+        ts_core_matrix_size =  max_core_num;
+        as_core_matrix_size =  max_core_num;
+    }
+
+    long global_sampling_period = 0;
+
+    int index1 = wpi->sample.first_accessing_tid;
+    int index2 = TD_GET(core_profile_trace_data.id);
+
+   int core_id1 = wpi->sample.first_accessing_core_id;
+   int core_id2 = sched_getcpu();
+   int flag = 0;
+   // if ts2 > tprev then
+   if(prev_timestamp < wpi->sample.bulletinBoardTimestamp) {
+   	if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
+		if(wpi->sample.sampleType == ALL_LOAD) {
+        		global_sampling_period = global_load_sampling_period;
+			flag = 1;
+			number_of_caught_read_traps++;
+		}
+    	} else if (wt->accessType == STORE && wpi->sample.samplerAccessType == STORE) {
+        	if(wpi->sample.sampleType == ALL_STORE) {
+        	        global_sampling_period = global_store_sampling_period;
+			flag = 1;
+        	        number_of_caught_write_traps++;
+		}
+	} else if (wt->accessType == LOAD_AND_STORE && wpi->sample.samplerAccessType == LOAD_AND_STORE){
+		if(wpi->sample.sampleType == ALL_LOAD) {
+    	            global_sampling_period = global_load_sampling_period;
+    	            flag = 1;
+    	            number_of_caught_read_write_traps++;
+    	    	}
+	    	if(wpi->sample.sampleType == ALL_STORE) {
+            	    global_sampling_period = global_store_sampling_period;
+            	    flag = 1;
+            	    number_of_caught_read_write_traps++;
+        	}
+    	}
+    }
+
+
+    if (flag == 1) {
+    	void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
+    	double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+
+    	// if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+    	if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
+		int id = -1;
+		// Record true sharing
+		trueWWIns ++;
+            	metricId =  true_ww_metric_id;
+            	joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+    		ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
+		if(core_id1 != core_id2) {
+			ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
+		}
+
+    	} else {
+		int id = -1;
+		// Record false sharing
+		falseWWIns ++;
+            	metricId =  false_ww_metric_id;
+            	joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+		fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
+		if(core_id1 != core_id2) {
+			fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
+		}
+    	}
+    	as_matrix[index1][index2] = as_matrix[index1][index2] + increment;
+    	if(core_id1 != core_id2) {
+    		as_core_matrix[core_id1][core_id2] = as_core_matrix[core_id1][core_id2] + increment; 
+    	}
+	// tprev = ts2
+	prev_timestamp = wpi->sample.bulletinBoardTimestamp;
+    }
+
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+    cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
+    node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+    cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+    return ALREADY_DISABLED;
+}
 
 static WPTriggerActionType AllSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
     assert(0);
@@ -2128,6 +2271,76 @@ bool PrintStats(){
 }
 #endif
 
+SharedEntry_t getEntryRandomlyFromBulletinBoard(int tid, uint64_t cur_time, int * do_not_arm_watchpoint) {
+	int hashIndex = rdtsc() % HASHTABLESIZE;
+	int iter = 0;
+	while(1) {
+		if(iter == HASHTABLESIZE) {
+			*do_not_arm_watchpoint = 1;
+			break;
+		}
+		if((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1) && (bulletinBoard.hashTable[hashIndex].tid != tid) && ((cur_time - bulletinBoard.hashTable[hashIndex].time) < bulletinBoard.hashTable[hashIndex].expiration_period))
+			break;
+		++hashIndex;
+		hashIndex %= HASHTABLESIZE;
+		iter++;
+	}
+	return bulletinBoard.hashTable[hashIndex];
+}
+
+int hashCode(void * key) {
+   return (uint64_t) key % 54121 % HASHTABLESIZE;
+}
+
+SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
+	int hashIndex = hashCode(cacheLineBaseAddress);
+	int iter = 0;
+	while((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1) && (cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && iter < HASHTABLESIZE) {
+		++hashIndex;
+		hashIndex %= HASHTABLESIZE;
+		iter++;
+	}
+	if(iter == HASHTABLESIZE)
+		*item_not_found = 1;
+	return bulletinBoard.hashTable[hashIndex];
+}
+
+
+void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t prev_time) {
+   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
+   int hashIndex = hashCode(cacheLineBaseAddress);
+
+   int iter = 0;
+   while(bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1 && cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress && iter < HASHTABLESIZE) {
+      ++hashIndex;
+      hashIndex %= HASHTABLESIZE;
+      iter++;
+   }
+   if (bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+	bulletinBoard.hashTable[hashIndex] = item;
+  } else if((cacheLineBaseAddress == bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
+	item.prev_transfer_counter = bulletinBoard.hashTable[hashIndex].prev_transfer_counter;
+	bulletinBoard.hashTable[hashIndex] = item;
+  } else {
+        iter = 1;
+	uint64_t oldest_time = bulletinBoard.hashTable[0].time;
+	int targetIndex = 0;
+	hashIndex = 1;
+	while(iter < HASHTABLESIZE) {
+		if(bulletinBoard.hashTable[hashIndex].time < oldest_time) {
+			oldest_time = bulletinBoard.hashTable[hashIndex].time;
+			targetIndex = hashIndex;
+		}
+		++hashIndex;   
+      		hashIndex %= HASHTABLESIZE;
+      		iter++;
+	}
+	if((item.time - bulletinBoard.hashTable[targetIndex].time) > (cur_time - prev_time)) {
+		bulletinBoard.hashTable[targetIndex] = item;
+	}
+  }
+}
+
 bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
     void * data_addr = mmap_data->addr;
     void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
@@ -2442,6 +2655,226 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
             HandleIPCFalseSharing(data_addr, precisePC, node, accessLen, accessType, sampledMetricId, isSamplePointAccurate);
         }
             break;
+	case WP_COMDETECTIVE: {
+
+	    int sType = -1;
+	    if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+            	sType = ALL_STORE;
+            else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
+               	sType = ALL_LOAD;
+            else sType = UNKNOWN_SAMPLE_TYPE;
+	    uint64_t curtime = rdtsc();
+
+	    int64_t storeCurTime = 0;
+	    if(/*sType == ALL_STORE*/ (accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE)) )
+		storeCurTime = curtime;
+
+
+	    int me = TD_GET(core_profile_trace_data.id);
+	    int current_core = sched_getcpu();
+	    // L1 = getCacheline ( M1 )
+	    void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
+	    int item_not_found = 0;
+	    struct SharedEntry item;
+	    do{ 
+        	int64_t startCounter = bulletinBoard.counter;
+        	if(startCounter & 1) {
+            		continue;
+        	}
+        	//__sync_synchronize();
+		// entry = BulletinBoard.AtomicGet (key= L1 )
+        	item = getEntryFromBulletinBoard(cacheLineBaseAddressVar, &item_not_found);
+        	//__sync_synchronize();
+        	int64_t endCounter = bulletinBoard.counter;
+        	if(startCounter == endCounter) {
+            		break;
+		}
+    	    }while(1);
+
+	    int arm_watchpoint_flag = 0;
+
+	    // if entry == NULL then
+	    if((item.cacheLineBaseAddress == -1) || (item_not_found == 1)) {
+		//fprintf(stderr, "not found\n");
+		// TryArmWatchpoint( T 1 )
+		arm_watchpoint_flag = 1;
+	    // else
+	    } else {
+		//fprintf(stderr, "found\n");
+		// < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
+		// if T1 != T2 and ts2 > tprev then
+		if((me != item.tid) && (item.time > prev_timestamp)) {
+			int flag = 0;
+			double global_sampling_period = 0;
+			if(sType == ALL_LOAD) {
+                		global_sampling_period = (double) global_load_sampling_period;
+                		flag = 1;
+        		}
+        		if(sType == ALL_STORE) {
+                		global_sampling_period = (double) global_store_sampling_period;
+                		flag = 1;
+        		}
+			int max_thread_num = item.tid;
+    			if(max_thread_num < me)
+    			{   
+        			max_thread_num = me;
+    			}
+    			if(as_matrix_size < max_thread_num)
+    			{   
+        			//matrix_size_set(max_thread_num);
+        			fs_matrix_size =  max_thread_num;
+        			ts_matrix_size =  max_thread_num;
+        			as_matrix_size =  max_thread_num;  
+    			}
+
+			int max_core_num = item.core_id;
+                	if(max_core_num < current_core)
+                	{
+                		max_core_num = current_core;
+                	}
+                	if(as_core_matrix_size < max_core_num)
+                	{
+                		//core_matrix_size_set(max_core_num);
+                		fs_core_matrix_size =  max_core_num;
+                        	ts_core_matrix_size =  max_core_num;
+                        	as_core_matrix_size =  max_core_num;
+                	}
+			if(flag == 1) {
+				int metricId = -1;
+				// if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+				if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
+					// Record true sharing
+					/*trueWWIns ++;
+					metricId =  true_ww_metric_id;
+					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
+					ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + global_sampling_period;
+					if(item.core_id != current_core) {
+                                		ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + global_sampling_period;
+					}
+				} else {
+					/*falseWWIns ++;
+					metricId =  false_ww_metric_id;
+					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
+					// Record false sharing
+					fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + global_sampling_period;
+					if(item.core_id != current_core) {
+						fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + global_sampling_period;
+					}
+				}
+				as_matrix[item.tid][me] = as_matrix[item.tid][me] + global_sampling_period;
+				if(item.core_id != current_core) {
+					as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + global_sampling_period;
+                		}	
+				// tprev = ts2
+				prev_timestamp = item.time;
+				/*
+				sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+    				// insert a special node
+    				cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
+    				node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+    				// update the metricId
+    				cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+				*/
+	    		}
+
+	    	} else {
+			// TryArmWatchpoint(T1)
+			arm_watchpoint_flag = 1;
+		}
+	    }
+	    
+	    if (arm_watchpoint_flag) {
+		// begin watchpoints
+		int do_not_arm_watchpoint = 0;
+		// getting an unexpired address from BulletinBoard that is not from T
+		struct SharedEntry localSharedData;
+		do{ 
+        		int64_t startCounter1 = bulletinBoard.counter;
+        		if(startCounter1 & 1) {
+            			continue;
+        		}
+        		localSharedData = getEntryRandomlyFromBulletinBoard(me, curtime, &do_not_arm_watchpoint);	
+        		int64_t endCounter1 = bulletinBoard.counter;
+        		if(startCounter1 == endCounter1) {
+            			break;
+			}
+    	    	}while(1);
+
+		if((localSharedData.cacheLineBaseAddress != -1) && !do_not_arm_watchpoint) {
+			long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
+                	accessedIns += metricThreshold;
+			void * cacheLineBaseAddress = localSharedData.cacheLineBaseAddress;
+			int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7}; // hard coded
+                        for(int i = 0; i < wpConfig.maxWP; i ++) {
+                            int idx = rdtsc() & (CACHE_LINE_SZ/MAX_WP_LENGTH -1);
+                            int tmpVal = shuffleNums[idx];
+                            shuffleNums[idx] = shuffleNums[i];
+                            shuffleNums[i] = tmpVal;
+                        }
+			number_of_arming++;
+
+                        for(int i = 0; i < wpConfig.maxWP; i ++) {
+                            SampleData_t sd= {
+                                .va = cacheLineBaseAddress + (shuffleNums[i] << 3),
+				.target_va = localSharedData.address,
+                                .node = localSharedData.node,
+				.samplerAccessType = accessType,
+                                .accessType=localSharedData.accessType,
+				.sampleType=sType,
+                                .type=localSharedData.wpType,
+                                .wpLength = MAX_WP_LENGTH,
+                                .accessLength= accessLen,
+                                .sampledMetricId=sampledMetricId,
+                                .isSamplePointAccurate = isSamplePointAccurate,
+                                .preWPAction=theWPConfig->preWPAction,
+                                .isBackTrace = false,
+				.first_accessing_tid = localSharedData.tid,
+				.first_accessing_core_id = localSharedData.core_id,
+				.bulletinBoardTimestamp = curtime
+                            };
+			    // if current WPs in T are old then
+				// Disarm any previously armed WPs
+				// Set WPs on an unexpired address from BulletinBoard that is not from T
+                            SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
+                        }
+		}
+		// end watchpoints
+	    }
+
+	    // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
+	    if((sType == ALL_LOAD) || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+	    } else {
+		// BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
+		uint64_t bulletinCounter = bulletinBoard.counter;
+		if((bulletinCounter & 1) == 0) {
+			if(__sync_bool_compare_and_swap(&bulletinBoard.counter, bulletinCounter, bulletinCounter+1)){
+				struct SharedEntry inserted_item;
+                		inserted_item.time = curtime;
+                		inserted_item.tid = me;
+				inserted_item.core_id = sched_getcpu();
+                		inserted_item.wpType = WP_RW;
+                		inserted_item.accessType = accessType;
+                		inserted_item.sampleType = sType;
+                		inserted_item.address = data_addr;
+                		inserted_item.accessLen = accessLen;
+				inserted_item.node = node;
+				inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
+				inserted_item.prev_transfer_counter = 0;
+				inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+				int bb_flag = 0;
+				//__sync_synchronize();
+                		hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
+				//__sync_synchronize();
+                		bulletinBoard.counter++;
+			}
+		}
+	    }
+	    // ends
+
+	    lastTime = curtime;
+	    if(accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE))
+		storeLastTime = storeCurTime;
+	}
         default:
             break;
     }
@@ -2452,5 +2885,16 @@ ErrExit:
     wpStats.numImpreciseSamples ++;
     return false;
     
+}
+
+void dump_comdetective_matrices() {
+	if(theWPConfig->id == WP_COMDETECTIVE) {
+		dump_fs_matrix();
+		dump_fs_core_matrix();
+		dump_ts_matrix();
+		dump_ts_core_matrix();
+		dump_as_matrix();
+		dump_as_core_matrix();
+	}
 }
 

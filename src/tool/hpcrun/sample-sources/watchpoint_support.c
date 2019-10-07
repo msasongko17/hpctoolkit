@@ -60,8 +60,7 @@
 
 #include "watchpoint_support.h"
 #include <unwind/x86-family/x86-misc.h>
-//#include "matrix.h"
-//#include <adm_init_fini.h>
+#include "matrix.h"
 
 //extern int init_adamant;
 
@@ -287,13 +286,12 @@ static void InitConfig(){
     for (int j = 0 ; j < i; j ++) {
         CHECK(close(wpHandles[j]));
     }
-    /*int custom_wp_size = atoi(getenv(WATCHPOINT_SIZE));
+    int custom_wp_size = atoi(getenv(WATCHPOINT_SIZE));
     if(custom_wp_size < i)
         wpConfig.maxWP = custom_wp_size;
     else
         wpConfig.maxWP = i;
-   fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);*/
-   wpConfig.maxWP = i;
+    fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
     
     // Should we get the floating point type in an access?
     wpConfig.getFloatType = false;

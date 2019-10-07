@@ -137,6 +137,7 @@
 
 #include <messages/messages.h>
 #include <messages/debug-flag.h>
+#include "mymapping.h"
 
 extern void hpcrun_set_retain_recursion_mode(bool mode);
 #ifndef USE_LIBUNW
@@ -846,6 +847,7 @@ monitor_init_process(int *argc, char **argv, void* data)
   hpcrun_process_sample_source_none();
 
   if (!hpcrun_get_disabled()) {
+    hpcrun_set_thread_mapping();
     hpcrun_files_set_directory();
   }
 

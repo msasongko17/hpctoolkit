@@ -197,6 +197,8 @@ arg_ok()
 preload_list=
 HPCRUN_DEBUG_FLAGS=
 HPCRUN_EVENT_LIST=
+BULLETIN_BOARD_SIZE=127
+WATCHPOINT_SIZE=4
 
 while test "x$1" != x
 do
@@ -278,6 +280,26 @@ do
 	    shift
 	    ;;
 
+	--mapping )
+            arg_ok "$1" || die "missing argument for $arg"
+            export HPCRUN_THREAD_MAPPING="$1"
+            shift
+            ;;
+
+	--bulletin-board-size )
+            arg_ok "$1" || die "missing argument for $arg"
+	    BULLETIN_BOARD_SIZE=$1
+            shift
+            ;;
+
+	# --------------------------------------------------
+
+        --debug-register-size )
+            arg_ok "$1" || die "missing argument for $arg"
+            WATCHPOINT_SIZE=$1
+            shift
+            ;;
+
 	# --------------------------------------------------
 
 	-r | --retain-recursion )
@@ -336,6 +358,9 @@ do
 	    ;;
     esac
 done
+
+export BULLETIN_BOARD_SIZE
+export WATCHPOINT_SIZE
 
 # Add default sampling source if needed.
 case "$HPCRUN_EVENT_LIST" in

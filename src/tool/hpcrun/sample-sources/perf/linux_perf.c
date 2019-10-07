@@ -101,8 +101,8 @@
 #include <hpcrun/sample-sources/blame-shift/blame-shift.h>
 #include <hpcrun/utilities/tokenize.h>
 #include <hpcrun/utilities/arch/context-pc.h>
-//#include <hpcrun/matrix.h>
-//#include <hpcrun/mymapping.h>
+#include <hpcrun/matrix.h>
+#include <hpcrun/mymapping.h>
 
 #include <evlist.h>
 
@@ -293,8 +293,8 @@ static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
   //printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
-  /*if(mapping_size > 0)
-  	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);*/
+  if(mapping_size > 0)
+  	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
   et->event = event;
   // ask sys to "create" the event
   // it returns -1 if it fails.
@@ -763,11 +763,11 @@ METHOD_FN(process_event_list, int lush_metrics)
         default_threshold.threshold_num);
     //global_sampling_period = threshold;
     //global_sampling_period = threshold;
-    /*if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+    if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
         global_store_sampling_period = threshold;
 
     if (strncmp (name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
-        global_load_sampling_period = threshold;*/
+        global_load_sampling_period = threshold;
 	
     // ------------------------------------------------------------
     // need a special case if we have our own customized  predefined  event
