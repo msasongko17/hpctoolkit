@@ -244,6 +244,7 @@ HashTable_t bulletinBoard = {.counter = 0};
 __thread uint64_t prev_timestamp = 0;
 
 __thread int64_t lastTime = 0;
+__thread int64_t storeLastTime = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
 __thread uint64_t usedBytes = 0;
