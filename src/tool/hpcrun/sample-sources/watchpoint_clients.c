@@ -575,7 +575,7 @@ static void ClientTermination(){
 	case WP_COMDETECTIVE:
         case WP_IPC_ALL_SHARING:
             hpcrun_stats_num_accessedIns_inc(accessedIns);
-            hpcrun_stats_num_falseWRIns_inc(falseWWIns);
+            hpcrun_stats_num_falseWWIns_inc(falseWWIns);
             hpcrun_stats_num_falseRWIns_inc(falseRWIns);
             hpcrun_stats_num_falseWRIns_inc(falseWRIns);
             hpcrun_stats_num_trueWWIns_inc(trueWWIns);
