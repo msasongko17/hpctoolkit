@@ -11,6 +11,7 @@ int mapping_vector[1024];
 
 int mapping_size;
 
+/*
 void
 hpcrun_enable_object_level ()
 {
@@ -19,7 +20,7 @@ hpcrun_enable_object_level ()
 	} else {
 		printf("object level feature is disabled\n");
 	}
-}
+}*/
 
 void
 hpcrun_set_thread_mapping ()
