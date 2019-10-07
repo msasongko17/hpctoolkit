@@ -59,6 +59,8 @@
 #include <lib/prof-lean/stdatomic.h>
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <unwind/common/validate_return_addr.h>
+#include "matrix.h"
+#include "env.h"
 
 
 //***************************************************************************

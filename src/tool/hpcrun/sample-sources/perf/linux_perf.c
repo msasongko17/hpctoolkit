@@ -101,7 +101,7 @@
 #include <hpcrun/sample-sources/blame-shift/blame-shift.h>
 #include <hpcrun/utilities/tokenize.h>
 #include <hpcrun/utilities/arch/context-pc.h>
-//#include <hpcrun/matrix.h>
+#include <hpcrun/matrix.h>
 //#include <hpcrun/mymapping.h>
 
 #include <evlist.h>
