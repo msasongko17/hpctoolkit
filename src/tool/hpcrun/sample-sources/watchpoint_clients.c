@@ -1379,11 +1379,6 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     const void* joinNode;
     int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
-    last_trapped_cacheline = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);
-
-
-    did_last_sample_trap = true;
-
     number_of_traps++;
     int max_thread_num = wpi->sample.first_accessing_tid;
     if(max_thread_num < TD_GET(core_profile_trace_data.id))
