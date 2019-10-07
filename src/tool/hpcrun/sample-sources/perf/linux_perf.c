@@ -763,11 +763,11 @@ METHOD_FN(process_event_list, int lush_metrics)
         default_threshold.threshold_num);
     //global_sampling_period = threshold;
     //global_sampling_period = threshold;
-    /*if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+    if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
         global_store_sampling_period = threshold;
 
     if (strncmp (name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
-        global_load_sampling_period = threshold;*/
+        global_load_sampling_period = threshold;
 	
     // ------------------------------------------------------------
     // need a special case if we have our own customized  predefined  event
