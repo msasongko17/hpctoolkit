@@ -573,8 +573,7 @@ static void ClientTermination(){
             break;
         case WP_ALL_SHARING:
 	case WP_COMDETECTIVE:
-        case WP_IPC_ALL_SHARING: assert(0);
-            assert(0);
+        case WP_IPC_ALL_SHARING:
             hpcrun_stats_num_accessedIns_inc(accessedIns);
             hpcrun_stats_num_falseWRIns_inc(falseWWIns);
             hpcrun_stats_num_falseRWIns_inc(falseRWIns);
@@ -1406,10 +1405,6 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
         ts_core_matrix_size =  max_core_num;
         as_core_matrix_size =  max_core_num;
     }
-
-
-    if(max_consecutive_count < consecutive_access_count)
-		max_consecutive_count = consecutive_access_count;
 
     long global_sampling_period = 0;
 
