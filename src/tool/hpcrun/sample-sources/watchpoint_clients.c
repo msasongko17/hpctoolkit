@@ -1451,18 +1451,24 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     	if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
 		int id = -1;
 		// Record true sharing
+		trueWWIns ++;
+            	metricId =  true_ww_metric_id;
+            	joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
     		ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
 		if(core_id1 != core_id2) {
 			ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
 		}
 
     	} else {
-			int id = -1;
-			// Record false sharing
-			fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
-			if(core_id1 != core_id2) {
-				fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
-			}
+		int id = -1;
+		// Record false sharing
+		falseWWIns ++;
+            	metricId =  false_ww_metric_id;
+            	joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+		fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
+		if(core_id1 != core_id2) {
+			fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
+		}
     	}
     	as_matrix[index1][index2] = as_matrix[index1][index2] + increment;
     	if(core_id1 != core_id2) {
