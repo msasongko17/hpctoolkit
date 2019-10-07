@@ -114,6 +114,8 @@ static atomic_long trolled = ATOMIC_VAR_INIT(0);
 static atomic_long frames_total = ATOMIC_VAR_INIT(0);
 static atomic_long trolled_frames = ATOMIC_VAR_INIT(0);
 
+extern void dump_comdetective_matrices();
+
 //***************************************************************************
 // interface operations
 //***************************************************************************
@@ -632,6 +634,7 @@ hpcrun_stats_num_samples_yielded(void)
 void
 hpcrun_stats_print_summary(void)
 {
+  dump_comdetective_matrices();
   long blocked = atomic_load_explicit(&num_samples_blocked_async, memory_order_relaxed) +
     atomic_load_explicit(&num_samples_blocked_dlopen, memory_order_relaxed);
   long errant = atomic_load_explicit(&num_samples_dropped, memory_order_relaxed);
@@ -651,6 +654,8 @@ hpcrun_stats_print_summary(void)
   AMSG("WATCHPOINT ANOMALIES: samples:%.2e, SM_imprecise:%.2e, WP_Set:%.2e, WP_triggered:%.2e, WP_SampleTriggering:%.2e, WP_ImpreciseIP:%.2e, WP_InsaneIP:%.2e, WP_Off8Addr:%.2e, WP_ImpreciseAddr:%.2e, WP_Dropped:%.2e", (double)atomic_load(&num_samples_total), (double)atomic_load(&num_samples_imprecise), (double)atomic_load(&num_watchpoints_set), (double)atomic_load(&num_watchpoints_triggered), (double)atomic_load(&num_sample_triggering_watchpoints),  (double)atomic_load(&num_watchpoints_imprecise), (double)atomic_load(&num_insane_ip), (double)atomic_load(&num_watchpoints_imprecise_address_8_byte), (double)atomic_load(&num_watchpoints_imprecise_address), (double)atomic_load(&num_watchpoints_dropped));
 
   AMSG("WATCHPOINT STATS: writtenBytes:%ld, usedBytes:%ld, deadBytes:%ld, newBytes:%ld, oldBytes:%ld, oldAppxBytes:%ld, loadedBytes:%ld, accessedIns:%ld, falseWWIns:%ld, falseRWIns:%ld, falseWRIns:%ld, trueWWIns:%ld, trueRWIns:%ld, trueWRIns:%ld, RSS:%ld, reuse:%ld, latency:%ld", num_writtenBytes, num_usedBytes, num_deadBytes, num_newBytes, num_oldBytes, num_oldAppxBytes, num_loadedBytes, num_accessedIns, num_falseWWIns, num_falseRWIns, num_falseWRIns, num_trueWWIns, num_trueRWIns, num_trueWRIns,  (size_t)(rusage.ru_maxrss), num_reuse, num_latency);
+
+  AMSG("COMDETECTIVE STATS: fs_volume:%0.2lf, fs_core_volume:%0.2lf, ts_volume:%0.2lf, ts_core_volume:%0.2lf, as_volume:%0.2lf, as_core_volume:%0.2lf, cache_line_transfer:%0.2lf, cache_line_transfer_millions:%0.2lf, cache_line_transfer_gbytes:%0.2lf", fs_volume, fs_core_volume, ts_volume, ts_core_volume, as_volume, as_core_volume, cache_line_transfer, cache_line_transfer_millions, cache_line_transfer_gbytes);
 
   AMSG("SAMPLE ANOMALIES: blocks: %ld (async: %ld, dlopen: %ld), "
        "errors: %ld (segv: %ld, soft: %ld)",
