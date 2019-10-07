@@ -293,8 +293,8 @@ static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
   //printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
-  /*if(mapping_size > 0)
-  	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);*/
+  if(mapping_size > 0)
+  	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
   et->event = event;
   // ask sys to "create" the event
   // it returns -1 if it fails.
