@@ -2744,17 +2744,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 				// if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
 				if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
 					// Record true sharing
-					trueWWIns ++;
+					/*trueWWIns ++;
 					metricId =  true_ww_metric_id;
-					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
 					ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + global_sampling_period;
 					if(item.core_id != current_core) {
                                 		ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + global_sampling_period;
 					}
 				} else {
-					falseWWIns ++;
+					/*falseWWIns ++;
 					metricId =  false_ww_metric_id;
-					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+					cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
 					// Record false sharing
 					fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + global_sampling_period;
 					if(item.core_id != current_core) {
