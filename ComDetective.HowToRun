@@ -1,0 +1,25 @@
+Usage
+=====
+1. To run ComDetective with default configuration (sampling period: 500K, bulletin board size: 127, number of watchpoints: 4, and name of output folder "<timestamp>_timestamped_results"):
+
+ComDetectiverun <./your_executable> your_args
+
+2. To run ComDetective with custom configuration (user-chosen sampling period, bulletin board size, number of watchpoints, and name of output folder):
+
+ComDetectiverun --period <sampling rate> --bulletin-board-size <bulletin board size> --debug-register-size <number of debug registers> --output <name of output folder> <./your_executable> your_args
+
+or
+
+ComDetectiverun -p <sampling rate> -b <bulletin board size> -d <number of debug registers> -o <name of output folder> <./your_executable> args_for_executable
+
+3. To monitor a program that has multiple processes (e.g. an MPI program):
+
+mpirun -n <process count> ComDetectiverun <./your_executable> your_args
+
+
+
+Results
+=====
+Communication matrices are dumped to the output folder. Each matrix file is named as follow: <executable name>-<pid of the process>-<matrix type>_matrix.csv. <matrix type> can be "as" for any communication among threads, "ts" for true sharing among threads, "fs" for false sharing among threads, "as_core" for any communication among cores, "fs_core" for false sharing among cores, or "ts_core" for true sharing among cores. Total counts of communications are printed in the log file named <executable name>-*.log within the output folder.
+
+

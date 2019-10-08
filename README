@@ -99,3 +99,18 @@ Email (for compliments, complaints and cash):
   - Relevant profiling/analysis commands. If you have used hpcrun,
     please include the results of executing:
       hpcsummary --all <hpctoolkit-measurements>
+
+----------------------------------------
+3. ComDetective
+----------------------------------------
+
+A tool for inter-thread/inter-core communication analysis based on HPCToolkits.
+A paper about it is published at SC 2019: Sasongko, M.A. , Unat, D., Pakhtar, P., and Chabbi, M "ComDetective: A Lightweight Communication Detection Tool for Threads."
+
+Installation
+===============
+See ComDetective.Install
+
+Usage
+=====
+See ComDetective.HowToRun
