@@ -2774,14 +2774,15 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  }	
 				  // tprev = ts2
 				  prev_timestamp = item.time;
-				  /*
-				     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
-				  // insert a special node
-				  cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
-				  node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
-				  // update the metricId
-				  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
-				  */
+				  // before
+				  const void* joinNode;
+                                  int joinNodeIdx = isSamplePointAccurate ? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+                                  joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+                                  cct_node_t *node1 = hpcrun_insert_special_node(node, joinNode);
+                                  node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
+                                  metricId =  false_ww_metric_id;
+                                  cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});
+				  // after
 				}
 
 			      } else {
