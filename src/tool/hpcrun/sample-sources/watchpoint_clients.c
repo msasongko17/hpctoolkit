@@ -2609,6 +2609,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 					};
 					SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */);
 				      }
+				      const void* joinNode;
+				      int joinNodeIdx = isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+				      joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+				      cct_node_t *node = hpcrun_insert_special_node(localSharedData.node, joinNode);
+				      //node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+				      int metricId =  false_ww_metric_id;
+				      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
 				    }
 				    break;
 	     case WP_ALL_SHARING: {
