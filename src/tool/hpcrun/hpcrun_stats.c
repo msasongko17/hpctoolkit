@@ -130,7 +130,7 @@ hpcrun_stats_reinit(void)
   fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
   fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
   for(int i = 0; i < HASHTABLESIZE; i++) {
-	bulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
+    bulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
   }
   atomic_store_explicit(&num_samples_total, 0, memory_order_relaxed);
   atomic_store_explicit(&num_samples_attempted, 0, memory_order_relaxed);

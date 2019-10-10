@@ -67,184 +67,190 @@ double cache_line_transfer_millions;
 double cache_line_transfer_gbytes;
 // comdetective stats end
 
-void dump_fs_matrix()
+void 
+dump_fs_matrix()
 {
-	FILE * fp;
-	char file_name[PATH_MAX]; 
-	sprintf(file_name, "%s/%s-%ld-fs_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-	fp = fopen (file_name, "w+");
-	//printf("fs_matrix_size: %d\n", fs_matrix_size);
-	double total= 0;
-	for(int i = fs_matrix_size; i >= 0; i--) 
-	{
-		for (int j = 0; j <= fs_matrix_size; j++)
-		{
-			if(j < fs_matrix_size) {
-                                fprintf(fp, "%0.2lf,", fs_matrix[i][j] + fs_matrix[j][i]);
-                                total += fs_matrix[i][j];
-                                //printf("%0.2lf,", fs_matrix[i][j] + fs_matrix[j][i]);
-                        } else {
-                                fprintf(fp, "%0.2lf", fs_matrix[i][j] + fs_matrix[j][i]);
-                                total += fs_matrix[i][j];
-                                //printf("%0.2lf", fs_matrix[i][j] + fs_matrix[j][i]);
-                        }
-		}
-		fprintf(fp,"\n");
-		//printf("\n");
-	}
-	fclose(fp);
-	fs_volume = total;
+  FILE * fp;
+  char file_name[PATH_MAX]; 
+  sprintf(file_name, "%s/%s-%ld-fs_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+  fp = fopen (file_name, "w+");
+  //printf("fs_matrix_size: %d\n", fs_matrix_size);
+  double total= 0;
+  for(int i = fs_matrix_size; i >= 0; i--) 
+  {
+    for (int j = 0; j <= fs_matrix_size; j++)
+    {
+      if(j < fs_matrix_size) {
+	fprintf(fp, "%0.2lf,", fs_matrix[i][j] + fs_matrix[j][i]);
+	total += fs_matrix[i][j];
+	//printf("%0.2lf,", fs_matrix[i][j] + fs_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", fs_matrix[i][j] + fs_matrix[j][i]);
+	total += fs_matrix[i][j];
+	//printf("%0.2lf", fs_matrix[i][j] + fs_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  fclose(fp);
+  fs_volume = total;
 }
 
-void dump_fs_core_matrix()
+void 
+dump_fs_core_matrix()
 {
-        FILE * fp;
-        char file_name[PATH_MAX];
-	sprintf(file_name, "%s/%s-%ld-fs_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-        fp = fopen (file_name, "w+");
-        //printf("fs_core_matrix_size: %d\n", fs_core_matrix_size);
-        double total= 0;
-        for(int i = fs_core_matrix_size; i >= 0; i--)
-        {
-                for (int j = 0; j <= fs_core_matrix_size; j++)
-                {
-			if(j < fs_core_matrix_size) {
-                                fprintf(fp, "%0.2lf,", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
-                                total += fs_core_matrix[i][j];
-                                //printf("%0.2lf,", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
-                        } else {
-                                fprintf(fp, "%0.2lf", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
-                                total += fs_core_matrix[i][j];
-                                //printf("%0.2lf", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
-                        }
-                }
-                fprintf(fp,"\n");
-                //printf("\n");
-        }
-        fclose(fp);
-	fs_core_volume = total;
+  FILE * fp;
+  char file_name[PATH_MAX];
+  sprintf(file_name, "%s/%s-%ld-fs_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+  fp = fopen (file_name, "w+");
+  //printf("fs_core_matrix_size: %d\n", fs_core_matrix_size);
+  double total= 0;
+  for(int i = fs_core_matrix_size; i >= 0; i--)
+  {
+    for (int j = 0; j <= fs_core_matrix_size; j++)
+    {
+      if(j < fs_core_matrix_size) {
+	fprintf(fp, "%0.2lf,", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
+	total += fs_core_matrix[i][j];
+	//printf("%0.2lf,", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
+	total += fs_core_matrix[i][j];
+	//printf("%0.2lf", fs_core_matrix[i][j] + fs_core_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  fclose(fp);
+  fs_core_volume = total;
 }
 
-void dump_ts_matrix()
+void 
+dump_ts_matrix()
 {
-	FILE * fp;
-	char file_name[PATH_MAX];
-	sprintf(file_name, "%s/%s-%ld-ts_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-	fp = fopen (file_name, "w+");
-	//printf("ts_matrix_size: %d\n", ts_matrix_size);
-	double total = 0;
-	for(int i = ts_matrix_size; i >= 0; i--) 
-	{
-		for (int j = 0; j <= ts_matrix_size; j++)
-		{
-			if(j < ts_matrix_size) {
-                                fprintf(fp, "%0.2lf,", ts_matrix[i][j] + ts_matrix[j][i]);
-                                total += ts_matrix[i][j];
-                                //printf("%0.2lf,", ts_matrix[i][j] + ts_matrix[j][i]);
-                        } else {
-                                fprintf(fp, "%0.2lf", ts_matrix[i][j] + ts_matrix[j][i]);
-                                total += ts_matrix[i][j];
-                                //printf("%0.2lf", ts_matrix[i][j] + ts_matrix[j][i]);
-                        }
-		}
-		fprintf(fp,"\n");
-		//printf("\n");
-	}
-	fclose(fp);
-	ts_volume = total;
+  FILE * fp;
+  char file_name[PATH_MAX];
+  sprintf(file_name, "%s/%s-%ld-ts_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+  fp = fopen (file_name, "w+");
+  //printf("ts_matrix_size: %d\n", ts_matrix_size);
+  double total = 0;
+  for(int i = ts_matrix_size; i >= 0; i--) 
+  {
+    for (int j = 0; j <= ts_matrix_size; j++)
+    {
+      if(j < ts_matrix_size) {
+	fprintf(fp, "%0.2lf,", ts_matrix[i][j] + ts_matrix[j][i]);
+	total += ts_matrix[i][j];
+	//printf("%0.2lf,", ts_matrix[i][j] + ts_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", ts_matrix[i][j] + ts_matrix[j][i]);
+	total += ts_matrix[i][j];
+	//printf("%0.2lf", ts_matrix[i][j] + ts_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  fclose(fp);
+  ts_volume = total;
 }
 
-void dump_ts_core_matrix()
+void 
+dump_ts_core_matrix()
 {
-        FILE * fp;
-        char file_name[PATH_MAX];
-	sprintf(file_name, "%s/%s-%ld-ts_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-        fp = fopen (file_name, "w+");
-        //printf("ts_core_matrix_size: %d\n", ts_core_matrix_size);
-        double total = 0;
-        for(int i = ts_core_matrix_size; i >= 0; i--)
-        {
-                for (int j = 0; j <= ts_core_matrix_size; j++)
-                {
-			if(j < ts_core_matrix_size) {
-                                fprintf(fp, "%0.2lf,", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
-                                total += ts_core_matrix[i][j];
-                                //printf("%0.2lf,", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
-                        } else {
-                                fprintf(fp, "%0.2lf", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
-                                total += ts_core_matrix[i][j];
-                                //printf("%0.2lf", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
-                        }
-                }
-                fprintf(fp,"\n");
-                //printf("\n");
-        }
-        fclose(fp);
-	ts_core_volume = total;
+  FILE * fp;
+  char file_name[PATH_MAX];
+  sprintf(file_name, "%s/%s-%ld-ts_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+  fp = fopen (file_name, "w+");
+  //printf("ts_core_matrix_size: %d\n", ts_core_matrix_size);
+  double total = 0;
+  for(int i = ts_core_matrix_size; i >= 0; i--)
+  {
+    for (int j = 0; j <= ts_core_matrix_size; j++)
+    {
+      if(j < ts_core_matrix_size) {
+	fprintf(fp, "%0.2lf,", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
+	total += ts_core_matrix[i][j];
+	//printf("%0.2lf,", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
+	total += ts_core_matrix[i][j];
+	//printf("%0.2lf", ts_core_matrix[i][j] + ts_core_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  fclose(fp);
+  ts_core_volume = total;
 }
 
-void dump_as_matrix()
+void 
+dump_as_matrix()
 {
-	FILE * fp;
-	char file_name[PATH_MAX];
-	long timeprint = (long) clock();
-	sprintf(file_name, "%s/%s-%ld-as_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-	
-	fp = fopen (file_name, "w+");
-	//printf("as_matrix_size: %d\n", as_matrix_size);
-	double total = 0;
-	//printf("all sharing matrix:\n");
-	for(int i = as_matrix_size; i >= 0; i--)
-	{
-		for (int j = 0; j <= as_matrix_size; j++)
-		{
-			if(j < as_matrix_size) {
-				fprintf(fp, "%0.2lf,", as_matrix[i][j] + as_matrix[j][i]);
-				total += as_matrix[i][j];
-				//printf("%0.2lf,", as_matrix[i][j] + as_matrix[j][i]);
-			} else {
-				fprintf(fp, "%0.2lf", as_matrix[i][j] + as_matrix[j][i]);
-                                total += as_matrix[i][j];
-                                //printf("%0.2lf", as_matrix[i][j] + as_matrix[j][i]);
-			}
-		}
-		fprintf(fp,"\n");
-		//printf("\n");
-	}
-	as_volume = total;
-	fclose(fp);
+  FILE * fp;
+  char file_name[PATH_MAX];
+  long timeprint = (long) clock();
+  sprintf(file_name, "%s/%s-%ld-as_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+
+  fp = fopen (file_name, "w+");
+  //printf("as_matrix_size: %d\n", as_matrix_size);
+  double total = 0;
+  //printf("all sharing matrix:\n");
+  for(int i = as_matrix_size; i >= 0; i--)
+  {
+    for (int j = 0; j <= as_matrix_size; j++)
+    {
+      if(j < as_matrix_size) {
+	fprintf(fp, "%0.2lf,", as_matrix[i][j] + as_matrix[j][i]);
+	total += as_matrix[i][j];
+	//printf("%0.2lf,", as_matrix[i][j] + as_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", as_matrix[i][j] + as_matrix[j][i]);
+	total += as_matrix[i][j];
+	//printf("%0.2lf", as_matrix[i][j] + as_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  as_volume = total;
+  fclose(fp);
 }
 
-void dump_as_core_matrix()
+void 
+dump_as_core_matrix()
 {
-        FILE * fp;
-        char file_name[PATH_MAX];
-	long timeprint = (long) clock();
-	sprintf(file_name, "%s/%s-%ld-as_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
-        fp = fopen (file_name, "w+");
-        //printf("as_matrix_size: %d\n", as_matrix_size);
-        double total = 0;
-        //printf("all sharing matrix:\n");
-        for(int i = as_core_matrix_size; i >= 0; i--)
-        {
-                for (int j = 0; j <= as_core_matrix_size; j++)
-                {
-                        if(j < as_core_matrix_size) {
-                                fprintf(fp, "%0.2lf,", as_core_matrix[i][j] + as_core_matrix[j][i]);
-                                total += as_core_matrix[i][j];
-                                //printf("%0.2lf,", as_core_matrix[i][j] + as_core_matrix[j][i]);
-                        } else {
-                                fprintf(fp, "%0.2lf", as_core_matrix[i][j] + as_core_matrix[j][i]);
-                                total += as_core_matrix[i][j];
-                                //printf("%0.2lf", as_core_matrix[i][j] + as_core_matrix[j][i]);
-                        }
-                }
-                fprintf(fp,"\n");
-                //printf("\n");
-        }
-	as_core_volume = total;
-	cache_line_transfer = total;
-	cache_line_transfer_millions = total/(1000000);
-	cache_line_transfer_gbytes = total*64/(1024*1024*1024);
-        fclose(fp);
+  FILE * fp;
+  char file_name[PATH_MAX];
+  long timeprint = (long) clock();
+  sprintf(file_name, "%s/%s-%ld-as_core_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
+  fp = fopen (file_name, "w+");
+  //printf("as_matrix_size: %d\n", as_matrix_size);
+  double total = 0;
+  //printf("all sharing matrix:\n");
+  for(int i = as_core_matrix_size; i >= 0; i--)
+  {
+    for (int j = 0; j <= as_core_matrix_size; j++)
+    {
+      if(j < as_core_matrix_size) {
+	fprintf(fp, "%0.2lf,", as_core_matrix[i][j] + as_core_matrix[j][i]);
+	total += as_core_matrix[i][j];
+	//printf("%0.2lf,", as_core_matrix[i][j] + as_core_matrix[j][i]);
+      } else {
+	fprintf(fp, "%0.2lf", as_core_matrix[i][j] + as_core_matrix[j][i]);
+	total += as_core_matrix[i][j];
+	//printf("%0.2lf", as_core_matrix[i][j] + as_core_matrix[j][i]);
+      }
+    }
+    fprintf(fp,"\n");
+    //printf("\n");
+  }
+  as_core_volume = total;
+  cache_line_transfer = total;
+  cache_line_transfer_millions = total/(1000000);
+  cache_line_transfer_gbytes = total*64/(1024*1024*1024);
+  fclose(fp);
 }
