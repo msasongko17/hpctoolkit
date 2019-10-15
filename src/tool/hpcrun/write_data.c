@@ -224,6 +224,8 @@ write_epochs(FILE* fs, core_profile_trace_data_t * cptd, epoch_t* epoch)
 
   TMSG(DATA_WRITE, "writing # epochs = %d", num_epochs);
 
+  fprintf(stderr, "writing # epochs = %d\n", num_epochs);
+
   //
   // for each epoch ...
   //
@@ -264,7 +266,6 @@ write_epochs(FILE* fs, core_profile_trace_data_t * cptd, epoch_t* epoch)
 
     TMSG(DATA_WRITE, "metric tbl len = %d", metric_tbl->len);
     hpcrun_fmt_metricTbl_fwrite(metric_tbl, cptd->perf_event_info, fs);
-
     TMSG(DATA_WRITE, "Done writing metric data");
 
     //

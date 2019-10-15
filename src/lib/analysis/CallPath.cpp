@@ -1059,6 +1059,8 @@ makeReturnCountMetric(Prof::CallPath::Profile& prof)
       for (uint i = 0; i < retCntId.size(); ++i) {
 	uint mId = retCntId[i];
 	n_parent->demandMetric(mId) += n->demandMetric(mId);
+        n_parent->demandSender(mId) += n->demandSender(mId);
+        n_parent->demandReceiver(mId) += n->demandReceiver(mId);
 	n->metric(mId) = 0.0;
       }
     }
@@ -1083,6 +1085,8 @@ write(Prof::CallPath::Profile& prof, std::ostream& os,
 void
 makeDatabase(Prof::CallPath::Profile& prof, const Analysis::Args& args)
 {
+
+  fprintf(stderr, "in makeDatabase\n");
   const string& db_dir = args.db_dir;
 
   DIAG_Msg(1, "Populating Experiment database: " << db_dir);
@@ -1116,6 +1120,7 @@ static void
 write(Prof::CallPath::Profile& prof, std::ostream& os,
       const Analysis::Args& args)
 {
+  fprintf(stderr, "write is writing into experiment.XML\n");
   static const char* experimentDTD =
 #include <lib/xml/hpc-experiment.dtd.h>
 
@@ -1168,6 +1173,7 @@ write(Prof::CallPath::Profile& prof, std::ostream& os,
   // 
   // ------------------------------------------------------------
   os << "<SecCallPathProfileData>\n";
+  fprintf(stderr, "before prof.cct()->writeXML(os, metricBegId, metricEndId, oFlags)\n");
   prof.cct()->writeXML(os, metricBegId, metricEndId, oFlags);
   os << "</SecCallPathProfileData>\n";
 

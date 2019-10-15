@@ -704,6 +704,10 @@ ANode::aggregateMetrics(uint mBegId, uint mEndId)
       for (uint mId = mBegId; mId < mEndId; ++mId) {
 	double mVal = n->demandMetric(mId, mEndId/*size*/);
 	n_parent->demandMetric(mId, mEndId/*size*/) += mVal;
+	int senderId = n->demandSender(mId, mEndId/*size*/);
+        n_parent->demandSender(mId, mEndId/*size*/) += senderId;
+        int receiverId = n->demandReceiver(mId, mEndId/*size*/);
+        n_parent->demandReceiver(mId, mEndId/*size*/) += receiverId;
       }
     }
   }

@@ -672,7 +672,6 @@ hpcrun_stats_print_summary(void)
   if (hpcrun_get_disabled()) {
     AMSG("SAMPLING HAS BEEN DISABLED");
   }
-
   // logs, retentions || adj.: recorded, retained, written
 
   if (ENABLED(UNW_VALID)) {

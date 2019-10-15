@@ -599,6 +599,7 @@ cct_node_t *topNNode[N]={NULL};
   static void
 TopN(cct_node_t* node, cct_op_arg_t arg, size_t level)
 {
+  fprintf(stderr, "TopN is called\n");
   int i, t;
   uint64_t min;
   int metricID = (int)arg;
@@ -636,6 +637,7 @@ TopN(cct_node_t* node, cct_op_arg_t arg, size_t level)
   static void
 PrintTopN(int metricID)
 {
+  fprintf(stderr, "PrintTopN is called\n");
   FILE *fd;
   char default_path[PATH_MAX];
   thread_data_t *td = hpcrun_get_thread_data();

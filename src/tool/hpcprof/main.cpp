@@ -210,7 +210,11 @@ realmain(int argc, char* const* argv)
   // -------------------------------------------------------
 
   if (Analysis::Args::MetricFlg_isSum(args.prof_metrics)) {
+    fprintf(stderr, " before makeMetric is executed\n");
+    prof->metricMgr()->dump();
     makeMetrics(*prof, args, nArgs);
+    fprintf(stderr, " after makeMetric is executed\n");
+    prof->metricMgr()->dump();
   }
 
   // -------------------------------------------------------

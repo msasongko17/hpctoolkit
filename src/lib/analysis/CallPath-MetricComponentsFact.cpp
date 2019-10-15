@@ -167,6 +167,10 @@ MetricComponentsFact::make(Prof::CCT::ANode* node,
 	double mval = stmt->metric(mId_src);
 	stmt->demandMetric(mId_dst) += mval;
 	stmt->metric(mId_src) = 0.0;
+        int senderId = stmt->sender(mId_src);
+        stmt->demandSender(mId_dst) += senderId;
+        int receiverId = stmt->receiver(mId_src);
+        stmt->demandReceiver(mId_dst) += receiverId;
       }
     }
   }

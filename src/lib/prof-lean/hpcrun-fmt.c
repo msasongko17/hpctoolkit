@@ -322,7 +322,7 @@ hpcrun_fmt_metricTbl_fwrite(metric_desc_p_tbl_t* metric_tbl, metric_aux_info_t *
 	} else {
 	  info_ptr = &(aux_info[i]);
 	}
-
+    // is this the one??
     hpcrun_fmt_metricDesc_fwrite(metric_tbl->lst[i], info_ptr, fs);
   }
 
@@ -412,18 +412,26 @@ int
 hpcrun_fmt_metricDesc_fwrite(metric_desc_t* x, metric_aux_info_t *aux_info, FILE* fs)
 {
   HPCFMT_ThrowIfError(hpcfmt_str_fwrite(x->name, fs));
+  fprintf(stderr, "x->name: %s\n", x->name);
   HPCFMT_ThrowIfError(hpcfmt_str_fwrite(x->description, fs));
+  fprintf(stderr, "x->description: %s\n", x->description);
   HPCFMT_ThrowIfError(hpcfmt_intX_fwrite(x->flags.bits, sizeof(x->flags), fs));
+
   HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(x->period, fs));
+  fprintf(stderr, "x->period: %ld\n", x->period);
   HPCFMT_ThrowIfError(hpcfmt_str_fwrite(x->formula, fs));
+  fprintf(stderr, "x->formula: %s\n", x->formula);
   HPCFMT_ThrowIfError(hpcfmt_str_fwrite(x->format, fs));
+  fprintf(stderr, "x->format: %s\n", x->format);
 
   HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(x->is_frequency_metric, fs));
 
   HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(aux_info->is_multiplexed, fs));
+  fprintf(stderr, "aux_info->is_multiplexed: %d\n", aux_info->is_multiplexed);
   HPCFMT_ThrowIfError(hpcfmt_real8_fwrite(aux_info->threshold_mean, fs));
+  fprintf(stderr, "aux_info->threshold_mean: %0.2lf\n", aux_info->threshold_mean);
   HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(aux_info->num_samples, fs));
-
+  fprintf(stderr, "aux_info->num_samples: %ld\n", aux_info->num_samples);
   return HPCFMT_OK;
 }
 
@@ -631,8 +639,13 @@ hpcrun_fmt_cct_node_fread(hpcrun_fmt_cct_node_t* x,
     hpcrun_fmt_lip_fread(&x->lip, fs);
   }
 
+  fprintf(stderr, "in hpcrun_fmt_cct_node_fread before x->metrics[i].bits loop\n");
   for (int i = 0; i < x->num_metrics; ++i) {
     HPCFMT_ThrowIfError(hpcfmt_int8_fread(&x->metrics[i].bits, fs));
+    fprintf(stderr, "x->metrics[%d].thread2val_map.val is %d\n", i, x->metrics[i].thread2val_map.val);
+    fprintf(stderr, "x->metrics[%d].thread2val_map.sender is %d\n", i, x->metrics[i].thread2val_map.sender);
+    fprintf(stderr, "x->metrics[%d].thread2val_map.receiver is %d\n", i, x->metrics[i].thread2val_map.receiver);
+    fprintf(stderr, "x->metrics[%d].bits = %ld\n", i, x->metrics[i].bits);
   }
   
   return HPCFMT_OK;
@@ -644,13 +657,16 @@ hpcrun_fmt_cct_node_fwrite(hpcrun_fmt_cct_node_t* x,
 			   epoch_flags_t flags, FILE* fs)
 {
   HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(x->id, fs));
+  fprintf(stderr, "node id is %ld\n", x->id);
   HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(x->id_parent, fs));
+  fprintf(stderr, "node's parent id is %ld\n", x->id_parent);
 
   if (flags.fields.isLogicalUnwind) {
     HPCFMT_ThrowIfError(hpcfmt_int4_fwrite(x->as_info.bits, fs));
   }
 
   HPCFMT_ThrowIfError(hpcfmt_int2_fwrite(x->lm_id, fs));
+  fprintf(stderr, "load module id is %ld\n", x->lm_id);
   HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(x->lm_ip, fs));
 
   if (flags.fields.isLogicalUnwind) {
@@ -659,6 +675,10 @@ hpcrun_fmt_cct_node_fwrite(hpcrun_fmt_cct_node_t* x,
 
   for (int i = 0; i < x->num_metrics; ++i) {
     HPCFMT_ThrowIfError(hpcfmt_int8_fwrite(x->metrics[i].bits, fs));
+    fprintf(stderr, "metric.bits %d is %ld\n", i, x->metrics[i].bits);
+    fprintf(stderr, "metric.i %d is %ld\n", i, x->metrics[i].i);
+    fprintf(stderr, "metric.thread2val_map.sender %d is %ld\n", i, x->metrics[i].thread2val_map.sender);
+    fprintf(stderr, "metric.thread2val_map.receiver %d is %ld\n", i, x->metrics[i].thread2val_map.receiver);
   }
   
   return HPCFMT_OK;

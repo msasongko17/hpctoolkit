@@ -353,6 +353,7 @@ hpcrun_threadMgr_data_put( epoch_t *epoch, thread_data_t *data )
 void
 hpcrun_threadMgr_data_fini(thread_data_t *td)
 {
+  fprintf(stderr, "in hpcrun_threadMgr_data_fini\n");
   int num_cores   = get_nprocs();
   int num_log_thr = get_num_logical_threads();
   int max_iter    = num_cores < num_log_thr ? num_cores : num_log_thr;
@@ -420,6 +421,7 @@ hpcrun_threadMgr_data_fini(thread_data_t *td)
 
   if (td && td->core_profile_trace_data.id == 0) {
 
+    fprintf(stderr, "before finalize_thread_data\n");
     finalize_thread_data(&td->core_profile_trace_data);
 
     TMSG(PROCESS, "%d: write thread data, finally", td->core_profile_trace_data.id);

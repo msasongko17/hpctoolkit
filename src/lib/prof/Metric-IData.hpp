@@ -101,6 +101,8 @@ class IData {
 public:
   
   typedef std::vector<double> MetricVec;
+  typedef std::vector<int> SenderVec;
+  typedef std::vector<int> ReceiverVec;
 
 public:
   // --------------------------------------------------------
@@ -109,6 +111,8 @@ public:
   IData(size_t size = 0)
   {
     ensureMetricsSize(size);
+    ensureSendersSize(size);
+    ensureReceiversSize(size);
   }
 
   virtual ~IData()
@@ -116,7 +120,7 @@ public:
   }
   
   IData(const IData& x)
-    : m_metrics(x.m_metrics)
+    : m_metrics(x.m_metrics), m_senders(x.m_senders), m_receivers(x.m_receivers)
   {
   }
   
@@ -124,6 +128,8 @@ public:
   operator=(const IData& x)
   {
     m_metrics = x.m_metrics;
+    m_senders = x.m_senders;
+    m_receivers = x.m_receivers;
     return *this;
   }
 
@@ -167,6 +173,21 @@ public:
   metric(size_t mId)
   { return m_metrics[mId]; }
 
+  int
+  sender(size_t mId) const
+  { return m_senders[mId]; }
+
+  int&
+  sender(size_t mId)
+  { return m_senders[mId]; }
+
+  int
+  receiver(size_t mId) const
+  { return m_receivers[mId]; }
+
+  int&
+  receiver(size_t mId)
+  { return m_receivers[mId]; }
 
   double
   demandMetric(size_t mId, size_t size = 0) const
@@ -184,6 +205,37 @@ public:
     return metric(mId);
   }
 
+  int
+  demandSender(size_t mId, size_t size = 0) const
+  {
+    size_t sz = std::max(size, mId+1);
+    ensureSendersSize(sz);
+    return sender(mId);
+  }
+
+  int&
+  demandSender(size_t mId, size_t size = 0)
+  {
+    size_t sz = std::max(size, mId+1);
+    ensureSendersSize(sz);
+    return sender(mId);
+  }
+
+  int
+  demandReceiver(size_t mId, size_t size = 0) const
+  {
+    size_t sz = std::max(size, mId+1);
+    ensureReceiversSize(sz);
+    return receiver(mId);
+  } 
+  
+  int&
+  demandReceiver(size_t mId, size_t size = 0)
+  {
+    size_t sz = std::max(size, mId+1);
+    ensureReceiversSize(sz);
+    return receiver(mId);
+  }
 
   // zeroMetrics: takes bounds of the form [mBegId, mEndId)
   // N.B.: does not have demandZeroMetrics() semantics
@@ -206,8 +258,25 @@ public:
   void
   ensureMetricsSize(size_t size) const
   {
-    if (size > m_metrics.size())
+    if (size > m_metrics.size()) {
       m_metrics.resize(size, 0.0 /*value*/); // inserts at end
+    }
+  }
+
+  void
+  ensureSendersSize(size_t size) const
+  {
+    if (size > m_senders.size()) {
+      m_senders.resize(size, 0.0 /*value*/); // inserts at end
+    }
+  }
+
+  void
+  ensureReceiversSize(size_t size) const
+  {
+    if (size > m_receivers.size()) {
+      m_receivers.resize(size, 0.0 /*value*/); // inserts at end
+    }
   }
 
   void
@@ -247,6 +316,8 @@ public:
   
 private:
   mutable MetricVec m_metrics;
+  mutable SenderVec m_senders;
+  mutable ReceiverVec m_receivers;
 };
 
 //***************************************************************************

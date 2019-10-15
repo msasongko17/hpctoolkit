@@ -990,6 +990,7 @@ int
 Profile::fmt_fread(Profile* &prof, FILE* infs, uint rFlags,
 		   std::string ctxtStr, const char* filename, FILE* outfs)
 {
+  fprintf(stderr, "in fmt_fread\n");
   int ret;
 
   // ------------------------------------------------------------
@@ -1412,6 +1413,7 @@ Profile::fmt_epoch_fread(Profile* &prof, FILE* infs, uint rFlags,
   // ------------------------------------------------------------
   // cct
   // ------------------------------------------------------------
+  fprintf(stderr, "in fmt_epoch_fread before fmt_cct_fread\n");
   fmt_cct_fread(*prof, infs, rFlags, metricTbl, ctxtStr, outfs);
 
 
@@ -1475,6 +1477,7 @@ Profile::fmt_cct_fread(Profile& prof, FILE* infs, uint rFlags,
     // ----------------------------------------------------------
     // Read the node
     // ----------------------------------------------------------
+    fprintf(stderr, "in fmt_cct_fread before hpcrun_fmt_cct_node_fread\n");
     ret = hpcrun_fmt_cct_node_fread(&nodeFmt, prof.m_flags, infs);
     if (ret != HPCFMT_OK) {
       DIAG_Throw("Error reading CCT node " << nodeFmt.id);
@@ -1963,7 +1966,14 @@ cct_makeNode(Prof::CallPath::Profile& prof,
 	DIAG_Die(DIAG_UnexpectedInput);
     }
 
+    fprintf(stderr, "in cct_makeNode before assignment mval: %0.2lf, (double)mdesc->period(): %0.2lf, metricData.metric(%d): %0.2lf\n", mval, (double)mdesc->period(), i_dst, metricData.metric(i_dst));
     metricData.metric(i_dst) = mval * (double)mdesc->period();
+    //if(mval > 0) {
+	//fprintf(stderr, "assignment to sender and receiver happens\n");
+	metricData.sender(i_dst)  = 4;
+	metricData.receiver(i_dst)  = 13;
+    //}
+    fprintf(stderr, "in cct_makeNode after assignment mval: %0.2lf, (double)mdesc->period(): %0.2lf, metricData.metric(%d): %0.2lf\n", mval, (double)mdesc->period(), i_dst, metricData.metric(i_dst));
 
     if (!hpcrun_metricVal_isZero(m)) {
       hasMetrics = true;

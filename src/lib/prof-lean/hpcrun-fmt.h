@@ -346,6 +346,13 @@ typedef union hpcrun_metricVal_u {
 
   uint64_t bits; // for reading/writing
 
+  struct thread2val {
+    uint64_t val;
+    int sender; 
+    int receiver; 
+ }  thread2val_map; 
+
+
 } hpcrun_metricVal_t;
 
 extern hpcrun_metricVal_t hpcrun_metricVal_ZERO;

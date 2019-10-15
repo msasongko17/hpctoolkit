@@ -113,8 +113,15 @@ IData::writeMetricsXML(std::ostream& os, uint mBegId, uint mEndId,
   for (uint i = mBegId; i < mEndId; i++) {
     if (hasMetric(i)) {
       double m = metric(i);
+      int s = sender(i);
+      int r = receiver(i);
+      if(s > 0 || r > 0)
+	fprintf(stderr, "there are senders and receivers\n");
+      fprintf(stderr, "printed metric id %d, value: %0.2lf\n", i, m);
       os << ((!wasMetricWritten) ? pfx : "");
       os << "<M " << "n" << xml::MakeAttrNum(i) 
+        << "s" << xml::MakeAttrNum(s) 
+        << "r" << xml::MakeAttrNum(r)
 	 << " v" << xml::MakeAttrNum(m) << "/>";
       wasMetricWritten = true;
     }

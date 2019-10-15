@@ -279,6 +279,7 @@ std::ostream&
 Tree::writeXML(std::ostream& os, uint metricBeg, uint metricEnd,
 	       uint oFlags) const
 {
+  fprintf(stderr, "in CCT-Tree::writeXML\n");
   if (m_root) {
     m_root->writeXML(os, metricBeg, metricEnd, oFlags);
   }
@@ -484,6 +485,10 @@ ANode::aggregateMetricsIncl(const VMAIntervalSet& ivalset)
 	for (uint mId = mBegId; mId < mEndId; ++mId) {
 	  double mVal = n->demandMetric(mId, mEndId/*size*/);
 	  n_parent->demandMetric(mId, mEndId/*size*/) += mVal;
+          int senderId = n->demandSender(mId, mEndId/*size*/);
+          n_parent->demandSender(mId, mEndId/*size*/) += senderId;
+          int receiverId = n->demandReceiver(mId, mEndId/*size*/);
+          n_parent->demandReceiver(mId, mEndId/*size*/) += receiverId;
 	}
       }
     }
@@ -581,9 +586,15 @@ ANode::aggregateMetricsExcl(AProcNode* frame, const VMAIntervalSet& ivalset)
 
       for (uint mId = mBegId; mId < mEndId; ++mId) {
         double mVal = n->demandMetric(mId, mEndId/*size*/);
+        int senderId = n->demandSender(mId, mEndId/*size*/);
+        int receiverId = n->demandReceiver(mId, mEndId/*size*/);
         n_parent->demandMetric(mId, mEndId/*size*/) += mVal;
+        n_parent->demandSender(mId, mEndId/*size*/) += senderId;
+        n_parent->demandReceiver(mId, mEndId/*size*/) += receiverId;
         if (frame && frame != n_parent) {
           frame->demandMetric(mId, mEndId/*size*/) += mVal;
+          frame->demandSender(mId, mEndId/*size*/) += senderId;
+          frame->demandReceiver(mId, mEndId/*size*/) += receiverId;
         }
       }
     }
@@ -924,6 +935,8 @@ ANode::mergeMe(const ANode& y, MergeContext* GCC_ATTR_UNUSED mrgCtxt,
   uint x_end = metricBegIdx + y.numMetrics(); // open upper bound
   if ( !(x_end <= x->numMetrics()) ) {
     ensureMetricsSize(x_end);
+    ensureSendersSize(x_end);
+    ensureReceiversSize(x_end);
   }
 
   for (uint x_i = metricBegIdx, y_i = 0; x_i < x_end; ++x_i, ++y_i) {
@@ -1383,7 +1396,8 @@ ANode::writeXML(ostream& os, uint metricBeg, uint metricEnd,
     pfx = "";
     indent = "";
   }
-  
+
+  fprintf(stderr, "in ANode::writeXML before writeXML_pre\n");  
   bool doPost = writeXML_pre(os, metricBeg, metricEnd, oFlags, pfx);
   string prefix = pfx + indent;
   for (ANodeSortedChildIterator it(this, ANodeSortedIterator::cmpByStructureInfo);
