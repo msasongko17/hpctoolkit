@@ -2703,7 +2703,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      //fprintf(stderr, "found\n");
 			      // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
 			      // if T1 != T2 and ts2 > tprev then
-			      if((me != item.tid) && (item.time > prev_timestamp)) {
+			      if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= (storeCurTime - storeLastTime))) {
 				int flag = 0;
 				double global_sampling_period = 0;
 				if(sType == ALL_LOAD) {
