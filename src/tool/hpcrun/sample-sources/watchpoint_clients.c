@@ -2295,13 +2295,7 @@ int hashCode(void * key) {
 
 SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
   int hashIndex = hashCode(cacheLineBaseAddress);
-  int iter = 0;
-  while((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1) && (cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && iter < HASHTABLESIZE) {
-    ++hashIndex;
-    hashIndex %= HASHTABLESIZE;
-    iter++;
-  }
-  if(iter == HASHTABLESIZE)
+  if(cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
     *item_not_found = 1;
   return bulletinBoard.hashTable[hashIndex];
 }
@@ -2311,34 +2305,11 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
   int hashIndex = hashCode(cacheLineBaseAddress);
 
-  int iter = 0;
-  while(bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1 && cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress && iter < HASHTABLESIZE) {
-    ++hashIndex;
-    hashIndex %= HASHTABLESIZE;
-    iter++;
-  }
   if (bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
     bulletinBoard.hashTable[hashIndex] = item;
-  } else if((cacheLineBaseAddress == bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
-    item.prev_transfer_counter = bulletinBoard.hashTable[hashIndex].prev_transfer_counter;
+  } else if((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time)) {
+    //item.prev_transfer_counter = bulletinBoard.hashTable[hashIndex].prev_transfer_counter;
     bulletinBoard.hashTable[hashIndex] = item;
-  } else {
-    iter = 1;
-    uint64_t oldest_time = bulletinBoard.hashTable[0].time;
-    int targetIndex = 0;
-    hashIndex = 1;
-    while(iter < HASHTABLESIZE) {
-      if(bulletinBoard.hashTable[hashIndex].time < oldest_time) {
-	oldest_time = bulletinBoard.hashTable[hashIndex].time;
-	targetIndex = hashIndex;
-      }
-      ++hashIndex;   
-      hashIndex %= HASHTABLESIZE;
-      iter++;
-    }
-    if((item.time - bulletinBoard.hashTable[targetIndex].time) > (cur_time - prev_time)) {
-      bulletinBoard.hashTable[targetIndex] = item;
-    }
   }
 }
 
