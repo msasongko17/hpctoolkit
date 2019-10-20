@@ -2837,7 +2837,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  // if current WPs in T are old then
 				  // Disarm any previously armed WPs
 				  // Set WPs on an unexpired address from BulletinBoard that is not from T
-				  SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
+				  //SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
+                                  SubscribeWatchpointWithStoreTime(&sd, OVERWRITE, false /* capture value */, curtime);
+                                  //SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */); 
 				}
 			      }
 			      // end watchpoints
