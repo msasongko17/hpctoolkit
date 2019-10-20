@@ -1392,6 +1392,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     as_matrix_size =  max_thread_num;
   }
 
+  int64_t trapTime = rdtsc();
   int max_core_num = wpi->sample.first_accessing_core_id;
 
   if(max_core_num < sched_getcpu())
@@ -1415,7 +1416,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
   int core_id2 = sched_getcpu();
   int flag = 0;
   // if ts2 > tprev then
-  if(prev_timestamp < wpi->sample.bulletinBoardTimestamp) {
+  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
 	global_sampling_period = global_load_sampling_period;
@@ -2830,7 +2831,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				    .isBackTrace = false,
 				    .first_accessing_tid = localSharedData.tid,
 				    .first_accessing_core_id = localSharedData.core_id,
-				    .bulletinBoardTimestamp = curtime
+				    .bulletinBoardTimestamp = localSharedData.time,
+				    .expirationPeriod = localSharedData.expiration_period
 				  };
 				  // if current WPs in T are old then
 				  // Disarm any previously armed WPs
@@ -2860,7 +2862,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  inserted_item.node = node;
 				  inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
 				  inserted_item.prev_transfer_counter = 0;
-				  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+				   inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
 				  int bb_flag = 0;
 				  //__sync_synchronize();
 				  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
