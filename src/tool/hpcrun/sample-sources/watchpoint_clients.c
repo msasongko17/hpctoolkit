@@ -2305,10 +2305,7 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
   int hashIndex = hashCode(cacheLineBaseAddress);
 
-  if (bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
-    bulletinBoard.hashTable[hashIndex] = item;
-  } else if((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time)) {
-    //item.prev_transfer_counter = bulletinBoard.hashTable[hashIndex].prev_transfer_counter;
+  if ((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
     bulletinBoard.hashTable[hashIndex] = item;
   }
 }
@@ -2638,7 +2635,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    uint64_t curtime = rdtsc();
 
 			    int64_t storeCurTime = 0;
-			    if(/*sType == ALL_STORE*/ (accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE)) )
+			    if(/*sType == ALL_STORE*/ accessType == STORE || accessType == LOAD_AND_STORE)
 			      storeCurTime = curtime;
 
 
@@ -2817,7 +2814,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    }
 
 			    // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
-			    if((sType == ALL_LOAD) || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+			    if((accessType == LOAD) || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= item.expiration_period))) {
 			    } else {
 			      // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
 			      uint64_t bulletinCounter = bulletinBoard.counter;
@@ -2847,7 +2844,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    // ends
 
 			    lastTime = curtime;
-			    if(accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE))
+			    if(accessType == STORE || accessType == LOAD_AND_STORE)
 			      storeLastTime = storeCurTime;
 			  }
     default:
