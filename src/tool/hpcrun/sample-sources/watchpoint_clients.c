@@ -2305,7 +2305,7 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
   int hashIndex = hashCode(cacheLineBaseAddress);
 
-  if ((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
+  if ((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || (item.tid != bulletinBoard.hashTable[hashIndex].tid) || ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
     bulletinBoard.hashTable[hashIndex] = item;
   }
 }
@@ -2806,15 +2806,15 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  // Disarm any previously armed WPs
 				  // Set WPs on an unexpired address from BulletinBoard that is not from T
 				  //SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
-                                  //SubscribeWatchpointWithStoreTime(&sd, OVERWRITE, false /* capture value */, curtime);
-                                  SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */); 
+                                  SubscribeWatchpointWithStoreTime(&sd, OVERWRITE, false /* capture value */, curtime);
+                                  //SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */); 
 				}
 			      }
 			      // end watchpoints
 			    }
 
 			    // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
-			    if((accessType == LOAD) || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+			    if((accessType == LOAD) || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
 			    } else {
 			      // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
 			      uint64_t bulletinCounter = bulletinBoard.counter;
