@@ -2710,29 +2710,33 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				}
 				if(flag == 1) {
 				  int metricId = -1;
-				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
+                                  double multiplier = ((double) curtime - (double) item.time)/(curtime - lastTime);
+                                  double increment_multiplier = multiplier < 1.0 ? multiplier : 1.0;
+                                  //fprintf(stderr, "increment_multiplier: %0.2lf\n", increment_multiplier); 
+                                  double increment = increment_multiplier * global_sampling_period;
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
 				    // Record true sharing
 				    /*trueWWIns ++;
 				      metricId =  true_ww_metric_id;
 				      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
-				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + global_sampling_period;
+				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
 				    if(item.core_id != current_core) {
-				      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + global_sampling_period;
+				      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + increment;
 				    }
 				  } else {
 				    /*falseWWIns ++;
 				      metricId =  false_ww_metric_id;
 				      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
 				    // Record false sharing
-				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + global_sampling_period;
+				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
 				    if(item.core_id != current_core) {
-				      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + global_sampling_period;
+				      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + increment;
 				    }
 				  }
-				  as_matrix[item.tid][me] = as_matrix[item.tid][me] + global_sampling_period;
+				  as_matrix[item.tid][me] = as_matrix[item.tid][me] + increment;
 				  if(item.core_id != current_core) {
-				    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + global_sampling_period;
+				    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + increment;
 				  }	
 				  // tprev = ts2
 				  prev_timestamp = item.time;
