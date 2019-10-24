@@ -245,6 +245,7 @@ __thread uint64_t prev_timestamp = 0;
 
 __thread int64_t lastTime = 0;
 __thread int64_t storeLastTime = 0;
+__thread int64_t loadLastTime = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
 __thread uint64_t usedBytes = 0;
@@ -2635,10 +2636,12 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    uint64_t curtime = rdtsc();
 
 			    int64_t storeCurTime = 0;
+                            int64_t loadCurTime = 0; 
 			    if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
 			      storeCurTime = curtime;
-
-
+                            if(sType == ALL_LOAD /*accessType == STORE || accessType == LOAD_AND_STORE*/)
+                              loadCurTime = curtime;
+                           
 			    int me = TD_GET(core_profile_trace_data.id);
 			    int current_core = sched_getcpu();
 			    // L1 = getCacheline ( M1 )
@@ -2711,7 +2714,11 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(flag == 1) {
 				  int metricId = -1;
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
-                                  double multiplier = ((double) curtime - (double) item.time)/(curtime - lastTime);
+                                  double multiplier;
+                                  if (sType == ALL_STORE) 
+                                    multiplier = ((double) curtime - (double) item.time)/(curtime - storeLastTime);
+                                  if (sType == ALL_LOAD)
+                                    multiplier = ((double) curtime - (double) item.time)/(curtime - loadLastTime);
                                   double increment_multiplier = multiplier < 1.0 ? multiplier : 1.0;
                                   //fprintf(stderr, "increment_multiplier: %0.2lf\n", increment_multiplier); 
                                   double increment = increment_multiplier * global_sampling_period;
@@ -2836,7 +2843,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  inserted_item.node = node;
 				  inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
 				  inserted_item.prev_transfer_counter = 0;
-				   inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+				  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
 				  int bb_flag = 0;
 				  //__sync_synchronize();
 				  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
@@ -2850,6 +2857,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    lastTime = curtime;
 			    if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
 			      storeLastTime = storeCurTime;
+                            if( sType == ALL_LOAD  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
+                              loadLastTime = loadCurTime;
 			  }
     default:
 			  break;
