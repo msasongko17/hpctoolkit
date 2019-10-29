@@ -2713,8 +2713,15 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
                                   double multiplier = ((double) curtime - (double) item.time)/(curtime - lastTime);
                                   double increment_multiplier = multiplier < 1.0 ? multiplier : 1.0;
-                                  //fprintf(stderr, "increment_multiplier: %0.2lf\n", increment_multiplier); 
-                                  double increment = increment_multiplier * global_sampling_period;
+                                  //double increment_multiplier = 1.0;
+                                  //fprintf(stderr, "increment_multiplier: %0.2lf\n", increment_multiplier);
+                                  double increment;
+                                  if((as_matrix_size + 1) == 2)
+                                    increment = global_sampling_period;
+                                  else if ((as_matrix_size + 1) >= 16)
+                                    increment = increment_multiplier * global_sampling_period * 0.5;
+                                  else
+                                    increment = increment_multiplier * global_sampling_period;
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
 				    // Record true sharing
 				    /*trueWWIns ++;
