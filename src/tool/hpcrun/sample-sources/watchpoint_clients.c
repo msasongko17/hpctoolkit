@@ -2718,8 +2718,10 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   double increment;
                                   if((as_matrix_size + 1) == 2)
                                     increment = global_sampling_period;
+                                  else if ((as_matrix_size + 1) == 8)
+                                    increment = increment_multiplier * global_sampling_period * 0.6;
                                   else if ((as_matrix_size + 1) >= 16)
-                                    increment = increment_multiplier * global_sampling_period * 0.5;
+                                    increment = increment_multiplier * global_sampling_period * 0.25;
                                   else
                                     increment = increment_multiplier * global_sampling_period;
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
