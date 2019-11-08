@@ -449,8 +449,7 @@ MY_INCLUDE_DIRS =			\
 	$(LIBUNWIND_IFLAGS)		\
 	-I$(HPCFNBOUNDS_INC)		\
         $(OPT_CUPTI_IFLAGS)             \
-	-I$(LIBMONITOR_INC)		\
-	-I$(LIBADM_INC)
+	-I$(LIBMONITOR_INC)
 
 MY_MIPS_INCLUDE_DIRS = \
 	-I$(srcdir)/unwind/mips
@@ -697,7 +696,7 @@ if OPT_BGQ_BACKEND
 endif
 
 libhpcrun_la_LDFLAGS = -Wl,-Bsymbolic 	\
-	-L$(LIBMONITOR_LIB) -lmonitor -L$(LIBADM_LIB) -ladm -lpthread -lrt \
+	-L$(LIBMONITOR_LIB) -lmonitor -lpthread -lrt \
         $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
         $(PERFMON_LDFLAGS_DYN)
 
@@ -846,6 +845,13 @@ if OPT_PAPI_CUPTI
 libhpcrun_la_CPPFLAGS += $(CUPTI_INC_FLGS)
 MY_CPP_DEFINES += -DHPCRUN_SS_PAPI_C_CUPTI
 endif
+
+if USE_ADAMANT
+libhpcrun_la_CPPFLAGS += -DADAMANT_USED
+libhpcrun_o_CPPFLAGS  += -DADAMANT_USED
+#MY_INCLUDE_DIRS += -I$(LIBADM_INC) 
+#libhpcrun_la_LDFLAGS += -L$(LIBADM_LIB) -ladm 
+endif 
 
 if OPT_PAPI_STATIC
   libhpcrun_o_SOURCES   += $(MY_PAPI_FILES)

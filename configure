@@ -724,6 +724,7 @@ OPT_ENABLE_KERNEL_4_3_FALSE
 OPT_ENABLE_KERNEL_4_3_TRUE
 OPT_ENABLE_PERF_EVENT_FALSE
 OPT_ENABLE_PERF_EVENT_TRUE
+USE_ADAMANT
 PERF_EVENT_PARANOID
 OPT_PERFMON_FALSE
 OPT_PERFMON_TRUE
@@ -765,7 +766,9 @@ LIBMONITOR_LIB
 LIBMONITOR_INC
 LIBADM_COPY
 LIBADM_LIB
+LIBADM_LIBRARY
 LIBADM_INC
+LIBADM_CPPFLAGS_DYN
 LIBDWARF_COPY
 LIBDWARF_INC
 LIBDWARF_LIB
@@ -20734,9 +20737,7 @@ fi
 #-------------------------------------------------
 # Option: --with-libadm=PATH
 #-------------------------------------------------
-
 LIBADM=no
-
 # Check whether --with-libadm was given.
 if test "${with_libadm+set}" = set; then :
   withval=$with_libadm; LIBADM="$withval"
@@ -20745,25 +20746,24 @@ fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: checking for libadm" >&5
 $as_echo_n "checking for libadm... " >&6; }
-
-LIBADM_INC=no
 LIBADM_LIB=no
-LIBADM_COPY=no
-
+LIBADM_INC=""
+LIBADM_LIB=""
 case "$LIBADM" in
   /* )
     if test ! -f "${LIBADM}/include/adm_init_fini.h"
     then
       as_fn_error $? "unable to find adm_init_fini.h in: $LIBADM" "$LINENO" 5
     fi
-    LIBADM_INC="${LIBADM}/include"
     if test -f "${LIBADM}/src/libadm.so" ; then
-      LIBADM_LIB="${LIBADM}/src"
+      LIBADM_INC="-I${LIBADM}/include"
+      LIBADM_LIB="-L${LIBADM}/src -ladm"
+      LIBADM_LIBRARY="${LIBADM}/src"
+      LIBADM_CPPFLAGS_DYN='-DADAMANT_USED'
     fi
     if test "$LIBADM_LIB" = no ; then
       as_fn_error $? "unable to find libadm.so in: $LIBADM" "$LINENO" 5
     fi
-    LIBADM_COPY=yes
     ;;
   no )
     ;;

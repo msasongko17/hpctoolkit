@@ -291,6 +291,12 @@ pkglibexec_PROGRAMS =
 @OPT_ENABLE_LUSH_TRUE@@OPT_WITH_CILK_TRUE@am__append_130 = libagent-cilk.la
 @OPT_ENABLE_LUSH_TRUE@am__append_131 = libagent-pthread.la \
 @OPT_ENABLE_LUSH_TRUE@	libagent-tbb.la
+#@USE_ADAMANT@am__append_132 = -DADAMANT_USED
+#@USE_ADAMANT@am__append_133 = -DADAMANT_USED
+#@USE_ADAMANT@am__append_134 = -I$(LIBADM_INC)
+#@USE_ADAMANT@am__append_135 = -L$(LIBADM_LIB) -ladm
+am__append_134 = -I$(LIBADM_INC)
+am__append_135 = -L$(LIBADM_LIB) -ladm
 subdir = src/tool/hpcrun
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -1185,6 +1191,7 @@ LIBELF_LIB = @LIBELF_LIB@
 LIBADM_COPY = @LIBADM_COPY@
 LIBADM_INC = @LIBADM_INC@
 LIBADM_LIB = @LIBADM_LIB@
+LIBADM_CPPFLAGS_DYN = @LIBADM_CPPFLAGS_DYN@
 LIBMONITOR_COPY = @LIBMONITOR_COPY@
 
 #-----------------------------------------------------------
@@ -1583,8 +1590,7 @@ MY_INCLUDE_DIRS = \
 	$(LIBUNWIND_IFLAGS)		\
 	-I$(HPCFNBOUNDS_INC)		\
         $(OPT_CUPTI_IFLAGS)             \
-	-I$(LIBMONITOR_INC)		\
-	-I$(LIBADM_INC)
+	-I$(LIBMONITOR_INC) $(LIBADM_INC)
 
 MY_MIPS_INCLUDE_DIRS = \
 	-I$(srcdir)/unwind/mips
@@ -1665,12 +1671,12 @@ libhpcrun_la_CPPFLAGS = $(MY_CPP_DEFINES) $(LIBUNWIND_CPPFLAGS_DYN) \
 	$(am__append_46) $(am__append_61) $(am__append_79) \
 	$(am__append_92) $(am__append_106) $(am__append_109) \
 	$(am__append_117) $(am__append_120) $(am__append_123) \
-	$(UNW_INCLUDE_DIRS)
+	$(UNW_INCLUDE_DIRS) $(am__append_132) $(LIBADM_CPPFLAGS_DYN)
 libhpcrun_o_CPPFLAGS = -DHPCRUN_STATIC_LINK $(MY_CPP_DEFINES) \
 	$(LIBUNWIND_CPPFLAGS_STAT) $(MY_INCLUDE_DIRS) $(am__append_21) \
 	$(am__append_32) $(am__append_47) $(am__append_62) \
 	$(am__append_80) $(am__append_93) $(am__append_112) \
-	$(am__append_118) $(am__append_121) $(UNW_INCLUDE_DIRS)
+	$(am__append_118) $(am__append_121) $(UNW_INCLUDE_DIRS) $(am__append_133) $(LIBADM_CPPFLAGS_DYN)
 libhpcrun_wrap_a_CPPFLAGS = \
 	-DHPCRUN_STATIC_LINK		\
 	$(MY_CPP_DEFINES)		\
@@ -1762,9 +1768,9 @@ libhpcrun_la_LIBADD = $(HPCLIB_ProfLean) $(HPCLIB_SupportLean) \
 libhpcrun_o_LDADD = $(HPCLIB_ProfLean) $(HPCLIB_SupportLean) \
 	$(am__append_27)
 libhpcrun_la_LDFLAGS = -Wl,-Bsymbolic -L$(LIBMONITOR_LIB) -lmonitor \
-	-L$(LIBADM_LIB) -ladm -lpthread -lrt $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
+	-lpthread -lrt $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
 	$(PERFMON_LDFLAGS_DYN) $(am__append_63) $(am__append_107) \
-	$(am__append_119) $(UNW_DYNAMIC_LD_FLAGS)
+	$(am__append_119) $(UNW_DYNAMIC_LD_FLAGS) $(LIBADM_LIB)
 libhpcrun_ga_la_LDFLAGS = -Wl,-Bsymbolic
 libhpcrun_io_la_LDFLAGS = -Wl,-Bsymbolic
 libhpcrun_memleak_la_LDFLAGS = -Wl,-Bsymbolic
