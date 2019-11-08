@@ -1182,6 +1182,9 @@ LIBDWARF_LIB = @LIBDWARF_LIB@
 LIBELF_COPY = @LIBELF_COPY@
 LIBELF_INC = @LIBELF_INC@
 LIBELF_LIB = @LIBELF_LIB@
+LIBADM_COPY = @LIBADM_COPY@
+LIBADM_INC = @LIBADM_INC@
+LIBADM_LIB = @LIBADM_LIB@
 LIBMONITOR_COPY = @LIBMONITOR_COPY@
 
 #-----------------------------------------------------------
@@ -1580,7 +1583,8 @@ MY_INCLUDE_DIRS = \
 	$(LIBUNWIND_IFLAGS)		\
 	-I$(HPCFNBOUNDS_INC)		\
         $(OPT_CUPTI_IFLAGS)             \
-	-I$(LIBMONITOR_INC)
+	-I$(LIBMONITOR_INC)		\
+	-I$(LIBADM_INC)
 
 MY_MIPS_INCLUDE_DIRS = \
 	-I$(srcdir)/unwind/mips
@@ -1758,7 +1762,7 @@ libhpcrun_la_LIBADD = $(HPCLIB_ProfLean) $(HPCLIB_SupportLean) \
 libhpcrun_o_LDADD = $(HPCLIB_ProfLean) $(HPCLIB_SupportLean) \
 	$(am__append_27)
 libhpcrun_la_LDFLAGS = -Wl,-Bsymbolic -L$(LIBMONITOR_LIB) -lmonitor \
-	-lpthread -lrt $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
+	-L$(LIBADM_LIB) -ladm -lpthread -lrt $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
 	$(PERFMON_LDFLAGS_DYN) $(am__append_63) $(am__append_107) \
 	$(am__append_119) $(UNW_DYNAMIC_LD_FLAGS)
 libhpcrun_ga_la_LDFLAGS = -Wl,-Bsymbolic

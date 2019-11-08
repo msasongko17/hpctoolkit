@@ -158,6 +158,8 @@ endif
 
 LIBMONITOR_INC = @LIBMONITOR_INC@
 LIBMONITOR_LIB = @LIBMONITOR_LIB@
+LIBADM_INC = @LIBADM_INC@
+LIBADM_LIB = @LIBADM_LIB@
 PAPI_INC_FLGS =  @OPT_PAPI_IFLAGS@ 
 PAPI_LD_FLGS =   @OPT_PAPI_LDFLAGS@
 XED2_INC = @XED2_INC@
@@ -447,7 +449,8 @@ MY_INCLUDE_DIRS =			\
 	$(LIBUNWIND_IFLAGS)		\
 	-I$(HPCFNBOUNDS_INC)		\
         $(OPT_CUPTI_IFLAGS)             \
-	-I$(LIBMONITOR_INC)
+	-I$(LIBMONITOR_INC)		\
+	-I$(LIBADM_INC)
 
 MY_MIPS_INCLUDE_DIRS = \
 	-I$(srcdir)/unwind/mips
@@ -694,7 +697,7 @@ if OPT_BGQ_BACKEND
 endif
 
 libhpcrun_la_LDFLAGS = -Wl,-Bsymbolic 	\
-	-L$(LIBMONITOR_LIB) -lmonitor -lpthread -lrt \
+	-L$(LIBMONITOR_LIB) -lmonitor -L$(LIBADM_LIB) -ladm -lpthread -lrt \
         $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
         $(PERFMON_LDFLAGS_DYN)
 
