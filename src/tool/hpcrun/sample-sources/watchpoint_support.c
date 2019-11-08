@@ -1194,6 +1194,44 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     return false;
 }
 
+
+bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime){
+    if(ValidateWPData(sampleData) == false) {
+        return false;
+    }
+    if(IsOveralpped(sampleData)){
+        return false; // drop the sample if it overlaps an existing address
+    }
+
+    // No overlap, look for a victim slot
+    int victimLocation = -1;
+    // Find a slot to install WP
+    VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+
+    if(r != NONE_AVAILABLE) {
+        // VV IMP: Capture value before arming the WP.
+        if(captureValue) {
+            CaptureValue(sampleData, &tData.watchPointArray[victimLocation]);
+        }
+        // I know the error case that we have captured the value but ArmWatchPoint fails.
+        // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
+        //printf("and this region\n");
+        //printf("arming watchpoints\n");
+        if((curTime - tData.watchPointArray[victimLocation].sample.bulletinBoardTimestamp) > tData.watchPointArray[victimLocation].sample.expirationPeriod) {
+                //printf("watchpoints are armed on address %lx, length: %d\n", sampleData->va, sampleData->accessLength);
+                if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
+                        //LOG to hpcrun log
+                        EMSG("ArmWatchPoint failed for address %p", sampleData->va); 
+                        return false;
+                }
+                } /*else {
+                printf("watchpoints are not armed because they are still new\n");
+        }*/
+        return true;
+    }
+    return false;
+}
+
 bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime){
     if(ValidateWPData(sampleData) == false) {
         return false;

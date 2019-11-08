@@ -1392,6 +1392,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     as_matrix_size =  max_thread_num;
   }
 
+  int64_t trapTime = rdtsc();
   int max_core_num = wpi->sample.first_accessing_core_id;
 
   if(max_core_num < sched_getcpu())
@@ -1415,7 +1416,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
   int core_id2 = sched_getcpu();
   int flag = 0;
   // if ts2 > tprev then
-  if(prev_timestamp < wpi->sample.bulletinBoardTimestamp) {
+  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
 	global_sampling_period = global_load_sampling_period;
@@ -2294,13 +2295,7 @@ int hashCode(void * key) {
 
 SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
   int hashIndex = hashCode(cacheLineBaseAddress);
-  int iter = 0;
-  while((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1) && (cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && iter < HASHTABLESIZE) {
-    ++hashIndex;
-    hashIndex %= HASHTABLESIZE;
-    iter++;
-  }
-  if(iter == HASHTABLESIZE)
+  if(cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
     *item_not_found = 1;
   return bulletinBoard.hashTable[hashIndex];
 }
@@ -2310,34 +2305,8 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
   int hashIndex = hashCode(cacheLineBaseAddress);
 
-  int iter = 0;
-  while(bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1 && cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress && iter < HASHTABLESIZE) {
-    ++hashIndex;
-    hashIndex %= HASHTABLESIZE;
-    iter++;
-  }
-  if (bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+  if ((bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || (item.tid != bulletinBoard.hashTable[hashIndex].tid) || ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
     bulletinBoard.hashTable[hashIndex] = item;
-  } else if((cacheLineBaseAddress == bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && ((item.time - bulletinBoard.hashTable[hashIndex].time) > (cur_time - prev_time))) {
-    item.prev_transfer_counter = bulletinBoard.hashTable[hashIndex].prev_transfer_counter;
-    bulletinBoard.hashTable[hashIndex] = item;
-  } else {
-    iter = 1;
-    uint64_t oldest_time = bulletinBoard.hashTable[0].time;
-    int targetIndex = 0;
-    hashIndex = 1;
-    while(iter < HASHTABLESIZE) {
-      if(bulletinBoard.hashTable[hashIndex].time < oldest_time) {
-	oldest_time = bulletinBoard.hashTable[hashIndex].time;
-	targetIndex = hashIndex;
-      }
-      ++hashIndex;   
-      hashIndex %= HASHTABLESIZE;
-      iter++;
-    }
-    if((item.time - bulletinBoard.hashTable[targetIndex].time) > (cur_time - prev_time)) {
-      bulletinBoard.hashTable[targetIndex] = item;
-    }
   }
 }
 
@@ -2666,7 +2635,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    uint64_t curtime = rdtsc();
 
 			    int64_t storeCurTime = 0;
-			    if(/*sType == ALL_STORE*/ (accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE)) )
+			    if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
 			      storeCurTime = curtime;
 
 
@@ -2703,7 +2672,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      //fprintf(stderr, "found\n");
 			      // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
 			      // if T1 != T2 and ts2 > tprev then
-			      if((me != item.tid) && (item.time > prev_timestamp)) {
+			      if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
 				int flag = 0;
 				double global_sampling_period = 0;
 				if(sType == ALL_LOAD) {
@@ -2741,29 +2710,42 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				}
 				if(flag == 1) {
 				  int metricId = -1;
-				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
+                                  double multiplier = ((double) curtime - (double) item.time)/(curtime - lastTime);
+                                  double increment_multiplier = multiplier < 1.0 ? multiplier : 1.0;
+                                  //double increment_multiplier = 1.0;
+                                  //fprintf(stderr, "increment_multiplier: %0.2lf\n", increment_multiplier);
+                                  double increment;
+                                  if((as_matrix_size + 1) == 2)
+                                    increment = global_sampling_period;
+                                  else if ((as_matrix_size + 1) == 8)
+                                    increment = increment_multiplier * global_sampling_period * 0.6;
+                                  else if ((as_matrix_size + 1) >= 16)
+                                    increment = increment_multiplier * global_sampling_period * 0.5;
+                                  else
+                                    increment = increment_multiplier * global_sampling_period;
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
 				    // Record true sharing
 				    /*trueWWIns ++;
 				      metricId =  true_ww_metric_id;
 				      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
-				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + global_sampling_period;
+				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
 				    if(item.core_id != current_core) {
-				      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + global_sampling_period;
+				      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + increment;
 				    }
 				  } else {
 				    /*falseWWIns ++;
 				      metricId =  false_ww_metric_id;
 				      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
 				    // Record false sharing
-				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + global_sampling_period;
+				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
 				    if(item.core_id != current_core) {
-				      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + global_sampling_period;
+				      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + increment;
 				    }
 				  }
-				  as_matrix[item.tid][me] = as_matrix[item.tid][me] + global_sampling_period;
+				  as_matrix[item.tid][me] = as_matrix[item.tid][me] + increment;
 				  if(item.core_id != current_core) {
-				    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + global_sampling_period;
+				    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + increment;
 				  }	
 				  // tprev = ts2
 				  prev_timestamp = item.time;
@@ -2830,19 +2812,22 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				    .isBackTrace = false,
 				    .first_accessing_tid = localSharedData.tid,
 				    .first_accessing_core_id = localSharedData.core_id,
-				    .bulletinBoardTimestamp = curtime
+				    .bulletinBoardTimestamp = localSharedData.time,
+				    .expirationPeriod = localSharedData.expiration_period
 				  };
 				  // if current WPs in T are old then
 				  // Disarm any previously armed WPs
 				  // Set WPs on an unexpired address from BulletinBoard that is not from T
-				  SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
+				  //SubscribeWatchpointWithTime(&sd, OVERWRITE, false /* capture value */, curtime, lastTime);
+                                  SubscribeWatchpointWithStoreTime(&sd, OVERWRITE, false /* capture value */, curtime);
+                                  //SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */); 
 				}
 			      }
 			      // end watchpoints
 			    }
 
 			    // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
-			    if((sType == ALL_LOAD) || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+			    if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
 			    } else {
 			      // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
 			      uint64_t bulletinCounter = bulletinBoard.counter;
@@ -2860,7 +2845,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  inserted_item.node = node;
 				  inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
 				  inserted_item.prev_transfer_counter = 0;
-				  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+				   inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
 				  int bb_flag = 0;
 				  //__sync_synchronize();
 				  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
@@ -2872,7 +2857,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    // ends
 
 			    lastTime = curtime;
-			    if(accessType == STORE || (accessType == LOAD_AND_STORE && sType == ALL_STORE))
+			    if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
 			      storeLastTime = storeCurTime;
 			  }
     default:
