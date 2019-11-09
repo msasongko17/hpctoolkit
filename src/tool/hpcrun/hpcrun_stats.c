@@ -119,6 +119,8 @@ static atomic_long trolled_frames = ATOMIC_VAR_INIT(0);
 
 extern void dump_comdetective_matrices();
 
+extern char output_directory[PATH_MAX];
+
 //***************************************************************************
 // interface operations
 //***************************************************************************
@@ -646,8 +648,12 @@ void
 hpcrun_stats_print_summary(void)
 {
   int object_flag = 0;
-  if(getenv(HPCRUN_OBJECT_LEVEL))
+#if ADAMANT_USED
+  if(getenv(HPCRUN_OBJECT_LEVEL)) {
     object_flag = 1;
+    adm_finalize(object_flag, output_directory, hpcrun_files_executable_name(), getpid() );
+  }
+#endif
   dump_comdetective_matrices();
   long blocked = atomic_load_explicit(&num_samples_blocked_async, memory_order_relaxed) +
     atomic_load_explicit(&num_samples_blocked_dlopen, memory_order_relaxed);
