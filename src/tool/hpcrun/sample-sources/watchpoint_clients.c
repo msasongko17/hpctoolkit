@@ -1458,8 +1458,51 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
       trueWWIns ++;
       metricId =  true_ww_metric_id;
       joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+#if ADAMANT_USED
+      if(getenv(HPCRUN_OBJECT_LEVEL)) {
+        inc_true_matrix( (uint64_t) wt->va, index1, index2, increment);
+        inc_true_count((uint64_t) wt->va, increment);
+        int obj_id1 = get_object_id_by_address(wpi->sample.target_va);
+        int obj_id2 = get_object_id_by_address(wt->va);
+        if(obj_id1 == 0 && obj_id2 == 0) {
+          id = get_id_after_backtrace();
+          //fprintf(stderr, "true sharing communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+          inc_true_matrix_by_object_id(id, core_id1, core_id2, increment);
+          inc_true_count_by_object_id(id, increment);
+        }
+        if(obj_id1 == 1 && obj_id2 == 1) {
+          if(id == -1)
+            id = get_id_after_backtrace();
+            //fprintf(stderr, "true sharing communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+            inc_true_matrix_by_object_id(id, core_id1, core_id2, increment);
+            inc_true_count_by_object_id(id, increment);
+        }
+      }
+#endif
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
       if(core_id1 != core_id2) {
+#if ADAMANT_USED
+        if(getenv(HPCRUN_OBJECT_LEVEL)) {
+          inc_true_core_matrix( (uint64_t) wt->va, core_id1, core_id2, increment);
+          inc_true_core_count((uint64_t) wt->va, increment);
+          int obj_id1 = get_object_id_by_address(wpi->sample.target_va);
+          int obj_id2 = get_object_id_by_address(wt->va);
+          if(obj_id1 == 0 && obj_id2 == 0) {
+            if(id == -1)
+              id = get_id_after_backtrace();
+              //fprintf(stderr, "communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+              inc_true_core_matrix_by_object_id(id, core_id1, core_id2, increment);
+              inc_true_core_count_by_object_id(id, increment);
+          }
+          if(obj_id1 == 1 && obj_id2 == 1) {
+            if(id == -1)
+              id = get_id_after_backtrace();
+                                //fprintf(stderr, "communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+              inc_true_core_matrix_by_object_id(id, core_id1, core_id2, increment);
+              inc_true_core_count_by_object_id(id, increment);
+          }
+        }
+#endif
 	ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
       }
 
@@ -1469,8 +1512,57 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
       falseWWIns ++;
       metricId =  false_ww_metric_id;
       joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+#if ADAMANT_USED
+      if(getenv(HPCRUN_OBJECT_LEVEL)) {
+        inc_false_matrix((uint64_t) wpi->sample.target_va, (uint64_t) wt->va, index1, index2, increment);
+        inc_false_count((uint64_t) wpi->sample.target_va, (uint64_t) wt->va, increment);
+        int obj_id1 = get_object_id_by_address(wpi->sample.target_va);
+        int obj_id2 = get_object_id_by_address(wt->va);
+        // debugging starts
+        if((obj_id1 == obj_id2) && (obj_id1 == 998)) {
+          fprintf(stderr, "false sharing is detected between threads %d and %d on address %ld and address %ld\n", index1, index2, wpi->sample.target_va, wt->va);
+          //sleep(4);
+        }
+        // debugging ends
+        if(obj_id1 == 0 && obj_id2 == 0) {
+          id = get_id_after_backtrace();
+          //fprintf(stderr, "false sharing communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+          inc_false_matrix_by_object_id(id, core_id1, core_id2, increment);
+          inc_false_count_by_object_id(id, increment);
+        }
+        if(obj_id1 == 1 && obj_id2 == 1) {
+         if(id == -1)
+           id = get_id_after_backtrace();
+           //fprintf(stderr, "false sharing communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+           inc_false_matrix_by_object_id(id, core_id1, core_id2, increment);
+           inc_false_count_by_object_id(id, increment);
+        }
+      }
+#endif
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       if(core_id1 != core_id2) {
+#if ADAMANT_USED
+        if(getenv(HPCRUN_OBJECT_LEVEL)) {
+          inc_false_core_matrix((uint64_t) wpi->sample.target_va, (uint64_t) wt->va, core_id1, core_id2, increment);
+          inc_false_core_count((uint64_t) wpi->sample.target_va, (uint64_t) wt->va, increment);
+          int obj_id1 = get_object_id_by_address(wpi->sample.target_va);
+          int obj_id2 = get_object_id_by_address(wt->va);
+          if(obj_id1 == 0 && obj_id2 == 0) {
+            if(id == -1)
+              id = get_id_after_backtrace();
+              //fprintf(stderr, "communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+              inc_false_core_matrix_by_object_id(id, core_id1, core_id2, increment);
+              inc_false_core_count_by_object_id(id, increment);
+          }
+          if(obj_id1 == 1 && obj_id2 == 1) {
+            if(id == -1)
+              id = get_id_after_backtrace();
+              //fprintf(stderr, "communication is detected on an unknown object with increment %0.2lf on node %d\n", increment, id);
+            inc_false_core_matrix_by_object_id(id, core_id1, core_id2, increment);
+            inc_false_core_count_by_object_id(id, increment);
+          }
+        }
+#endif
 	fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
       }
     }
