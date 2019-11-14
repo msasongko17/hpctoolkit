@@ -7,7 +7,9 @@
 #include <string.h>
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
+#if ADAMANT_USED
 #include <adm_init_fini.h>
+#endif
 #include "env.h"
 //#define ENABLE_OBJECT_LEVEL 1
 #include <sys/mman.h>
@@ -360,7 +362,7 @@ static void numa_alloc_interleaved_init(void)
     }
 }
 
-
+#if ADAMANT_USED
 void *malloc(size_t size)
 {
     //fprintf(stderr, "in malloc\n");
@@ -449,40 +451,6 @@ void free(void* ptr)
     	free_adm(ptr);
     }
 }
-
-/*
-void* realloc(void *ptr, size_t size) 
-{
-    //fprintf(stderr, "in realloc\n");
-    if (getenv(HPCRUN_OBJECT_LEVEL)) {
-    	if(!init_adamant) {
-        	init_adamant = 1;
-        	adm_initialize();
-    	}
-    }
-
-    if(real_realloc==NULL) {
-        realloc_init();
-    }
-
-    if(real_malloc==NULL) {
-        malloc_init();
-    }
-
-    void *p = NULL;
-    //fprintf(stderr, "realloc(%p, %ld)\n", ptr, size);
-    p = real_realloc(ptr, size);
-    //fprintf(stderr, "%p\n", p);
-    if (getenv(HPCRUN_OBJECT_LEVEL)) {
-    	if(real_malloc && (size > OBJECT_THRESHOLD)) {
-		//backtrace();
-		int node_id = get_id_after_backtrace();
-    		realloc_adm(p, size, node_id);
-	}
-    }
-    //fprintf(stderr, "realloc: %lx\n", (long unsigned int) p);
-    return p;
-}*/
 
 int posix_memalign(void** memptr, size_t alignment, size_t size)
 {
@@ -761,3 +729,4 @@ void *mmap64(void *start, size_t length, int prot, int flags, int fd, off_t offs
     }
     return p;
 }
+#endif
