@@ -59,9 +59,12 @@
 #include <lib/prof-lean/stdatomic.h>
 #include <lib/prof-lean/hpcrun-fmt.h>
 #include <unwind/common/validate_return_addr.h>
+#if ADAMANT_USED
+#include <adm_init_fini.h>
+#endif
 #include "matrix.h"
 #include "env.h"
-
+#include "myposix.h"
 
 //***************************************************************************
 // local variables
@@ -116,6 +119,8 @@ static atomic_long trolled_frames = ATOMIC_VAR_INIT(0);
 
 extern void dump_comdetective_matrices();
 
+extern char output_directory[PATH_MAX];
+
 //***************************************************************************
 // interface operations
 //***************************************************************************
@@ -127,7 +132,15 @@ hpcrun_stats_reinit(void)
   ts_matrix_size =  0;
   as_matrix_size =  0;
   HASHTABLESIZE = atoi(getenv(BULLETIN_BOARD_SIZE));
+#if ADAMANT_USED
+  if(getenv(HPCRUN_OBJECT_LEVEL)) {
+        //adm_initialize();
+        fprintf(stderr, "object level is activated\n");
+        //OBJECT_THRESHOLD = atoi(getenv(OBJECT_SIZE_THRESHOLD));
+  }
+#endif
   fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
+  //fprintf(stderr, "object threshold is %d\n", OBJECT_THRESHOLD);
   fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
   for(int i = 0; i < HASHTABLESIZE; i++) {
     bulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
@@ -634,6 +647,13 @@ hpcrun_stats_num_samples_yielded(void)
 void
 hpcrun_stats_print_summary(void)
 {
+  int object_flag = 0;
+#if ADAMANT_USED
+  if(getenv(HPCRUN_OBJECT_LEVEL)) {
+    object_flag = 1;
+    adm_finalize(object_flag, output_directory, hpcrun_files_executable_name(), getpid() );
+  }
+#endif
   dump_comdetective_matrices();
   long blocked = atomic_load_explicit(&num_samples_blocked_async, memory_order_relaxed) +
     atomic_load_explicit(&num_samples_blocked_dlopen, memory_order_relaxed);

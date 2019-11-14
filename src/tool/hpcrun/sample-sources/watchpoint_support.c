@@ -60,6 +60,9 @@
 
 #include "watchpoint_support.h"
 #include <unwind/x86-family/x86-misc.h>
+#if ADAMANT_USED
+#include <adm_init_fini.h>
+#endif
 #include "matrix.h"
 
 //extern int init_adamant;

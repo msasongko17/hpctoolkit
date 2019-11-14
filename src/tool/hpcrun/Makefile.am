@@ -158,6 +158,8 @@ endif
 
 LIBMONITOR_INC = @LIBMONITOR_INC@
 LIBMONITOR_LIB = @LIBMONITOR_LIB@
+LIBADM_INC = @LIBADM_INC@
+LIBADM_LIB = @LIBADM_LIB@
 PAPI_INC_FLGS =  @OPT_PAPI_IFLAGS@ 
 PAPI_LD_FLGS =   @OPT_PAPI_LDFLAGS@
 XED2_INC = @XED2_INC@
@@ -281,6 +283,7 @@ MY_BASE_FILES =				\
 	hpcrun_options.c		\
 	hpcrun_stats.c			\
 	matrix.c			\
+	myposix.c			\
 	mymapping.c			\
 	loadmap.c			\
 	metrics.c			\
@@ -843,6 +846,13 @@ if OPT_PAPI_CUPTI
 libhpcrun_la_CPPFLAGS += $(CUPTI_INC_FLGS)
 MY_CPP_DEFINES += -DHPCRUN_SS_PAPI_C_CUPTI
 endif
+
+if USE_ADAMANT
+libhpcrun_la_CPPFLAGS += -DADAMANT_USED
+libhpcrun_o_CPPFLAGS  += -DADAMANT_USED
+#MY_INCLUDE_DIRS += -I$(LIBADM_INC) 
+#libhpcrun_la_LDFLAGS += -L$(LIBADM_LIB) -ladm 
+endif 
 
 if OPT_PAPI_STATIC
   libhpcrun_o_SOURCES   += $(MY_PAPI_FILES)

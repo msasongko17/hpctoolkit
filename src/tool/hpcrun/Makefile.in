@@ -291,6 +291,12 @@ pkglibexec_PROGRAMS =
 @OPT_ENABLE_LUSH_TRUE@@OPT_WITH_CILK_TRUE@am__append_130 = libagent-cilk.la
 @OPT_ENABLE_LUSH_TRUE@am__append_131 = libagent-pthread.la \
 @OPT_ENABLE_LUSH_TRUE@	libagent-tbb.la
+#@USE_ADAMANT@am__append_132 = -DADAMANT_USED
+#@USE_ADAMANT@am__append_133 = -DADAMANT_USED
+#@USE_ADAMANT@am__append_134 = -I$(LIBADM_INC)
+#@USE_ADAMANT@am__append_135 = -L$(LIBADM_LIB) -ladm
+am__append_134 = -I$(LIBADM_INC)
+am__append_135 = -L$(LIBADM_LIB) -ladm
 subdir = src/tool/hpcrun
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/config/libtool.m4 \
@@ -439,6 +445,7 @@ am__libhpcrun_la_SOURCES_DIST = utilities/first_func.c main.h main.c \
 	hpcrun_stats.c loadmap.c metrics.c name.c rank.c \
 	sample_event.c sample_prob.c sample_sources_all.c \
 	matrix.c \
+	myposix.c \
 	mymapping.c \
 	sample-sources/blame-shift/blame-shift.c \
 	sample-sources/blame-shift/blame-map.c sample-sources/common.c \
@@ -535,6 +542,7 @@ am__objects_12 = utilities/libhpcrun_la-first_func.lo \
 	libhpcrun_la-handling_sample.lo libhpcrun_la-hpcrun_options.lo \
 	libhpcrun_la-hpcrun_stats.lo libhpcrun_la-loadmap.lo \
 	libhpcrun_la-matrix.lo \
+	libhpcrun_la-myposix.lo \
 	libhpcrun_la-mymapping.lo \
 	libhpcrun_la-metrics.lo libhpcrun_la-name.lo \
 	libhpcrun_la-rank.lo libhpcrun_la-sample_event.lo \
@@ -1182,6 +1190,10 @@ LIBDWARF_LIB = @LIBDWARF_LIB@
 LIBELF_COPY = @LIBELF_COPY@
 LIBELF_INC = @LIBELF_INC@
 LIBELF_LIB = @LIBELF_LIB@
+LIBADM_COPY = @LIBADM_COPY@
+LIBADM_INC = @LIBADM_INC@
+LIBADM_LIB = @LIBADM_LIB@
+LIBADM_CPPFLAGS_DYN = @LIBADM_CPPFLAGS_DYN@
 LIBMONITOR_COPY = @LIBMONITOR_COPY@
 
 #-----------------------------------------------------------
@@ -1580,7 +1592,7 @@ MY_INCLUDE_DIRS = \
 	$(LIBUNWIND_IFLAGS)		\
 	-I$(HPCFNBOUNDS_INC)		\
         $(OPT_CUPTI_IFLAGS)             \
-	-I$(LIBMONITOR_INC)
+	-I$(LIBMONITOR_INC) $(LIBADM_INC)
 
 MY_MIPS_INCLUDE_DIRS = \
 	-I$(srcdir)/unwind/mips
@@ -1661,12 +1673,12 @@ libhpcrun_la_CPPFLAGS = $(MY_CPP_DEFINES) $(LIBUNWIND_CPPFLAGS_DYN) \
 	$(am__append_46) $(am__append_61) $(am__append_79) \
 	$(am__append_92) $(am__append_106) $(am__append_109) \
 	$(am__append_117) $(am__append_120) $(am__append_123) \
-	$(UNW_INCLUDE_DIRS)
+	$(UNW_INCLUDE_DIRS) $(am__append_132) $(LIBADM_CPPFLAGS_DYN)
 libhpcrun_o_CPPFLAGS = -DHPCRUN_STATIC_LINK $(MY_CPP_DEFINES) \
 	$(LIBUNWIND_CPPFLAGS_STAT) $(MY_INCLUDE_DIRS) $(am__append_21) \
 	$(am__append_32) $(am__append_47) $(am__append_62) \
 	$(am__append_80) $(am__append_93) $(am__append_112) \
-	$(am__append_118) $(am__append_121) $(UNW_INCLUDE_DIRS)
+	$(am__append_118) $(am__append_121) $(UNW_INCLUDE_DIRS) $(am__append_133) $(LIBADM_CPPFLAGS_DYN)
 libhpcrun_wrap_a_CPPFLAGS = \
 	-DHPCRUN_STATIC_LINK		\
 	$(MY_CPP_DEFINES)		\
@@ -1760,7 +1772,7 @@ libhpcrun_o_LDADD = $(HPCLIB_ProfLean) $(HPCLIB_SupportLean) \
 libhpcrun_la_LDFLAGS = -Wl,-Bsymbolic -L$(LIBMONITOR_LIB) -lmonitor \
 	-lpthread -lrt $(LIBUNWIND_LDFLAGS_DYN) $(LZMA_LDFLAGS_DYN) \
 	$(PERFMON_LDFLAGS_DYN) $(am__append_63) $(am__append_107) \
-	$(am__append_119) $(UNW_DYNAMIC_LD_FLAGS)
+	$(am__append_119) $(UNW_DYNAMIC_LD_FLAGS) $(LIBADM_LIB)
 libhpcrun_ga_la_LDFLAGS = -Wl,-Bsymbolic
 libhpcrun_io_la_LDFLAGS = -Wl,-Bsymbolic
 libhpcrun_memleak_la_LDFLAGS = -Wl,-Bsymbolic
@@ -3501,6 +3513,13 @@ libhpcrun_la-matrix.lo: matrix.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='matrix.c' object='libhpcrun_la-matrix.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libhpcrun_la_CPPFLAGS) $(CPPFLAGS) $(libhpcrun_la_CFLAGS) $(CFLAGS) -c -o libhpcrun_la-matrix.lo `test -f 'matrix.c' || echo '$(srcdir)/'`matrix.c
+
+libhpcrun_la-myposix.lo: myposix.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libhpcrun_la_CPPFLAGS) $(CPPFLAGS) $(libhpcrun_la_CFLAGS) $(CFLAGS) -MT libhpcrun_la-myposix.lo -MD -MP -MF $(DEPDIR)/libhpcrun_la-myposix.Tpo -c -o libhpcrun_la-myposix.lo `test -f 'myposix.c' || echo '$(srcdir)/'`myposix.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libhpcrun_la-myposix.Tpo $(DEPDIR)/libhpcrun_la-myposix.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='myposix.c' object='libhpcrun_la-myposix.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libhpcrun_la_CPPFLAGS) $(CPPFLAGS) $(libhpcrun_la_CFLAGS) $(CFLAGS) -c -o libhpcrun_la-myposix.lo `test -f 'myposix.c' || echo '$(srcdir)/'`myposix.c
 
 libhpcrun_la-mymapping.lo: mymapping.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libhpcrun_la_CPPFLAGS) $(CPPFLAGS) $(libhpcrun_la_CFLAGS) $(CFLAGS) -MT libhpcrun_la-mymapping.lo -MD -MP -MF $(DEPDIR)/libhpcrun_la-mymapping.Tpo -c -o libhpcrun_la-mymapping.lo `test -f 'mymapping.c' || echo '$(srcdir)/'`mymapping.c
