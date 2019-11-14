@@ -64,7 +64,7 @@
 #endif
 #include "matrix.h"
 #include "env.h"
-
+#include "myposix.h"
 
 //***************************************************************************
 // local variables
@@ -134,7 +134,7 @@ hpcrun_stats_reinit(void)
   HASHTABLESIZE = atoi(getenv(BULLETIN_BOARD_SIZE));
 #if ADAMANT_USED
   if(getenv(HPCRUN_OBJECT_LEVEL)) {
-        adm_initialize();
+        //adm_initialize();
         fprintf(stderr, "object level is activated\n");
         //OBJECT_THRESHOLD = atoi(getenv(OBJECT_SIZE_THRESHOLD));
   }

@@ -138,6 +138,7 @@
 #include <adm_init_fini.h>
 #endif
 #include "matrix.h"
+#include "myposix.h"
 
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
@@ -1389,7 +1390,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
   }
   if(fs_matrix_size < max_thread_num)
   {
-    //matrix_size_set(max_thread_num);
+    matrix_size_set(max_thread_num);
     fs_matrix_size =  max_thread_num;
     ts_matrix_size =  max_thread_num;
     as_matrix_size =  max_thread_num;
@@ -1404,7 +1405,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
   }
   if(fs_core_matrix_size < max_core_num)
   {
-    //core_matrix_size_set(max_core_num);
+    core_matrix_size_set(max_core_num);
     fs_core_matrix_size =  max_core_num;
     ts_core_matrix_size =  max_core_num;
     as_core_matrix_size =  max_core_num;
@@ -2785,7 +2786,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				}
 				if(as_matrix_size < max_thread_num)
 				{   
-				  //matrix_size_set(max_thread_num);
+				  matrix_size_set(max_thread_num);
 				  fs_matrix_size =  max_thread_num;
 				  ts_matrix_size =  max_thread_num;
 				  as_matrix_size =  max_thread_num;  
@@ -2798,7 +2799,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				}
 				if(as_core_matrix_size < max_core_num)
 				{
-				  //core_matrix_size_set(max_core_num);
+				  core_matrix_size_set(max_core_num);
 				  fs_core_matrix_size =  max_core_num;
 				  ts_core_matrix_size =  max_core_num;
 				  as_core_matrix_size =  max_core_num;
