@@ -160,6 +160,10 @@ int curWatermarkId = 0;
 int watermark_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
 int pebs_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
 
+extern long load_and_store_all_load;
+extern long load_and_store_all_store;
+extern long store_all_store;
+
 void SetupWatermarkMetric(int metricId){
   if (curWatermarkId == NUM_WATERMARK_METRICS) {
     EEMSG("curWatermarkId == NUM_WATERMARK_METRICS = %d", NUM_WATERMARK_METRICS);
@@ -2732,6 +2736,16 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
 			      sType = ALL_LOAD;
 			    else sType = UNKNOWN_SAMPLE_TYPE;
+                            if(accessType == LOAD_AND_STORE) {
+                              if(sType == ALL_LOAD)
+			        load_and_store_all_load++;
+                              if(sType == ALL_STORE)
+                                load_and_store_all_store++;
+			    }
+                            if(accessType == STORE) {
+                              if(sType == ALL_STORE)
+                                store_all_store++;
+                            }
 			    uint64_t curtime = rdtsc();
 
 			    int64_t storeCurTime = 0;
@@ -2775,7 +2789,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
 				int flag = 0;
 				double global_sampling_period = 0;
-				if(sType == ALL_LOAD) {
+				if(/*sType == ALL_LOAD*/ accessType == LOAD) {
 				  global_sampling_period = (double) global_load_sampling_period;
 				  flag = 1;
 				}
@@ -2823,12 +2837,24 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   double increment;
                                   if((as_matrix_size + 1) == 2)
                                     increment = global_sampling_period;
-                                  else if ((as_matrix_size + 1) == 8)
-                                    increment = increment_multiplier * global_sampling_period * 0.6;
-                                  else if ((as_matrix_size + 1) >= 16)
-                                    increment = increment_multiplier * global_sampling_period * 0.5;
-                                  else
-                                    increment = increment_multiplier * global_sampling_period;
+                                  else if ((as_matrix_size + 1) == 8) {
+				    /*if (sType == ALL_LOAD)
+				      increment = increment_multiplier * global_sampling_period * 0.3;
+				    else*/
+                                      increment = increment_multiplier * global_sampling_period * 0.6;
+				  }
+                                  else if ((as_matrix_size + 1) >= 16) {
+                                    /*if (sType == ALL_LOAD)
+                                      increment = increment_multiplier * global_sampling_period * 0.25;
+                                    else*/
+                                      increment = increment_multiplier * global_sampling_period * 0.5;
+                                  }
+                                  else {
+                                    /*if (sType == ALL_LOAD)
+                                      increment = increment_multiplier * global_sampling_period * 0.5;
+                                    else*/
+                                      increment = increment_multiplier * global_sampling_period;
+                                  }
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
 				    // Record true sharing
 				    /*trueWWIns ++;
