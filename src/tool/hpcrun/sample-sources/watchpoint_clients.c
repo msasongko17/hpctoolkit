@@ -2789,7 +2789,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
 				int flag = 0;
 				double global_sampling_period = 0;
-				if(/*sType == ALL_LOAD*/ accessType == LOAD) {
+				if(sType == ALL_LOAD /*accessType == LOAD*/) {
 				  global_sampling_period = (double) global_load_sampling_period;
 				  flag = 1;
 				}
@@ -2838,21 +2838,21 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   if((as_matrix_size + 1) == 2)
                                     increment = global_sampling_period;
                                   else if ((as_matrix_size + 1) == 8) {
-				    /*if (sType == ALL_LOAD)
+				    if (sType == ALL_LOAD)
 				      increment = increment_multiplier * global_sampling_period * 0.3;
-				    else*/
+				    else
                                       increment = increment_multiplier * global_sampling_period * 0.6;
 				  }
                                   else if ((as_matrix_size + 1) >= 16) {
-                                    /*if (sType == ALL_LOAD)
+                                    if (sType == ALL_LOAD)
                                       increment = increment_multiplier * global_sampling_period * 0.25;
-                                    else*/
+                                    else
                                       increment = increment_multiplier * global_sampling_period * 0.5;
                                   }
                                   else {
-                                    /*if (sType == ALL_LOAD)
+                                    if (sType == ALL_LOAD)
                                       increment = increment_multiplier * global_sampling_period * 0.5;
-                                    else*/
+                                    else
                                       increment = increment_multiplier * global_sampling_period;
                                   }
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) {
