@@ -2310,6 +2310,23 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   }
 }
 
+/*
+double thread_coefficient(int as_matrix_size) {
+  double thread_count = (double) as_matrix_size + 1;
+  return (double) 2.54 - 0.851 * thread_count + 0.12 * thread_count * thread_count - 0.0058 * thread_count * thread_count * thread_count;  
+}*/
+
+/*
+double thread_coefficient(int as_matrix_size) {
+  double thread_count = (double) as_matrix_size + 1;
+  return 1.76 * exp(-0.208 * (double) thread_count);  
+}*/
+
+double thread_coefficient(int as_matrix_size) {
+  double thread_count = (double) as_matrix_size + 1;
+  return 2.31 * pow(thread_count, -0.869);  
+}
+
 bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
   void * data_addr = mmap_data->addr;
   void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
@@ -2676,11 +2693,11 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				int flag = 0;
 				double global_sampling_period = 0;
 				if(sType == ALL_LOAD) {
-				  global_sampling_period = (double) global_load_sampling_period;
+				  global_sampling_period = (double) global_load_sampling_period * thread_coefficient(as_matrix_size);
 				  flag = 1;
 				}
 				if(sType == ALL_STORE) {
-				  global_sampling_period = (double) global_store_sampling_period;
+				  global_sampling_period = (double) global_store_sampling_period * thread_coefficient(as_matrix_size);
 				  flag = 1;
 				}
 				int max_thread_num = item.tid;
@@ -2832,7 +2849,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				  inserted_item.node = node;
 				  inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
 				  inserted_item.prev_transfer_counter = 0;
-				   inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+				  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
 				  int bb_flag = 0;
 				  //__sync_synchronize();
 				  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
