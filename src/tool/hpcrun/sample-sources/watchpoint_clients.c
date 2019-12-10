@@ -2414,9 +2414,15 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   }
 }
 
+/*
 double thread_coefficient(int as_matrix_size) {
   double thread_count = (double) as_matrix_size + 1;
   return 2.31 * pow(thread_count, -0.869);
+}*/
+
+double thread_coefficient(int as_matrix_size) {
+  double thread_count = (double) as_matrix_size + 1;
+  return 2.87 * pow(thread_count, -0.9);
 }
 
 bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
