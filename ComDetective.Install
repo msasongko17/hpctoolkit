@@ -16,7 +16,7 @@ b. make
 
 c. make install
 
-4. To install ComDetective with object-level attribution enabled, firstly install adamant from https://github.com/comdetective-tools/adamant by typing the following command in the directory adamant/src:
+4. To install ComDetective by enabling attribution of detected communications to data objects, firstly install adamant from https://github.com/comdetective-tools/adamant by typing the following command in the directory adamant/src:
 	make
 
 After adamant is installed, go to HPCToolkit's directory, and execute the following commands:
