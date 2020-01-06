@@ -15,3 +15,15 @@ a. ./configure --prefix=<targeted installation directory for ComDetective> --wit
 b. make
 
 c. make install
+
+4. To install ComDetective with object-level attribution enabled, firstly install adamant from https://github.com/comdetective-tools/adamant by typing the following command in the directory adamant/src:
+	make
+
+After adamant is installed, go to HPCToolkit's directory, and execute the following commands:
+
+a. ./configure --prefix=<targeted installation directory for ComDetective> --with-externals=<directory of hpctoolkit externals>/x86_64-unknown-linux-gnu --with-libmonitor=<libmonitor-installation directory> --with-libadm=<directory of adamant>
+
+b. make
+
+c. make install
+
