@@ -28,12 +28,18 @@ void
 hpcrun_set_microarchitecture ()
 {
   char *string = getenv(HPCRUN_MICROARCHITECTURE);
-  if(strncmp(string, "HASWELL", 7))
+  if(strncmp(string, "HASWELL", 7) == 0) {
+//	printf("in haswell\n");
 	microarchitecture_type = HASWELL;
-  else if (strncmp(string, "BROADWELL", 9))
+  }
+  else if (strncmp(string, "BROADWELL", 9) == 0) {
+	//printf("in broadwell\n");
 	microarchitecture_type = BROADWELL;
-  else if(strncmp(string, "SKYLAKE", 9))
+  }
+  else if(strncmp(string, "SKYLAKE", 9) == 0) {
+	//printf("in skylake\n");
 	microarchitecture_type = SKYLAKE;
+  }
   else microarchitecture_type = OTHERS;
 }
 
