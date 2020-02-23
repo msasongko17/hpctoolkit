@@ -286,6 +286,12 @@ do
             shift
             ;;
 
+	--microarchitecture )
+            arg_ok "$1" || die "missing argument for $arg"
+            export HPCRUN_MICROARCHITECTURE="$1"
+            shift
+            ;;
+
 	# --------------------------------------------------
 
         --enable-object-level )

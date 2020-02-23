@@ -6,11 +6,12 @@
 #include <errno.h>
 #include <sched.h>
 #include "env.h"
+#include "microarchitecture.h"
 
 int mapping_vector[1024];
 
 int mapping_size;
-
+int microarchitecture_type;
 /*
 void
 hpcrun_enable_object_level ()
@@ -22,6 +23,19 @@ hpcrun_enable_object_level ()
   }
 }
 */
+
+void
+hpcrun_set_microarchitecture ()
+{
+  char *string = getenv(HPCRUN_MICROARCHITECTURE);
+  if(strncmp(string, "HASWELL", 7))
+	microarchitecture_type = HASWELL;
+  else if (strncmp(string, "BROADWELL", 9))
+	microarchitecture_type = BROADWELL;
+  else if(strncmp(string, "SKYLAKE", 9))
+	microarchitecture_type = SKYLAKE;
+  else microarchitecture_type = OTHERS;
+}
 
 void
 hpcrun_set_thread_mapping ()

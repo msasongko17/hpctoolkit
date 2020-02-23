@@ -22,6 +22,7 @@ object_size_treshold=-1
 output_folder=$(date +%s)"_timestamped_results"
 dump_file=$(echo $$)"_stdout.txt"
 object_flag=0
+microarchitecture=""
 while test "x$1" != x
 do
 	arg="$1" ; shift
@@ -72,6 +73,11 @@ do
             		output_folder="$1"
             		shift
             		;;
+		--microarchitecture )
+			arg_ok "$1" || die "missing argument for $arg"
+                        export HPCRUN_MICROARCHITECTURE="$1"
+                        shift
+                        ;;
 		-t | --object-size-threshold )
 			arg_ok "$1" || die "missing argument for $arg"
                         if ! [[ "$1" =~ ^[0-9]+$ ]]

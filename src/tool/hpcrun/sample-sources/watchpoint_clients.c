@@ -137,6 +137,7 @@
 #if ADAMANT_USED
 #include <adm_init_fini.h>
 #endif
+#include <hpcrun/microarchitecture.h>
 #include "matrix.h"
 #include "myposix.h"
 
@@ -2422,6 +2423,15 @@ double thread_coefficient(int as_matrix_size) {
 
 double thread_coefficient(int as_matrix_size) {
   double thread_count = (double) as_matrix_size + 1;
+  if(microarchitecture_type == HASWELL)
+	// haswell function(x) = 3.6x^-0.709
+  	return 3.6 * pow(thread_count, -0.709);
+  else if(microarchitecture_type == BROADWELL)
+   	//broadwell function(x) = 2.31x^-0.869
+        return 2.31 * pow(thread_count, -0.869);
+  else if(microarchitecture_type == SKYLAKE)
+	// skylake function(x) = 3.56x^-0.957
+	return 3.56 * pow(thread_count, -0.957);
   return 2.87 * pow(thread_count, -0.9);
 }
 

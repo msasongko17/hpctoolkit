@@ -138,6 +138,7 @@
 #include <messages/messages.h>
 #include <messages/debug-flag.h>
 #include "mymapping.h"
+#include "microarchitecture.h"
 
 extern void hpcrun_set_retain_recursion_mode(bool mode);
 #ifndef USE_LIBUNW
@@ -850,7 +851,7 @@ monitor_init_process(int *argc, char **argv, void* data)
     hpcrun_set_thread_mapping();
     hpcrun_files_set_directory();
   }
-
+  hpcrun_set_microarchitecture();
   TMSG(PROCESS,"hpcrun_files_set_executable called w process name = %s", process_name);
 
   TMSG(PROCESS,"init");
