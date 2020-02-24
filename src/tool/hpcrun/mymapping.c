@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sched.h>
+#include <stdio.h>
 #include "env.h"
 #include "microarchitecture.h"
 
@@ -27,8 +28,12 @@ hpcrun_enable_object_level ()
 void
 hpcrun_set_microarchitecture ()
 {
+  //fprintf(stderr, "before getenv\n");
   char *string = getenv(HPCRUN_MICROARCHITECTURE);
-  if(strncmp(string, "HASWELL", 7) == 0) {
+  //fprintf(stderr, "captured string: %s\n", string);
+  if(string == NULL)
+	  microarchitecture_type = OTHERS;
+  else if(strncmp(string, "HASWELL", 7) == 0) {
 //	printf("in haswell\n");
 	microarchitecture_type = HASWELL;
   }
