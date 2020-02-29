@@ -20,6 +20,16 @@ mpirun -n <process count> ComDetectiverun <./your_executable> your_args
 
 Results
 =====
-Communication matrices are dumped to the output folder. Each application level matrix file is named as follow: <executable name>-<pid of the process>-<matrix type>_matrix.csv, while data object level matrix file is named as follow: <executable name>-<pid of the process>-<object id>-<matrix type>_matrix_rank_<object rank>.csv. <matrix type> can be "as" for any communication among threads, "ts" for true sharing among threads, "fs" for false sharing among threads, "as_core" for any communication among cores, "fs_core" for false sharing among cores, or "ts_core" for true sharing among cores. <object id> is associated with the corresponding data object's name in file <executable name>-<pid of the process>-<matrix type>_object_ranking.txt. In this txt file, all data objects are ranked with respect to the counts of communication whose type is indicated by the <matrix type>. Total counts of communications are printed in the log file named <executable name>-*.log within the output folder.
+Communication matrices are dumped to the output folder. 
+
+Each application level matrix file is named as follow: <executable name>-<pid of the process>-<matrix type>_matrix.csv, 
+while data object level matrix file is named as follow: <executable name>-<pid of the process>-<object id>-<matrix type>_matrix_rank_<object rank>.csv. 
+
+<matrix type> can be "as" for any communication among threads, "ts" for true sharing among threads, 
+"fs" for false sharing among threads, "as_core" for any communication among cores, 
+"fs_core" for false sharing among cores, or "ts_core" for true sharing among cores. 
+<object id> is associated with the corresponding data object's name in file <executable name>-<pid of the process>-<matrix type>_object_ranking.txt. 
+In this txt file, all data objects are ranked with respect to the counts of communication whose type is indicated by the <matrix type>. 
+Total counts of communications are printed in the log file named <executable name>-*.log within the output folder.
 
 
