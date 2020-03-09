@@ -1408,7 +1408,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
 
   if(max_core_num < sched_getcpu()) // sched_getcpu() finds the cpu on which the thread is running
   {   
-    max_core_num = sched_getcpu(); // If the call is from a thread on a cpu which is #ly > than max core, assume it comes from the highest #ly core
+    max_core_num = sched_getcpu(); 
   }
   if(fs_core_matrix_size < max_core_num)
   {
@@ -1422,17 +1422,14 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
 
   long global_sampling_period = 0;
 
-  int index1 = wpi->sample.first_accessing_tid; // id of the first accessed thread
-  int index2 = TD_GET(core_profile_trace_data.id); // thread id of the core profiled data
+  int index1 = wpi->sample.first_accessing_tid; 
+  int index2 = TD_GET(core_profile_trace_data.id); 
 
-  int core_id1 = wpi->sample.first_accessing_core_id; // id of the first core 
-  int core_id2 = sched_getcpu(); // id of the cpu on which thread is currently running 
+  int core_id1 = wpi->sample.first_accessing_core_id;  
+  int core_id2 = sched_getcpu();  
   int flag = 0;
   // if ts2 > tprev then
-  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { // if the bb timestamp > prev timestamp and trap - bb timestamp is < expiration
-    // wt->accessType : how the watchpoint was access which trapped the cpu to do this callback
-    // wpi->sample.sampleType : sType in WP_COMDETECTIVE by hpcrun_id2metric() call.
-    // wpi->sample.samplerAccessType : accessType in WP_COMDETECTIVE by get_mem_..() using precise PC context.
+  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
 	global_sampling_period = global_load_sampling_period;
@@ -2569,22 +2566,22 @@ double thread_coefficient(int as_matrix_size) {
 
 // this method takes 4 args: data to measure performance (mmap data), PC context, a node (to check whether the node provided is null if so return) and sampledMetricId
 bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
-  void * data_addr = mmap_data->addr; // data address is extracted from the mmap_data
-  void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;// precise PC is calculated
+  void * data_addr = mmap_data->addr; 
+  void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
-  if (!IsValidAddress(data_addr, precisePC)) { // is the data addr and precisePC doesn't make a valid address
-    goto ErrExit; // incorrect access type//, return
+  if (!IsValidAddress(data_addr, precisePC)) { 
+    goto ErrExit; // incorrect access type
   }
 
-  // do not monitor NULL CCT node
+  
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
   }
 
   // fprintf(stderr, " numWatchpointsSet=%lu\n", wpStats.numWatchpointsSet);
 
-  // Using the precise PC context, access length and access type is extracted with get_mem_access..
+  
   int accessLen;
   AccessType accessType; // LOAD, STORE, LOAD_AND_STORE, UNKNOWN
 
@@ -2598,8 +2595,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     goto ErrExit; // incorrect access type
   }
 
-  // Determining accuracy by checking the PC locations, i.e.:
-  // if the context PC and precise PC are not in the same function, then the sample point is inaccurate.
+  
   bool isSamplePointAccurate;
   FunctionType ft = is_same_function(contextPC, precisePC);
   if (ft == SAME_FN) {
@@ -2607,9 +2603,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
   } else {
     isSamplePointAccurate = false;
   }
-
-  // theWPConfig is a type of WPClientConfig_t (at line 228) which is a config struct for watchpoints by clients.
-  // Our case checks whether the config is the type comdetective at around line 2750.
+  
   switch (theWPConfig->id) {
     case WP_DEADSPY:{
 		      if(accessType == LOAD){
@@ -2887,14 +2881,10 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				HandleIPCFalseSharing(data_addr, precisePC, node, accessLen, accessType, sampledMetricId, isSamplePointAccurate);
 			      }
 			      break;
-    // This is the case when theWPConfig->id is COMDETECTIVE.
+    
     case WP_COMDETECTIVE: {
-        // LOAD_AND_STORE = inc R16 (loads R16, increments it and stores it back)
-        // STORE = ldi R16, 1 (stores 1 to R16)
-			    int sType = -1;
-                // hpcrun_id2metric uses sampledMetric id and returns a struct that has the characteristics
-                // of the thread. Accepted names of the struct can be either all_stores or all_loads. If neither
-                // we simply call an unknown sample. The accepted name is stored in the int sType (sample type).
+            int sType = -1;
+
 			    if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
 			      sType = ALL_STORE;
 			    else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
@@ -2910,15 +2900,15 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               if(sType == ALL_STORE)
                                 store_all_store++;
                             }
-			    uint64_t curtime = rdtsc(); // returns the current time
+			    uint64_t curtime = rdtsc() 
 
 			    int64_t storeCurTime = 0;
 			    if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
-			      storeCurTime = curtime; // when the sampleid results in all store
+			      storeCurTime = curtime; 
 
 
-			    int me = TD_GET(core_profile_trace_data.id); // get the current thread
-			    int current_core = sched_getcpu(); // get the current cpu
+			    int me = TD_GET(core_profile_trace_data.id); 
+			    int current_core = sched_getcpu(); 
 			    // L1 = getCacheline ( M1 )
 			    void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
 			    int item_not_found = 0;
@@ -2930,14 +2920,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      }
 			      //__sync_synchronize();
 			      // entry = BulletinBoard.AtomicGet (key= L1 )
-                  // using the cacheLineBaseAddress, getEntryFromBB returns an item and modifies the flag item_n_f
 			      item = getEntryFromBulletinBoard(cacheLineBaseAddressVar, &item_not_found);
 			      //__sync_synchronize();
 			      int64_t endCounter = bulletinBoard.counter;
 			      if(startCounter == endCounter) {
 				break;
 			      }
-			    }while(1); // this while loop provides the atomic behavior of the get from bb.
+			    }while(1);
 
 			    int arm_watchpoint_flag = 0;
 
@@ -2954,7 +2943,6 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			      if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
 				int flag = 0;
 				double global_sampling_period = 0;
-                // Set the flag and sampling period if sType is all_load or all_store.
 				if(sType == ALL_LOAD /*accessType == LOAD*/) { // means that the sample is (read) (WAR)
 				  global_sampling_period = (double) global_load_sampling_period;
 				  flag = 1;
@@ -2962,14 +2950,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(sType == ALL_STORE) { // means that the sample is a store type (write) (WAW)
 				  global_sampling_period = (double) global_store_sampling_period;
 				  flag = 2;
-				}
-                // The following 2 if checks are for thread and core related checks.
-				int max_thread_num = item.tid; // First assumes max thread num is thread id of the item from bb
-				if(max_thread_num < me) // If it turns out that it is smaller than the current thread
+				} 
+				int max_thread_num = item.tid; 
+				if(max_thread_num < me) 
 				{   
-				  max_thread_num = me; // update max thread num to the current thread
+				  max_thread_num = me; 
 				}
-				if(as_matrix_size < max_thread_num) // Handling the matrix sizes according to max thread num
+				if(as_matrix_size < max_thread_num) 
 				{ 
 #if ADAMANT_USED  
 				  matrix_size_set(max_thread_num);
