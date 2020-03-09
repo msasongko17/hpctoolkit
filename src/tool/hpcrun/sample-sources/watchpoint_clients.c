@@ -2564,7 +2564,7 @@ double thread_coefficient(int as_matrix_size) {
   return 2.87 * pow(thread_count, -0.9);
 }
 
-// this method takes 4 args: data to measure performance (mmap data), PC context, a node (to check whether the node provided is null if so return) and sampledMetricId
+
 bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
   void * data_addr = mmap_data->addr; 
   void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
