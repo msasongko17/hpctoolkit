@@ -1545,6 +1545,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+  fprintf(stderr, "in ReuseWPCallback\n");
   return ALREADY_DISABLED;
 }
 
@@ -2716,6 +2717,89 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		      }
 		    }
 		    break;
+    case WP_REUSE: {
+	fprintf(stderr, "WP_REUSE in OnSample\n");
+	#ifdef REUSE_HISTO
+#else
+        if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
+#endif
+        long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
+        accessedIns += metricThreshold;
+        SampleData_t sd= {
+        	.node = node,
+                .type=WP_RW,  //jqswang: Setting it to WP_READ causes segment fault
+                .accessType=accessType,
+                //.wpLength = accessLen, // set later
+                .accessLength= accessLen,
+                .sampledMetricId=sampledMetricId,
+                .isSamplePointAccurate = isSamplePointAccurate,
+                .preWPAction=theWPConfig->preWPAction,
+                .isBackTrace = false,
+        };
+	#ifdef REUSE_HISTO
+            sd.wpLength = 1;
+#else
+            sd.wpLength = GetFloorWPLength(accessLen);
+            sd.type = reuse_trap_type;
+	fprintf(stderr, "here1\n");
+#endif
+	bool isProfileSpatial;
+        if (reuse_profile_type == REUSE_TEMPORAL){
+        	isProfileSpatial = false;
+        } else if (reuse_profile_type == REUSE_SPATIAL){
+                isProfileSpatial = true;
+        } else {
+                isProfileSpatial = (rdtsc() & 1);
+        }
+
+	fprintf(stderr, "here2\n");
+	if (isProfileSpatial) {// detect spatial reuse
+                int wpSizes[] = {8, 4, 2, 1};
+                FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
+                int numFSLocs = 0;
+                GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
+                    sd.va = data_addr;
+                    sd.reuseType = REUSE_TEMPORAL;
+                } else {
+                    int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
+                    sd.va = (void *)falseSharingLocs[idx].va;
+                    sd.reuseType = REUSE_SPATIAL;
+#if 0
+                    int offset = ((uint64_t)data_addr - aligned_pc) / accessLen;
+                    int bound = CACHE_LINE_SZ / accessLen;
+                    int r = rdtsc() % bound;
+                    if (r == offset) r = (r+1) % bound;
+                    sd.va = aligned_pc + (r * accessLen);
+#endif
+                }
+            } else {
+                sd.va = data_addr;
+                sd.reuseType = REUSE_TEMPORAL;
+            }
+	fprintf(stderr, "here3\n");
+	if (!IsValidAddress(sd.va, precisePC)) {
+                goto ErrExit; // incorrect access type
+            }
+
+	fprintf(stderr, "here4\n");
+            // Read the reuse distance event counters
+            // We assume the reading event is load, store or both.
+          for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+                uint64_t val[3];
+                //assert(linux_perf_read_event_counter( reuse_distance_events[i], val) >= 0);
+                //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
+                //fprintf(stderr, "USE %lx -- ", val[0]);
+                memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);;
+           }
+	fprintf(stderr, "here5\n");
+            //fprintf(stderr, "\n");
+            // register the watchpoint
+            //SubscribeWatchpoint(&sd, OVERWRITE, false );
+	fprintf(stderr, "here6\n");
+
+    }
+    break;
     case WP_SPATIAL_REUSE:{
 			    long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
 			    accessedIns += metricThreshold;
@@ -3239,6 +3323,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
     default:
 			  break;
   }
+  fprintf(stderr, "here7!\n");
   wpStats.numWatchpointsSet ++;
   return true;
 
