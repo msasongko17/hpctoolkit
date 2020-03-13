@@ -295,6 +295,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
   //printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
   if(mapping_size > 0)
   	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
+  et->num_overflows = 0;
   et->event = event;
   // ask sys to "create" the event
   // it returns -1 if it fails.
@@ -997,6 +998,45 @@ void linux_perf_events_resume(){
   perf_start_all(nevents, event_thread);
 }
 
+
+// OUTPUT: val, it is a uint64_t array and has at least 3 elements.
+// For a counting event, val[0] is the actual value read from counter; val[1] is the time enabling; val[2] is time running
+// For a overflow event, val[0] is the actual scaled value; val[1] and val[2] are set to 0
+// RETURN: 0, sucess; -1, error
+int linux_perf_read_event_counter(int event_index, uint64_t *val){
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+
+  event_thread_t *current = &(event_thread[event_index]);
+
+  int ret = perf_read_event_counter(current, val);
+
+  if (ret < 0) return -1; // something wrong here
+
+  uint64_t sample_period = current->event->attr.sample_period;
+  if (sample_period == 0){ // counting event
+    return 0;
+  } else {
+    // overflow event
+    assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+    int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+    if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+                    || scaled_val < 0){
+            //jqswang: TODO: it does not filter out all the invalid values
+        //fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+       hpcrun_stats_num_corrected_reuse_distance_inc(1);
+       scaled_val = 0;
+    }
+   //fprintf(stderr, "%s: %lu, %lu(%ld) %lu %lu ->", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
+    val[0] = current->num_overflows * sample_period + scaled_val;
+    //fprintf(stderr, " %lu\n", val[0]);
+    val[1] = 0;
+    val[2] = 0;
+    return 0;
+  }
+}
+
+
 // ---------------------------------------------
 // signal handler
 // ---------------------------------------------
@@ -1092,6 +1132,9 @@ perf_event_handler(
     return 1; // tell monitor the signal has not been handled.
   }
 
+
+  // Increment the number of overflows for the current event
+  current->num_overflows++;
   // ----------------------------------------------------------------------------
   // parse the buffer until it finishes reading all buffers
   // ----------------------------------------------------------------------------
