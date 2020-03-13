@@ -743,6 +743,15 @@ METHOD_FN(process_event_list, int lush_metrics)
   }
   memset(event_desc, 0, size);
 
+  extern int *reuse_distance_events;
+  extern int reuse_distance_num_events;
+  reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
+  reuse_distance_num_events = 0;
+  if (reuse_distance_events == NULL){
+      EMSG("Unable to allocate %d bytes", sizeof(int)*num_events);
+      return;
+  }
+
   int i=0;
 
   default_threshold = init_default_count();
@@ -811,6 +820,18 @@ METHOD_FN(process_event_list, int lush_metrics)
                                    // since the OS will free it, we don't have to do it in hpcrun
     // set the metric for this perf event
     event_desc[i].metric = hpcrun_new_metric();
+
+    /******** For witch client WP_REUSE ***************/
+#ifdef REUSE_HISTO
+    if (strstr(name, "MEM_UOPS_RETIRED") != NULL)
+#else
+    if (strstr(name, "MEM_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+#endif
+    {
+        reuse_distance_events[reuse_distance_num_events++] = i;
+    }
+    /**************************************************/
+
    
     // ------------------------------------------------------------
     // if we use frequency (event_type=1) then the period is not deterministic,
