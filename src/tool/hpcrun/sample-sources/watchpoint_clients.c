@@ -155,6 +155,32 @@ int true_ww_metric_id = -1;
 int true_rw_metric_id = -1;
 int true_wr_metric_id = -1;
 
+int temporal_reuse_metric_id = -1;
+int spatial_reuse_metric_id = -1;
+int reuse_time_distance_metric_id = -1; // use rdtsc() to represent the reuse distance
+int reuse_time_distance_count_metric_id = -1; // how many times reuse_time_distance_metric is incremented
+int reuse_memory_distance_metric_id = -1; // use Loads+stores to reprent the reuse distance
+int reuse_memory_distance_count_metric_id = -1; // how many times reuse_memory_distance_metric is incremented
+int reuse_buffer_metric_ids[2] = {-1, -1}; // used to store temporal data for reuse client
+int reuse_store_buffer_metric_id = -1; // store the last time we get an available value of stores
+
+int *reuse_distance_events = NULL;
+int reuse_distance_num_events = 0;
+
+#ifdef REUSE_HISTO
+bool reuse_output_trace = false;
+double reuse_bin_start = 0;
+double reuse_bin_ratio = 0;
+uint64_t * reuse_bin_list = NULL;
+double * reuse_bin_pivot_list = NULL; // store the bin intervals
+int reuse_bin_size = 0;
+#else
+AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
+WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
+ReuseType reuse_profile_type = REUSE_BOTH; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
+#endif
+
 #define NUM_WATERMARK_METRICS (4)
 int curWatermarkId = 0;
 int watermark_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
@@ -199,6 +225,7 @@ __thread WPStats_t wpStats;
 #define WP_DEADSPY_EVENT_NAME "WP_DEADSPY"
 #define WP_REDSPY_EVENT_NAME "WP_REDSPY"
 #define WP_LOADSPY_EVENT_NAME "WP_LOADSPY"
+#define WP_REUSE_EVENT_NAME "WP_REUSE"
 #define WP_TEMPORAL_REUSE_EVENT_NAME "WP_TEMPORAL_REUSE"
 #define WP_SPATIAL_REUSE_EVENT_NAME "WP_SPATIAL_REUSE"
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
@@ -214,6 +241,7 @@ typedef enum WP_CLIENT_ID{
   WP_DEADSPY,
   WP_REDSPY,
   WP_LOADSPY,
+  WP_REUSE,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -268,6 +296,8 @@ __thread uint64_t trueWWIns = 0;
 __thread uint64_t trueWRIns = 0;
 __thread uint64_t trueRWIns = 0;
 __thread uint64_t reuse = 0;
+__thread uint64_t reuseTemporal = 0;
+__thread uint64_t reuseSpatial = 0;
 
 // ComDetective stats begin
 __thread uint64_t fs_num = 0;
@@ -296,6 +326,101 @@ __thread long unknwfunc=0;
 __thread long ipSame=0;
 __thread long ipDiff=0;
 
+ /* private tool function
+*****************************************************************************/
+static int OpenWitchTraceOutput(){
+    #define OUTPUT_TRACE_BUFFER_SIZE (1 <<10)
+    char file_name[PATH_MAX];
+    int ret = snprintf(file_name, PATH_MAX, "%s-%u.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
+    if ( ret < 0 || ret >= PATH_MAX){
+        return -1;
+    }
+    int fd = open(file_name, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0){
+        return -1;
+    }
+    ret = hpcio_outbuf_attach(&(TD_GET(witch_client_trace_output)), fd, hpcrun_malloc(OUTPUT_TRACE_BUFFER_SIZE), OUTPUT_TRACE_BUFFER_SIZE, HPCIO_OUTBUF_UNLOCKED);
+    if (ret != HPCFMT_OK){
+        return -1;
+    }
+    return 0;
+}
+
+static void CloseWitchTraceOutput(){
+    hpcio_outbuf_t *out_ptr = &(TD_GET(witch_client_trace_output));
+    if (out_ptr->fd >= 0){
+        hpcio_outbuf_close(out_ptr);
+    }
+}
+
+static int WriteWitchTraceOutput(const char *fmt, ...){
+    #define LOCAL_BUFFER_SIZE 1024
+    va_list arg;
+    char local_buf[LOCAL_BUFFER_SIZE];
+    va_start(arg, fmt);
+    int data_size = vsnprintf(local_buf, LOCAL_BUFFER_SIZE, fmt, arg);
+    va_end(arg);
+    if (data_size < 0 && data_size >= LOCAL_BUFFER_SIZE){
+        return -1;
+    }
+    int ret = hpcio_outbuf_write(&(TD_GET(witch_client_trace_output)), local_buf, data_size);
+    if (ret != data_size){
+        return -1;
+    }
+    return 0;
+}
+
+#ifdef REUSE_HISTO
+void ExpandReuseBinList(){
+        // each time we double the size of reuse_bin_list
+        uint64_t *old_reuse_bin_list = reuse_bin_list;
+        double *old_reuse_bin_pivot_list = reuse_bin_pivot_list;
+        int old_reuse_bin_size = reuse_bin_size;
+        reuse_bin_size *= 2;
+
+        reuse_bin_list = hpcrun_malloc(sizeof(uint64_t) * reuse_bin_size);
+        memset(reuse_bin_list, 0, sizeof(uint64_t) * reuse_bin_size);
+        memcpy(reuse_bin_list, old_reuse_bin_list, sizeof(uint64_t) * old_reuse_bin_size);
+
+        reuse_bin_pivot_list = hpcrun_malloc(sizeof(double) * reuse_bin_size);
+        memset(reuse_bin_pivot_list, 0, sizeof(double) * reuse_bin_size);
+        memcpy(reuse_bin_pivot_list, old_reuse_bin_pivot_list, sizeof(double) * old_reuse_bin_size);
+        for(int i=old_reuse_bin_size; i < reuse_bin_size; i++){
+                reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+        }
+
+        //hpcrun_free(old_reuse_bin_list);
+        //hpcrun_free(old_reuse_bin_pivot_list);
+}
+
+int FindReuseBinIndex(uint64_t distance){
+
+        if (distance < reuse_bin_pivot_list[0]){
+                return 0;
+        }
+        if (distance >= reuse_bin_pivot_list[reuse_bin_size - 1]){
+                ExpandReuseBinList();
+                return FindReuseBinIndex(distance);
+        }
+
+        int left = 0, right = reuse_bin_size - 1;
+        while(left + 1 < right){
+                int mid = (left + right) / 2;
+                if ( distance < reuse_bin_pivot_list[mid]){
+                        right = mid;
+                } else {
+                        left = mid;
+                }
+        }
+        assert(left + 1 == right);
+        return left + 1;
+}
+
+void ReuseAddDistance(uint64_t distance, uint64_t inc ){
+        int index = FindReuseBinIndex(distance);
+        reuse_bin_list[index] += inc;
+}
+#endif
 
 /******************************************************************************
  * sample source registration
@@ -313,6 +438,7 @@ __thread long ipDiff=0;
 static WPTriggerActionType DeadStoreWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType RedStoreWPCallback(WatchPointInfo_t *wpi, int startOffseti, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TemporalReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType SpatialReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType LoadLoadWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -387,6 +513,14 @@ static WpClientConfig_t wpClientConfig[] = {
     .wpCallback = ComDetectiveWPCallback,
     .preWPAction = DISABLE_ALL_WP,
     .configOverrideCallback = ComDetectiveWPConfigOverride
+  },
+      /**** Reuse ***/
+  {
+    .id = WP_REUSE,
+    .name = WP_REUSE_EVENT_NAME,
+    .wpCallback = ReuseWPCallback,
+    .preWPAction = DISABLE_WP,
+    .configOverrideCallback = ReuseWPConfigOverride
   },
   /**** Contention ***/
   {
@@ -579,6 +713,35 @@ static void ClientTermination(){
       hpcrun_stats_num_trueRWIns_inc(trueRWIns);
       hpcrun_stats_num_trueWRIns_inc(trueWRIns);
       break;
+    /*case WP_REUSE:
+        {
+#ifdef REUSE_HISTO
+            uint64_t val[3];
+            //fprintf(stderr, "FINAL_COUNTING:");
+            if (reuse_output_trace == false){ //dump the bin info
+                WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
+                WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
+
+                for(int i=0; i < reuse_bin_size; i++){
+                        WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
+                }
+            }
+
+            WriteWitchTraceOutput("FINAL_COUNTING:");
+        for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
+            assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
+            //fprintf(stderr, " %lu %lu %lu,", val[0], val[1], val[2]);//jqswang
+        WriteWitchTraceOutput(" %lu %lu %lu,", val[0], val[1], val[2]);
+         }
+            //fprintf(stderr, "\n");
+            WriteWitchTraceOutput("\n");
+            //close the trace output
+            CloseWitchTraceOutput();
+#endif
+            hpcrun_stats_num_accessedIns_inc(accessedIns);
+            hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
+            hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
+         }   break;*/
     case WP_ALL_SHARING:
     case WP_COMDETECTIVE:
     case WP_IPC_ALL_SHARING:
@@ -1378,6 +1541,10 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   // update the metricId
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+  return ALREADY_DISABLED;
+}
+
+static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   return ALREADY_DISABLED;
 }
 

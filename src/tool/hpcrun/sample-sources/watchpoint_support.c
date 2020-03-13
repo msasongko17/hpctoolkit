@@ -372,6 +372,13 @@ void ComDetectiveWPConfigOverride(void *v){
     wpConfig.replacementPolicy = OLDEST;
 }
 
+void ReuseWPConfigOverride(void *v){
+    // dont fix IP
+    wpConfig.dontFixIP = true;
+    wpConfig.dontDisassembleWPAddress = true;
+    wpConfig.isLBREnabled = false; //jqswang
+}
+
 void TrueSharingWPConfigOverride(void *v){
     // replacement policy is OLDEST forced.
     wpConfig.replacementPolicy = OLDEST;
