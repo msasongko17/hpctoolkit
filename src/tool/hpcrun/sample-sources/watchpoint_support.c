@@ -374,9 +374,11 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void ReuseWPConfigOverride(void *v){
     // dont fix IP
-    wpConfig.dontFixIP = true;
+    /*wpConfig.dontFixIP = true;
     wpConfig.dontDisassembleWPAddress = true;
     wpConfig.isLBREnabled = false; //jqswang
+    */
+    wpConfig.replacementPolicy = OLDEST;
 }
 
 void TrueSharingWPConfigOverride(void *v){
@@ -447,9 +449,9 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     switch (sampleData->type) {
         case WP_READ: pe.bp_type = HW_BREAKPOINT_R; break;
         case WP_WRITE: pe.bp_type = HW_BREAKPOINT_W; break;
-        default: pe.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R;
+        default: pe.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R; 
     }
-    
+   //fprintf(stderr, "pe.bp_len: %d, pe.bp_addr: %lx\n", pe.bp_len, pe.bp_addr);
 #if defined(FAST_BP_IOC_FLAG)
     if(modify) {
         // modification
@@ -765,7 +767,9 @@ static void ConsumeAllRingBufferData(void  *mbuf) {
 
 
 static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
+//    fprintf(stderr, "in ReadMampBuffer\n");
     struct perf_event_mmap_page *hdr = (struct perf_event_mmap_page *)mbuf;
+    //fprintf(stderr, "in ReadMampBuffer 6\n");
     void *data;
     unsigned long tail;
     size_t avail_sz, m, c;
@@ -778,6 +782,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
     /*
      * position of tail within the buffer payload
      */
+    //fprintf(stderr, "in ReadMampBuffer 7\n");
     tail = hdr->data_tail & pgmsk;
     
     /*
@@ -785,6 +790,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
      *
      * data_head, data_tail never wrap around
      */
+    //fprintf(stderr, "in ReadMampBuffer 5\n");
     avail_sz = hdr->data_head - hdr->data_tail;
     if (sz > avail_sz) {
         printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
@@ -812,16 +818,18 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
      * min with requested size
      */
     m = c < sz ? c : sz;
-    
+   
+    //fprintf(stderr, "in ReadMampBuffer 4\n"); 
     /* copy beginning */
     memcpy(buf, data + tail, m);
     
     /*
      * copy wrapped around leftover
      */
+    //fprintf(stderr, "in ReadMampBuffer 3\n");
     if (sz > m)
         memcpy(buf + m, data, sz - m);
-    
+    //fprintf(stderr, "in ReadMampBuffer 2\n");
     hdr->data_tail += sz;
     
     return 0;
@@ -877,11 +885,12 @@ static inline void *  GetPatchedIP(void *  contextIP) {
 static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrigger_t *wpt, void * context){
     //struct perf_event_mmap_page * b = wpi->mmapBuffer;
     struct perf_event_header hdr;
-    
+   //fprintf(stderr, "in CollectWatchPointTriggerInfo\n");
     if (ReadMampBuffer(wpi->mmapBuffer, &hdr, sizeof(struct perf_event_header)) < 0) {
         EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
         monitor_real_abort();
     }
+    //fprintf(stderr, "in CollectWatchPointTriggerInfo 1\n");
     switch(hdr.type) {
         case PERF_RECORD_SAMPLE:
             assert (hdr.type & PERF_SAMPLE_IP);
@@ -1025,6 +1034,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     // if the trap is already in hpcrun, return
     // If the interrupt came from inside our code, then drop the sample
     // and return and avoid any MSG.
+    //fprintf(stderr, "in OnWatchpoint\n");
     void* pc = hpcrun_context_pc(context);
     if (!hpcrun_safe_enter_async(pc)) return 0;
     
@@ -1041,7 +1051,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
         }
     }
-    
+    //fprintf(stderr, "in OnWatchpoint at this point\n");
     // Ensure it is an active WP
     if(location == -1) {
         EMSG("\n WP trigger did not match any known active WP\n");
@@ -1073,14 +1083,18 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
     }
     
-    
+   //fprintf(stderr, "in OnWatchpoint at that point\n"); 
     if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
+	//fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
         tData.numWatchpointDropped++;
         retVal = DISABLE_WP; // disable if unable to collect any info.
     } else {
+	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
         retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
+	//fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
     }
-    
+    //fprintf(stderr, "in OnWatchpoint at that point !!!\n");
+
     // Let the client take action.
     switch (retVal) {
         case DISABLE_WP: {

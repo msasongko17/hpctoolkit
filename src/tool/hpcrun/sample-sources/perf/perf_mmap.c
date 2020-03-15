@@ -332,8 +332,15 @@ int perf_read_event_counter(event_thread_t *current, uint64_t *val){
     EMSG("Error: unable to open the event %d file descriptor", current->event->id);
     return -1;
   }
+  //fprintf(stderr, "val[0] 1: %ld\n", val[0]);
+  //fprintf(stderr, "val[1] 1: %ld\n", val[1]);
+  //fprintf(stderr, "val[2] 1: %ld\n", val[2]);
   int ret = read(current->fd, val, sizeof(uint64_t) * 3 );
-  if (ret < sizeof(uint64_t)*3) {
+  //fprintf(stderr, "val[0] 2: %ld\n", val[0]);
+  //fprintf(stderr, "val[1] 2: %ld\n", val[1]);
+  //fprintf(stderr, "val[2] 2: %ld\n", val[2]);
+  //fprintf(stderr, "ret: %d\n", ret);
+  if (/*ret < sizeof(uint64_t)*3*/ret < sizeof(uint64_t)) {
     EMSG("Error: unable to read event %d", current->event->id);
     return -1;
   }

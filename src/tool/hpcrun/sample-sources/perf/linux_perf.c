@@ -1004,6 +1004,7 @@ void linux_perf_events_resume(){
 // For a overflow event, val[0] is the actual scaled value; val[1] and val[2] are set to 0
 // RETURN: 0, sucess; -1, error
 int linux_perf_read_event_counter(int event_index, uint64_t *val){
+  //fprintf(stderr, "this function is executed\n");
   sample_source_t *self = &obj_name();
   event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
@@ -1011,14 +1012,17 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 
   int ret = perf_read_event_counter(current, val);
 
-  if (ret < 0) return -1; // something wrong here
+  if (ret < 0) {
+	fprintf(stderr, "problem here\n");
+ 	return -1; // something wrong here
+  }
 
   uint64_t sample_period = current->event->attr.sample_period;
   if (sample_period == 0){ // counting event
     return 0;
   } else {
     // overflow event
-    assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+    //assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
     int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
     if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
                     || scaled_val < 0){

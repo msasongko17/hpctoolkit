@@ -701,9 +701,9 @@ hpcrun_stats_print_summary(void)
   struct rusage rusage;
   getrusage(RUSAGE_SELF, &rusage);
 
-  fprintf(stderr, "load_and_store_all_load: %ld\n", load_and_store_all_load);
-  fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);
-  fprintf(stderr, "store_all_store: %ld\n", store_all_store);
+  //fprintf(stdierr, "load_and_store_all_load: %ld\n", load_and_store_all_load);
+  //fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);
+  //fprintf(stderr, "store_all_store: %ld\n", store_all_store);
   //AMSG("WATCHPOINT ANOMALIES: samples:%ld, SM_imprecise:%ld, WP_Set:%ld, WP_triggered:%ld, WP_SampleTriggering:%ld, WP_ImpreciseIP:%ld, WP_InsaneIP:%ld, WP_Off8Addr:%ld, WP_ImpreciseAddr:%ld, WP_Dropped:%ld", num_samples_total, num_samples_imprecise, num_watchpoints_set, num_watchpoints_triggered, num_sample_triggering_watchpoints,  num_watchpoints_imprecise, num_insane_ip, num_watchpoints_imprecise_address_8_byte, num_watchpoints_imprecise_address, num_watchpoints_dropped);
   AMSG("WATCHPOINT ANOMALIES: samples:%.2e, SM_imprecise:%.2e, WP_Set:%.2e, WP_triggered:%.2e, WP_SampleTriggering:%.2e, WP_ImpreciseIP:%.2e, WP_InsaneIP:%.2e, WP_Off8Addr:%.2e, WP_ImpreciseAddr:%.2e, WP_Dropped:%.2e", (double)atomic_load(&num_samples_total), (double)atomic_load(&num_samples_imprecise), (double)atomic_load(&num_watchpoints_set), (double)atomic_load(&num_watchpoints_triggered), (double)atomic_load(&num_sample_triggering_watchpoints),  (double)atomic_load(&num_watchpoints_imprecise), (double)atomic_load(&num_insane_ip), (double)atomic_load(&num_watchpoints_imprecise_address_8_byte), (double)atomic_load(&num_watchpoints_imprecise_address), (double)atomic_load(&num_watchpoints_dropped));
 
