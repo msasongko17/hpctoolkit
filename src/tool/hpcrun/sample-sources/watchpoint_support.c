@@ -374,11 +374,11 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void ReuseWPConfigOverride(void *v){
     // dont fix IP
-    /*wpConfig.dontFixIP = true;
+    wpConfig.dontFixIP = true;
     wpConfig.dontDisassembleWPAddress = true;
-    wpConfig.isLBREnabled = false; //jqswang
+    /*wpConfig.isLBREnabled = false; //jqswang
     */
-    wpConfig.replacementPolicy = OLDEST;
+    //wpConfig.replacementPolicy = OLDEST;
 }
 
 void TrueSharingWPConfigOverride(void *v){
@@ -661,6 +661,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
     }
     switch (policy) {
         case AUTO:{
+	    fprintf(stderr, "replacement policy is AUTO\n");
             // Equal probability for any data access
             
             
@@ -691,7 +692,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             
         case NEWEST:{
             // Always replace the newest
-            
+            fprintf(stderr, "replacement policy is NEWEST\n");
             int64_t newestTime = 0;
             for(int i = 0; i < wpConfig.maxWP; i++){
                 if(newestTime < tData.watchPointArray[i].startTime) {
@@ -705,7 +706,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             
         case OLDEST:{
             // Always replace the oldest
-            
+            fprintf(stderr, "replacement policy is OLDEST\n");
             int64_t oldestTime = INT64_MAX;
             for(int i = 0; i < wpConfig.maxWP; i++){
                 if(oldestTime > tData.watchPointArray[i].startTime) {
@@ -1208,6 +1209,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
         // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
         //printf("and this region\n");
 	//printf("arming watchpoints\n");
+	fprintf(stderr, "watchpoint is armed\n");
         if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
             //LOG to hpcrun log
             EMSG("ArmWatchPoint failed for address %p", sampleData->va);
