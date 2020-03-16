@@ -20,6 +20,22 @@ extern double fs_core_matrix[2000][2000];
 extern double ts_core_matrix[2000][2000];
 extern double as_core_matrix[2000][2000];
 
+extern double war_fs_matrix[2000][2000];
+extern double war_ts_matrix[2000][2000];
+extern double war_as_matrix[2000][2000];
+
+extern double war_fs_core_matrix[2000][2000];
+extern double war_ts_core_matrix[2000][2000];
+extern double war_as_core_matrix[2000][2000];
+
+extern double waw_fs_matrix[2000][2000];
+extern double waw_ts_matrix[2000][2000];
+extern double waw_as_matrix[2000][2000];
+
+extern double waw_fs_core_matrix[2000][2000];
+extern double waw_ts_core_matrix[2000][2000];
+extern double waw_as_core_matrix[2000][2000];
+
 extern int ** matrix;
 
 extern long global_store_sampling_period;
@@ -55,6 +71,23 @@ void dump_fs_core_matrix();
 void dump_ts_core_matrix();
 void dump_as_core_matrix();
 
+void dump_war_fs_matrix();
+void dump_war_ts_matrix();
+void dump_war_as_matrix();
+
+void dump_war_fs_core_matrix();
+void dump_war_ts_core_matrix();
+void dump_war_as_core_matrix();
+
+void dump_waw_fs_matrix();
+void dump_waw_ts_matrix();
+void dump_waw_as_matrix();
+
+void dump_waw_fs_core_matrix();
+void dump_waw_ts_core_matrix();
+void dump_waw_as_core_matrix();
+
+
 void dump_matrix();
 
 // comdetective stats
@@ -67,6 +100,26 @@ extern double as_core_volume;
 extern double cache_line_transfer;
 extern double cache_line_transfer_millions;
 extern double cache_line_transfer_gbytes;
+
+extern double war_fs_volume;
+extern double war_fs_core_volume;
+extern double war_ts_volume;
+extern double war_ts_core_volume;
+extern double war_as_volume;
+extern double war_as_core_volume;
+extern double war_cache_line_transfer;
+extern double war_cache_line_transfer_millions;
+extern double war_cache_line_transfer_gbytes;
+
+extern double waw_fs_volume;
+extern double waw_fs_core_volume;
+extern double waw_ts_volume;
+extern double waw_ts_core_volume;
+extern double waw_as_volume;
+extern double waw_as_core_volume;
+extern double waw_cache_line_transfer;
+extern double waw_cache_line_transfer_millions;
+extern double waw_cache_line_transfer_gbytes;
 
 typedef struct SharedEntry{
   volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
