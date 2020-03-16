@@ -668,6 +668,9 @@ METHOD_FN(start)
     return;
   }
   td->ss_state[self->sel_idx] = START;
+  #ifdef REUSE_HISTO
+    assert(OpenWitchTraceOutput()==0);
+  #endif
 }
 
 static void ClientTermination(){
@@ -722,6 +725,7 @@ static void ClientTermination(){
             uint64_t val[3];
             //fprintf(stderr, "FINAL_COUNTING:");
             if (reuse_output_trace == false){ //dump the bin info
+		fprintf(stderr, "the bin info is dumped\n");
                 WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
                 WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
