@@ -392,7 +392,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
   uint64_t metric_inc = 1;
   if (current->event->attr.freq==1 && mmap_data->period > 0)
     metric_inc = mmap_data->period;
-
+  //fprintf(stderr, "metric_inc: %ld\n", metric_inc);
   // ----------------------------------------------------------------------------
   // record time enabled and time running
   // if the time enabled is not the same as running time, then it's multiplexed
@@ -414,6 +414,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     scale_f = 1.0;
 
   double counter = scale_f * metric_inc;
+  //fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
 
   // ----------------------------------------------------------------------------
   // set additional information for the metric description
@@ -447,7 +448,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     } else {
         td->precise_pc = 0;
     }
-    
+  //fprintf(stderr, "counter: %0.2lf\n", counter); 
   *sv = hpcrun_sample_callpath(context, current->event->metric,
         (hpcrun_metricVal_t) {.r=counter},
         0/*skipInner*/, 0/*isSync*/, &info);

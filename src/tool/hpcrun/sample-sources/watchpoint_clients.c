@@ -139,6 +139,7 @@
 #endif
 #include "matrix.h"
 #include "myposix.h"
+#define REUSE_HISTO 1
 
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
@@ -175,11 +176,12 @@ uint64_t * reuse_bin_list = NULL;
 double * reuse_bin_pivot_list = NULL; // store the bin intervals
 int reuse_bin_size = 0;
 #else
+#endif
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
 ReuseType reuse_profile_type = REUSE_BOTH; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
-#endif
+//#endif
 
 #define NUM_WATERMARK_METRICS (4)
 int curWatermarkId = 0;
@@ -419,6 +421,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
+	fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
 }
 #endif
 
@@ -713,7 +716,7 @@ static void ClientTermination(){
       hpcrun_stats_num_trueRWIns_inc(trueRWIns);
       hpcrun_stats_num_trueWRIns_inc(trueWRIns);
       break;
-    /*case WP_REUSE:
+    case WP_REUSE:
         {
 #ifdef REUSE_HISTO
             uint64_t val[3];
@@ -741,7 +744,7 @@ static void ClientTermination(){
             hpcrun_stats_num_accessedIns_inc(accessedIns);
             hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
             hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
-         }   break;*/
+         }   break;
     case WP_ALL_SHARING:
     case WP_COMDETECTIVE:
     case WP_IPC_ALL_SHARING:
@@ -1083,6 +1086,7 @@ METHOD_FN(process_event_list, int lush_metrics)
                                 reuse_output_trace = false;
                                 reuse_bin_start = 4000;
                                 reuse_bin_ratio = 2;
+				fprintf(stderr, "default configuration is applied\n");
                         }
 			if (reuse_output_trace == false){
                                 reuse_bin_size = 20;
@@ -1380,6 +1384,7 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
+  //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   diff.r = diff.r * proportion;
   cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
   return (uint64_t) (diffWithPeriod.r * proportion);
@@ -1704,7 +1709,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  fprintf(stderr, "in ReuseWPCallback\n");
+  //fprintf(stderr, "in ReuseWPCallback\n");
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
         // if the ip is 0, let's drop the WP
@@ -1720,7 +1725,9 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
        //fprintf(stderr, "DIFF: %lu\n", val[i][0] - wpi->sample.reuseDistance[i][0]);
       for(int j=0; j < 3; j++){
             if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
+		//fprintf(stderr, "before subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
                 val[i][j] -= wpi->sample.reuseDistance[i][j];
+		//fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
             }
             else { //Something wrong happens here and the record is not reliable. Drop it!
                 return ALREADY_DISABLED;
@@ -1729,13 +1736,16 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
     }
     // Report a reuse
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
     uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
     uint64_t inc = numDiffSamples;
+    //fprintf(stderr, "inc: %ld\n", inc);
     int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
     uint64_t time_distance = rdtsc() - wpi->startTime;
 
 #ifdef REUSE_HISTO
+    //fprintf(stderr, "inside REUSE_HISTO\n");
     //cct_node_t *reuseNode = getPreciseNode(wt->ctxt, wt->pc, temporal_reuse_metric_id );
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
@@ -1761,6 +1771,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
         sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
         cct_node_t *reuseNode = v.sample_node;
+	fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
         if (reuse_concatenate_use_reuse){
             reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
         }else{
@@ -1770,6 +1781,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
     else { // REUSE_SPATIAL
         sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
         cct_node_t *reuseNode = v.sample_node;
+	fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
         if (reuse_concatenate_use_reuse){
             reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
         }else{
@@ -1777,13 +1789,16 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
         }
     }
     cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
+    fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
     cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
     reuseTemporal += inc;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
         cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+	fprintf(stderr, "reuse distance temporal: %ld\n", inc);
     } else {
         cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+	fprintf(stderr, "reuse distance spatial: %ld\n", inc);
     }
     cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
     cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
@@ -2997,7 +3012,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
 	//fprintf(stderr, "here2 data_addr: %lx\n", (uint64_t) data_addr);
 	if (isProfileSpatial) {// detect spatial reuse
-
                 int wpSizes[] = {8, 4, 2, 1};
                 FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
                 int numFSLocs = 0;
@@ -3005,10 +3019,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                 if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
                     sd.va = data_addr;
                     sd.reuseType = REUSE_TEMPORAL;
+		    //fprintf(stderr, "REUSE_TEMPORAL is activated\n");
                 } else {
                     int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
                     sd.va = (void *)falseSharingLocs[idx].va;
                     sd.reuseType = REUSE_SPATIAL;
+		    //fprintf(stderr, "REUSE_SPATIAL is activated\n");
 #if 0
                     int offset = ((uint64_t)data_addr - aligned_pc) / accessLen;
                     int bound = CACHE_LINE_SZ / accessLen;
@@ -3020,6 +3036,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
             } else {
                 sd.va = data_addr;
                 sd.reuseType = REUSE_TEMPORAL;
+		//fprintf(stderr, "REUSE_TEMPORAL is activated\n");
             }
 	//fprintf(stderr, "here3\n");
 	if (!IsValidAddress(sd.va, precisePC)) {

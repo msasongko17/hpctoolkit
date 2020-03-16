@@ -191,6 +191,7 @@ hpcrun_cct_insert_backtrace_w_metric(cct_node_t* treenode,
 
   metric_upd_proc_t* upd_proc = hpcrun_get_metric_proc(metric_id);
   if (upd_proc) {
+    //fprintf(stderr, "datum value: %0.2lf\n", datum.r);
     upd_proc(metric_id, mset, datum);
   }
 
@@ -240,12 +241,14 @@ hpcrun_backtrace2cct(cct_bundle_t* cct, ucontext_t* context,
     TMSG(LUSH,"lush backtrace2cct invoked");
     n = lush_backtrace2cct(cct, context, metricId, metricIncr, skipInner,
 			   isSync);
+    fprintf(stderr, "lush_backtrace2cct\n");
   }
   else {
     TMSG(BT_INSERT,"regular (NON-lush) backtrace2cct invoked");
     n = help_hpcrun_backtrace2cct(cct, context,
 				  metricId, metricIncr,
 				  skipInner, isSync, data);
+   //fprintf(stderr, "help_hpcrun_backtrace2cct\n");
   }
 
   // N.B.: for lush_backtrace() it may be that n = NULL
