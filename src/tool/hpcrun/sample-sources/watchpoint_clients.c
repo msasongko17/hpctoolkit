@@ -2900,7 +2900,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               if(sType == ALL_STORE)
                                 store_all_store++;
                             }
-			    uint64_t curtime = rdtsc() 
+			    uint64_t curtime = rdtsc(); 
 
 			    int64_t storeCurTime = 0;
 			    if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
