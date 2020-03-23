@@ -288,6 +288,7 @@ typedef struct SharedData{
 SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = UNKNOWN, .tid = -1, .address = 0};
 
 HashTable_t bulletinBoard = {.counter = 0};
+ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
 
 __thread uint64_t prev_timestamp = 0;
 
@@ -774,6 +775,7 @@ static void ClientTermination(){
     case WP_MT_REUSE:
         {
 #ifdef MT_REUSE_HISTO
+	    fprintf(stderr, "in WP_MT_REUSE\n");
             uint64_t val[3];
             //fprintf(stderr, "FINAL_COUNTING:");
             if (mt_reuse_output_trace == false){ //dump the bin info
@@ -2012,7 +2014,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 }
 
 static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseWPCallback\n");
+  //fprintf(stderr, "in MtReuseWPCallback\n");
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
         // if the ip is 0, let's drop the WP
@@ -3409,6 +3411,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                 .isBackTrace = false,
         };
 	#ifdef REUSE_HISTO
+	//fprintf(stderr, "WP_MT_REUSE in OnSample\n");
             sd.wpLength = 1;
 #else
             sd.wpLength = GetFloorWPLength(accessLen);
