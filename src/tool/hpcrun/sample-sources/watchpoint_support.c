@@ -119,6 +119,7 @@ typedef struct ThreadData{
     void * gs_reg_val;
     uint64_t samplePostFull;
     long numWatchpointTriggers;
+    long numActiveWatchpointTriggers;
     long numWatchpointImpreciseIP;
     long numWatchpointImpreciseAddressArbitraryLength;
     long numWatchpointImpreciseAddress8ByteLength;
@@ -259,6 +260,7 @@ static void InitConfig(){
     wpConfig.pgsz = sysconf(_SC_PAGESIZE);
     
     // identify max WP supported by the architecture
+    fprintf(stderr, "watchpoints are created\n");
     volatile int wpHandles[MAX_WP_SLOTS];
     int i = 0;
     for(; i < MAX_WP_SLOTS; i++){
@@ -467,7 +469,8 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     {
         // fresh creation
         // Create the perf_event for this thread on all CPUs with no event group
-        int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
+        fprintf(stderr, "watchpoint is created this way\n");
+	int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
         if (perf_fd == -1) {
             EMSG("Failed to open perf event file: %s\n",strerror(errno));
             monitor_real_abort();
@@ -627,7 +630,9 @@ void WatchpointThreadTerminate(){
     }
     tData.fs_reg_val = (void*)-1;
     tData.gs_reg_val = (void*)-1;
-    
+   
+    fprintf(stderr, "tData.numWatchpointTriggers: %ld\n", tData.numWatchpointTriggers); 
+    fprintf(stderr, "tData.numActiveWatchpointTriggers: %ld\n", tData.numActiveWatchpointTriggers);
     hpcrun_stats_num_watchpoints_triggered_inc(tData.numWatchpointTriggers);
     hpcrun_stats_num_watchpoints_imprecise_inc(tData.numWatchpointImpreciseIP);
     hpcrun_stats_num_watchpoints_imprecise_address_inc(tData.numWatchpointImpreciseAddressArbitraryLength);
@@ -661,7 +666,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
     }
     switch (policy) {
         case AUTO:{
-	    fprintf(stderr, "replacement policy is AUTO\n");
+	    //fprintf(stderr, "replacement policy is AUTO\n");
             // Equal probability for any data access
             
             
@@ -692,7 +697,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             
         case NEWEST:{
             // Always replace the newest
-            fprintf(stderr, "replacement policy is NEWEST\n");
+            //fprintf(stderr, "replacement policy is NEWEST\n");
             int64_t newestTime = 0;
             for(int i = 0; i < wpConfig.maxWP; i++){
                 if(newestTime < tData.watchPointArray[i].startTime) {
@@ -706,7 +711,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             
         case OLDEST:{
             // Always replace the oldest
-            fprintf(stderr, "replacement policy is OLDEST\n");
+            //fprintf(stderr, "replacement policy is OLDEST\n");
             int64_t oldestTime = INT64_MAX;
             for(int i = 0; i < wpConfig.maxWP; i++){
                 if(oldestTime > tData.watchPointArray[i].startTime) {
@@ -1091,6 +1096,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         retVal = DISABLE_WP; // disable if unable to collect any info.
     } else {
 	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
+	tData.numActiveWatchpointTriggers++;
         retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
 	//fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
     }
@@ -1209,7 +1215,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
         // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
         //printf("and this region\n");
 	//printf("arming watchpoints\n");
-	fprintf(stderr, "watchpoint is armed\n");
+	//fprintf(stderr, "watchpoint is armed\n");
         if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
             //LOG to hpcrun log
             EMSG("ArmWatchPoint failed for address %p", sampleData->va);

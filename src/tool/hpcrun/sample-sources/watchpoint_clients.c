@@ -141,6 +141,12 @@
 #include "myposix.h"
 #define REUSE_HISTO 1
 
+#define MULTI_REUSE_HISTO 1
+
+#ifdef MULTI_REUSE_HISTO
+#include "reuse.h"
+#endif
+
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
 int load_metric_id = -1;
@@ -2805,6 +2811,30 @@ bool PrintStats(){
 }
 #endif
 
+int hashCode(void * key) {
+  return (uint64_t) key % 54121 % HASHTABLESIZE;
+}
+
+#ifdef MULTI_REUSE_HISTO
+
+ReuseBBEntry_t getEntryFromReuseBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
+  int hashIndex = hashCode(cacheLineBaseAddress);
+  if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    *item_not_found = 1;
+  return reuseBulletinBoard.hashTable[hashIndex];
+}
+
+void reuseHashInsert(ReuseBBEntry_t item) {
+  void * cacheLineBaseAddress = item.cacheLineBaseAddress;
+  int hashIndex = hashCode(cacheLineBaseAddress);
+
+  if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+    reuseBulletinBoard.hashTable[hashIndex] = item;
+  }
+}
+
+#endif
+
 SharedEntry_t getEntryRandomlyFromBulletinBoard(int tid, uint64_t cur_time, int * do_not_arm_watchpoint) {
   int hashIndex = rdtsc() % HASHTABLESIZE;
   int iter = 0;
@@ -2820,10 +2850,6 @@ SharedEntry_t getEntryRandomlyFromBulletinBoard(int tid, uint64_t cur_time, int 
     iter++;
   }
   return bulletinBoard.hashTable[hashIndex];
-}
-
-int hashCode(void * key) {
-  return (uint64_t) key % 54121 % HASHTABLESIZE;
 }
 
 SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
@@ -3062,6 +3088,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	//fprintf(stderr, "here5\n");
             //fprintf(stderr, "\n");
             // register the watchpoint
+	    //fprintf(stderr, "watchpoints are about to be armed from OnSample\n");
             SubscribeWatchpoint(&sd, OVERWRITE, false );
 	//fprintf(stderr, "here6\n");
 
