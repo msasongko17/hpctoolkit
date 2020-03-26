@@ -1,5 +1,4 @@
 typedef struct reuseBBEntry{
-  bool active;
   uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
   int tid;
   int core_id;

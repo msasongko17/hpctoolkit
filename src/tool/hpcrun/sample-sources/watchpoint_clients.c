@@ -403,6 +403,7 @@ ReuseBBEntry_t getEntryFromReuseBulletinBoard(void * cacheLineBaseAddress, int *
   return reuseBulletinBoard.hashTable[hashIndex];
 }
 
+/*
 void deactivateEntryInReuseBulletinBoard(void * cacheLineBaseAddress) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   //fprintf(stderr, "cache line %lx is compared with %lx\n", (long) cacheLineBaseAddress, (long) reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress);
@@ -410,7 +411,7 @@ void deactivateEntryInReuseBulletinBoard(void * cacheLineBaseAddress) {
     //fprintf(stderr, "cache line %lx is deactivated\n", cacheLineBaseAddress);
     reuseBulletinBoard.hashTable[hashIndex].active = false;
   }
-}
+}*/
 
 void reuseHashInsert(ReuseBBEntry_t item) {
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
@@ -423,7 +424,7 @@ void reuseHashInsert(ReuseBBEntry_t item) {
 
 void prettyPrintReuseHash() {
   for(int i = 0; i < HASHTABLESIZE; i++) {
-	  fprintf(stderr, "reuseBulletinBoard.hashTable[%d].cacheLineBaseAddress: %lx, tid: %d, core id: %d, active status: %d\n", i, (long) reuseBulletinBoard.hashTable[i].cacheLineBaseAddress, (int) reuseBulletinBoard.hashTable[i].tid, (int) reuseBulletinBoard.hashTable[i].core_id, (short) reuseBulletinBoard.hashTable[i].active);
+	  fprintf(stderr, "reuseBulletinBoard.hashTable[%d].cacheLineBaseAddress: %lx, tid: %d, core id: %d, access type: %s\n", i, (long) reuseBulletinBoard.hashTable[i].cacheLineBaseAddress, (int) reuseBulletinBoard.hashTable[i].tid, (int) reuseBulletinBoard.hashTable[i].core_id, reuseBulletinBoard.hashTable[i].accessType == LOAD ? "LOAD": (reuseBulletinBoard.hashTable[i].accessType == STORE ? "STORE" : (reuseBulletinBoard.hashTable[i].accessType == LOAD_AND_STORE ? "LOAD_AND_STORE": "UNKNOWN")));
   }
 }
 
@@ -2072,6 +2073,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
         return ALREADY_DISABLED;
     }
 #endif //jqswang
+    //fprintf(stderr, "there is a trap\n");
      //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
      uint64_t trapTime = rdtsc();
      uint64_t val[2][3];
@@ -2086,6 +2088,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		//fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
             }
             else { //Something wrong happens here and the record is not reliable. Drop it!
+		 fprintf(stderr, "Something wrong happens here and the record is not reliable\n");
                 return ALREADY_DISABLED;
             }
       }
@@ -2109,7 +2112,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     //fprintf(stderr, "pretty printing reuseBulletinBoard at watchpoint trap\n");
     //prettyPrintReuseHash(); 
 
-    //fprintf(stderr, "inside REUSE_HISTO\n");
+    fprintf(stderr, "inside REUSE_HISTO\n");
     //cct_node_t *reuseNode = getPreciseNode(wt->ctxt, wt->pc, temporal_reuse_metric_id );
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
@@ -2121,47 +2124,71 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
             }
             WriteWitchTraceOutput("\n");
     } else{
-	uint64_t inter_rd = 0;
         uint64_t intra_rd = 0;
         for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
                 assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
                 intra_rd += val[i][0];
         }
 
-	// reuse distance is updated for private cache
-	// before
+	if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+                ReuseBBEntry_t curr_access= {
+                        .time=trapTime,  //jqswang: Setting it to WP_READ causes segment fault
+                        .tid=TD_GET(core_profile_trace_data.id),
+                        .core_id=sched_getcpu(),
+                        .accessType=wt->accessType,
+                        .address=wt->va,
+                        .cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(wt->va)),
+                        .accessLen=wt->accessLength,
+                        .node=v.sample_node,
+                        .eventCountBetweenSamples=wpi->sample.eventCountBetweenSamples,
+                        .timeBetweenSamples=wpi->sample.timeBetweenSamples,
+                };
+           //fprintf(stderr, "curr_access.eventCountBetweenSamples: %ld, curr_access.timeBetweenSamples: %ld, tid: %d\n", curr_access.eventCountBetweenSamples, curr_access.timeBetweenSamples, me);
+           //prev_event_count = pmu_counter;
+           reuseHashInsert(curr_access);
+	   //fprintf(stderr, "pretty printing Bulletin Board at trap\n");
+	   //prettyPrintReuseHash();
+           }
+// update thi spot
+// before
 	int item_not_found_flag = 0;
-        int me = TD_GET(core_profile_trace_data.id);
-        //int my_core = sched_getcpu();
-	uint64_t reuse = 0;
-
-        ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard((void *) ALIGN_TO_CACHE_LINE((size_t)wpi->sample.va), &item_not_found_flag);
-        if(item_not_found_flag == 0 && prev_access.active) {
+           int me = TD_GET(core_profile_trace_data.id);
+           int my_core = sched_getcpu();
+           ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(wt->va)), &item_not_found_flag);
+           if(item_not_found_flag == 0) {
                 // get the use time
                 //uint64_t time_distance = sample_time - prev_access.time;
                 // get the use counter
                 // compute reuse distance
                 //uint64_t time_reuse_distance = pmu_counter - prev_access.pmu_counter; 
                 // for private cache
-                if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE){
+                /*if(accessType == STORE || accessType == LOAD_AND_STORE){
+                        if(me != prev_access.tid) {
+                                inter_thread_invalidation_count += metricThreshold;
+                                fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld\n", metricThreshold);
+                        }
+                        if(my_core != prev_access.core_id) {
+                                inter_core_invalidation_count += metricThreshold;
+                                fprintf(stderr, "inter_core_invalidation_count is incremented by %ld\n", metricThreshold);
+                        }
+                }*/
+		fprintf("wpi->sample.sampleTime: %ld - prev_access.time: %ld = %ld\n", wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime - prev_access.time);
+		if(wpi->sample.sampleTime >= prev_access.time) {
+			fprintf(stderr, "reuse distance is %ld\n", intra_rd);
+			ReuseAddDistance(intra_rd, inc);
+		} else {
                         if(me != prev_access.tid) {
                                 inter_thread_invalidation_count += inc;
-				fprintf(stderr, "inter thread invalidation is detected\n");
-                        } else ReuseAddDistance(intra_rd, inc);
-                        /*if(my_core != prev_access.core_id) {
-                                inter_core_invalidation_count += 1;
-                        }*/
-                } else ReuseAddDistance(intra_rd, inc);
+                                fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld\n", inc);
+                        }
+                        if(my_core != prev_access.core_id) {
+                                inter_core_invalidation_count += inc;
+                                fprintf(stderr, "inter_core_invalidation_count is incremented by %ld\n", inc);
+                        }
+		}
            }
-	// after
-	if(wt->accessType == STORE)
-		fprintf(stderr, "watchpoint trap's type is STORE\n");
-	else if(wt->accessType == LOAD_AND_STORE)
-		fprintf(stderr, "watchpoint trap's type is LOAD_AND_STORE\n");
-	else if(wt->accessType == LOAD)
-		fprintf(stderr, "watchpoint trap's type is LOAD\n");
+// after
     }
-    deactivateEntryInReuseBulletinBoard((void *) ALIGN_TO_CACHE_LINE((size_t)wpi->sample.va));
     #else
 
     cct_node_t *reusePairNode;
@@ -3544,11 +3571,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		pmu_counter += val[0];
            }
 	  // update bulletin board here
-	   int item_not_found_flag = 0;
+	   //int item_not_found_flag = 0;
 	   int me = TD_GET(core_profile_trace_data.id);
 	   int my_core = sched_getcpu();
-	   ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
-	   if(item_not_found_flag == 0 && prev_access.active) {
+	   /*ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
+	   if(item_not_found_flag == 0) {
 	   	// get the use time
 		//uint64_t time_distance = sample_time - prev_access.time;
 		// get the use counter
@@ -3565,25 +3592,32 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 				fprintf(stderr, "inter_core_invalidation_count is incremented by %ld\n", metricThreshold);
                         }
 		}
-	   }
+	   }*/
 	   //fprintf(stderr, "curTime: %ld, lastTime: %ld, pmu_counter: %ld, prev_event_count: %ld, tid: %d\n", curTime, lastTime, pmu_counter, prev_event_count, me);
-	   ReuseBBEntry_t curr_access= {
-                .active = true,
-                .time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
-                .tid=me,
-		.core_id=my_core,
-                .accessType=accessType,
-	        .address=data_addr,
-		.cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(data_addr)),
-		.accessLen=accessLen,
-		.node=node,
-		.pmu_counter=pmu_counter,
-		.eventCountBetweenSamples=pmu_counter-prev_event_count,	
-		.timeBetweenSamples=curTime-lastTime,
-           };
+	   uint64_t eventDiff = pmu_counter-prev_event_count;
+	   uint64_t timeDiff = curTime-lastTime;
+	   if(accessType == STORE || accessType == LOAD_AND_STORE) {
+	   	ReuseBBEntry_t curr_access= {
+                	.time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
+                	.tid=me,
+			.core_id=my_core,
+                	.accessType=accessType,
+	        	.address=data_addr,
+			.cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(data_addr)),
+			.accessLen=accessLen,
+			.node=node,
+			.eventCountBetweenSamples=eventDiff,	
+			.timeBetweenSamples=timeDiff,
+           	};
 	   //fprintf(stderr, "curr_access.eventCountBetweenSamples: %ld, curr_access.timeBetweenSamples: %ld, tid: %d\n", curr_access.eventCountBetweenSamples, curr_access.timeBetweenSamples, me);
-	   prev_event_count = pmu_counter;
+	   //prev_event_count = pmu_counter;
 	   reuseHashInsert(curr_access);
+	   //fprintf(stderr, "pretty printing Bulletin Board on sample\n");
+	   //prettyPrintReuseHash();
+	   }
+	   sd.eventCountBetweenSamples=eventDiff;
+	   sd.timeBetweenSamples=timeDiff;
+	   prev_event_count = pmu_counter;
 	   //fprintf(stderr, "Pretty printing reuseBulletinBoard\n");
 	   //prettyPrintReuseHash();
 
@@ -3593,9 +3627,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	    //fprintf(stderr, "watchpoints are about to be armed from OnSample\n");
             SubscribeWatchpoint(&sd, OVERWRITE, false );
 	//fprintf(stderr, "here6\n");
-
+	lastTime = curTime;
     }
-    lastTime = curTime; 
     break;
     case WP_SPATIAL_REUSE:{
 			    long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;

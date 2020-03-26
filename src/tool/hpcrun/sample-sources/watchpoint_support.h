@@ -112,7 +112,10 @@ typedef struct SampleData{
     bool isSamplePointAccurate;
     bool isBackTrace;
     ReuseType reuseType;
+    uint64_t eventCountBetweenSamples;
+    uint64_t timeBetweenSamples;
     uint64_t reuseDistance[2][3];
+    uint64_t sampleTime;
 } SampleData_t;
 
 typedef struct WatchPointInfo{

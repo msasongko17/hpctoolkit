@@ -376,7 +376,7 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void ReuseWPConfigOverride(void *v){
     // dont fix IP
-    wpConfig.dontFixIP = true;
+    //wpConfig.dontFixIP = true;
     //wpConfig.dontDisassembleWPAddress = true;
     //wpConfig.isLBREnabled = false; //jqswang
     
