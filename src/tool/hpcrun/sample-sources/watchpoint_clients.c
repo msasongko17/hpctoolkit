@@ -226,6 +226,7 @@ typedef struct WPStats{
 }WPStats_t;
 
 __thread WPStats_t wpStats;
+__thread uint64_t prev_event_count = 0;
 
 /******************************************************************************
  * macros
@@ -1990,6 +1991,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
       }
     }
     // Report a reuse
+    // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp 
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
     //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
     uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
@@ -2071,6 +2073,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     }
 #endif //jqswang
      //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+     uint64_t trapTime = rdtsc();
      uint64_t val[2][3];
      for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
         assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
@@ -2088,8 +2091,11 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       }
     }
     // Report a reuse
+    // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
     //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
+    //Increment of reuse distance with distance rd is the number of samples 
+    // in the context since the last WP trap multiplied by sample period
     uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
     uint64_t inc = numDiffSamples;
     //fprintf(stderr, "inc: %ld\n", inc);
@@ -2115,17 +2121,20 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
             }
             WriteWitchTraceOutput("\n");
     } else{
-        uint64_t rd = 0;
+	uint64_t inter_rd = 0;
+        uint64_t intra_rd = 0;
         for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
                 assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
-                rd += val[i][0];
+                intra_rd += val[i][0];
         }
 
 	// reuse distance is updated for private cache
 	// before
 	int item_not_found_flag = 0;
         int me = TD_GET(core_profile_trace_data.id);
-        int my_core = sched_getcpu();
+        //int my_core = sched_getcpu();
+	uint64_t reuse = 0;
+
         ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard((void *) ALIGN_TO_CACHE_LINE((size_t)wpi->sample.va), &item_not_found_flag);
         if(item_not_found_flag == 0 && prev_access.active) {
                 // get the use time
@@ -2136,12 +2145,13 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                 // for private cache
                 if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE){
                         if(me != prev_access.tid) {
-                                inter_thread_invalidation_count += 1;
-                        } else ReuseAddDistance(rd, inc);
-                        if(my_core != prev_access.core_id) {
+                                inter_thread_invalidation_count += inc;
+				fprintf(stderr, "inter thread invalidation is detected\n");
+                        } else ReuseAddDistance(intra_rd, inc);
+                        /*if(my_core != prev_access.core_id) {
                                 inter_core_invalidation_count += 1;
-                        }
-                }
+                        }*/
+                } else ReuseAddDistance(intra_rd, inc);
            }
 	// after
 	if(wt->accessType == STORE)
@@ -3250,10 +3260,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
   // fprintf(stderr, " numWatchpointsSet=%lu\n", wpStats.numWatchpointsSet);
 
-  uint64_t sample_time = rdtsc();
+  uint64_t curTime = rdtsc();
   int accessLen;
   AccessType accessType;
-
   if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
@@ -3451,6 +3460,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     break;
     case WP_MT_REUSE: {
 	//fprintf(stderr, "WP_REUSE in OnSample\n");
+	
 	#ifdef REUSE_HISTO
 #else
         if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
@@ -3547,26 +3557,32 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		// for private cache
 		if(accessType == STORE || accessType == LOAD_AND_STORE){
 			if(me != prev_access.tid) {
-				inter_thread_invalidation_count += 1;
+				inter_thread_invalidation_count += metricThreshold;
+				fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld\n", metricThreshold);
 			}
 			if(my_core != prev_access.core_id) {
-                                inter_core_invalidation_count += 1;
+                                inter_core_invalidation_count += metricThreshold;
+				fprintf(stderr, "inter_core_invalidation_count is incremented by %ld\n", metricThreshold);
                         }
 		}
 	   }
+	   //fprintf(stderr, "curTime: %ld, lastTime: %ld, pmu_counter: %ld, prev_event_count: %ld, tid: %d\n", curTime, lastTime, pmu_counter, prev_event_count, me);
 	   ReuseBBEntry_t curr_access= {
                 .active = true,
-                .time=sample_time,  //jqswang: Setting it to WP_READ causes segment fault
-                .tid=TD_GET(core_profile_trace_data.id),
+                .time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
+                .tid=me,
 		.core_id=my_core,
                 .accessType=accessType,
 	        .address=data_addr,
 		.cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(data_addr)),
 		.accessLen=accessLen,
 		.node=node,
-		.pmu_counter=pmu_counter,	
+		.pmu_counter=pmu_counter,
+		.eventCountBetweenSamples=pmu_counter-prev_event_count,	
+		.timeBetweenSamples=curTime-lastTime,
            };
-
+	   //fprintf(stderr, "curr_access.eventCountBetweenSamples: %ld, curr_access.timeBetweenSamples: %ld, tid: %d\n", curr_access.eventCountBetweenSamples, curr_access.timeBetweenSamples, me);
+	   prev_event_count = pmu_counter;
 	   reuseHashInsert(curr_access);
 	   //fprintf(stderr, "Pretty printing reuseBulletinBoard\n");
 	   //prettyPrintReuseHash();
@@ -3579,6 +3595,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	//fprintf(stderr, "here6\n");
 
     }
+    lastTime = curTime; 
     break;
     case WP_SPATIAL_REUSE:{
 			    long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;

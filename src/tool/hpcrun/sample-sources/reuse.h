@@ -9,6 +9,8 @@ typedef struct reuseBBEntry{
   int accessLen;
   cct_node_t * node;
   uint64_t pmu_counter;
+  uint64_t eventCountBetweenSamples;
+  uint64_t timeBetweenSamples;
   char dummy[CACHE_LINE_SZ];
 } ReuseBBEntry_t;
 
