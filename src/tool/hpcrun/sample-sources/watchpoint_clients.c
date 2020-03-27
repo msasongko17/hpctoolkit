@@ -419,8 +419,15 @@ void reuseHashInsert(ReuseBBEntry_t item) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
   //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
-  reuseBulletinBoard.hashTable[hashIndex] = item;
-  //}
+  if((reuseBulletinBoard.counter & 1) == 0)
+  {
+	  uint64_t theCounter = reuseBulletinBoard.counter;
+	  if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
+		  reuseBulletinBoard.hashTable[hashIndex] = item;
+		  __sync_synchronize();
+		  reuseBulletinBoard.counter++;
+	  }
+  }
 }
 
 void prettyPrintReuseHash() {
@@ -2157,7 +2164,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
            int my_core = sched_getcpu();
 	   fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
 	   //prettyPrintReuseHash();
-           ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(wt->va)), &item_not_found_flag);
+	   ReuseBBEntry_t prev_access;
+           ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
            if(item_not_found_flag == 0) {
                 // get the use time
                 //uint64_t time_distance = sample_time - prev_access.time;
@@ -2670,7 +2678,22 @@ void ReadSharedDataTransactionally(SharedData_t *localSharedData){
   }while(1);
 }
 
+void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_not_found_flag){
+  // Laport's STM
+  do{
+    int64_t startCounter = reuseBulletinBoard.counter;
+    if(startCounter & 1)
+      continue; // Some writer is updating
 
+    __sync_synchronize();
+    //*localSharedData = gSharedData;
+    *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_not_found_flag);
+    __sync_synchronize();
+    int64_t endCounter = reuseBulletinBoard.counter;
+    if(startCounter == endCounter)
+      break;
+  }while(1);
+}
 
 int static inline GetFloorWPLength(int accessLen){
   switch (accessLen) {
@@ -3626,7 +3649,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   int item_not_found_flag = 0;
 	   // detect communication here
 	   // before 
-	   ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
+	   //ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
+	   ReuseBBEntry_t prev_access;
+	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (2 * (curTime - lastTime)))) {
                 	inter_thread_invalidation_count += metricThreshold;

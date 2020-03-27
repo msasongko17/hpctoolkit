@@ -139,6 +139,7 @@ hpcrun_stats_reinit(void)
   fs_matrix_size =  0;
   ts_matrix_size =  0;
   as_matrix_size =  0;
+  as_core_matrix_size = 0;
   HASHTABLESIZE = atoi(getenv(BULLETIN_BOARD_SIZE));
 #if ADAMANT_USED
   if(getenv(HPCRUN_OBJECT_LEVEL)) {
