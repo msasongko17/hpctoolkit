@@ -2183,10 +2183,30 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 			// validate the invalidation by checking the execution time
                         if((me != prev_access.tid) && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
                                 inter_thread_invalidation_count += inc;
+				int max_thread_num = prev_access.tid;
+                        	if(max_thread_num < me)
+                        	{
+                                	max_thread_num = me;
+                        	}
+                        	if(as_matrix_size < max_thread_num)
+                        	{
+                                	as_matrix_size =  max_thread_num;
+                        	}
+                        	as_matrix[prev_access.tid][me] = (double) inc;
                                 fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld at trap\n", inc);
                         }
                         if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
                                 inter_core_invalidation_count += inc;
+				int max_core_num = prev_access.tid;
+                                if(max_core_num < me)
+                                {
+                                        max_core_num = me;
+                                }
+                                if(as_core_matrix_size < max_core_num)
+                                {
+                                        as_core_matrix_size =  max_core_num;
+                                }
+                                as_core_matrix[prev_access.tid][me] = (double) inc;
                                 fprintf(stderr, "inter_core_invalidation_count is incremented by %ld at trap\n", inc);
                         }
 		}
@@ -3610,10 +3630,30 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
            if(item_not_found_flag == 0) {
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (2 * (curTime - lastTime)))) {
                 	inter_thread_invalidation_count += metricThreshold;
+			int max_thread_num = prev_access.tid;
+                        if(max_thread_num < me)
+                        {
+                        	max_thread_num = me;
+                        }
+                        if(as_matrix_size < max_thread_num)
+                        {
+                        	as_matrix_size =  max_thread_num;
+                        }
+			as_matrix[prev_access.tid][me] = (double) metricThreshold;
                 	fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
            	}
                	if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (2 * (curTime - lastTime)))) {
                		inter_core_invalidation_count += metricThreshold;
+			int max_core_num = prev_access.tid;
+                        if(max_core_num < me)
+                        {
+                                max_core_num = me;
+                        }
+                        if(as_core_matrix_size < max_core_num)
+                        {
+                                as_core_matrix_size =  max_core_num;
+                        }
+			as_core_matrix[prev_access.tid][me] = (double) metricThreshold;
                		fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
                 }
 	   }
@@ -4189,6 +4229,10 @@ void dump_comdetective_matrices() {
     dump_ts_core_matrix();
     dump_as_matrix();
     dump_as_core_matrix();
+  }
+  if(theWPConfig->id == WP_MT_REUSE) {
+	  dump_as_matrix();
+	  dump_as_core_matrix();
   }
 }
 
