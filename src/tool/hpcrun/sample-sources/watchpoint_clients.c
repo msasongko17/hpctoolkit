@@ -487,7 +487,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
+	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
 }
 #endif
 
@@ -2120,7 +2120,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     //fprintf(stderr, "pretty printing reuseBulletinBoard at watchpoint trap\n");
     //prettyPrintReuseHash(); 
 
-    fprintf(stderr, "inside REUSE_HISTO\n");
+    //fprintf(stderr, "inside REUSE_HISTO\n");
     //cct_node_t *reuseNode = getPreciseNode(wt->ctxt, wt->pc, temporal_reuse_metric_id );
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
@@ -2162,7 +2162,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	int item_not_found_flag = 0;
            int me = TD_GET(core_profile_trace_data.id);
            int my_core = sched_getcpu();
-	   fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
+	   //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
 	   //prettyPrintReuseHash();
 	   ReuseBBEntry_t prev_access;
            ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
@@ -2183,9 +2183,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                                 fprintf(stderr, "inter_core_invalidation_count is incremented by %ld\n", metricThreshold);
                         }
                 }*/
-		fprintf(stderr, "wpi->sample.sampleTime: %ld - prev_access.time: %ld = %ld, wpi->sample.accessType: %d, me: %d, prev_access.tid: %d\n", wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime - prev_access.time, wpi->sample.accessType, me, prev_access.tid);
+		//fprintf(stderr, "wpi->sample.sampleTime: %ld - prev_access.time: %ld = %ld, wpi->sample.accessType: %d, me: %d, prev_access.tid: %d\n", wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime - prev_access.time, wpi->sample.accessType, me, prev_access.tid);
 		if(wpi->sample.sampleTime >= prev_access.time) {
-			fprintf(stderr, "reuse distance is %ld no interception\n", intra_rd);
+			//fprintf(stderr, "reuse distance is %ld no interception\n", intra_rd);
 			ReuseAddDistance(intra_rd, inc);
 		} else {
 			// validate the invalidation by checking the execution time
@@ -2201,7 +2201,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                                 	as_matrix_size =  max_thread_num;
                         	}
                         	as_matrix[prev_access.tid][me] = (double) inc;
-                                fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld at trap\n", inc);
+                                //fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld at trap\n", inc);
                         }
                         if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
                                 inter_core_invalidation_count += inc;
@@ -2215,11 +2215,11 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                                         as_core_matrix_size =  max_core_num;
                                 }
                                 as_core_matrix[prev_access.tid][me] = (double) inc;
-                                fprintf(stderr, "inter_core_invalidation_count is incremented by %ld at trap\n", inc);
+                                //fprintf(stderr, "inter_core_invalidation_count is incremented by %ld at trap\n", inc);
                         }
 		}
            } else {
-		   fprintf(stderr, "reuse distance is %ld due to absence\n", intra_rd);
+		   //fprintf(stderr, "reuse distance is %ld due to absence\n", intra_rd);
 		   ReuseAddDistance(intra_rd, inc);
 	   }
 
@@ -3665,7 +3665,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                         	as_matrix_size =  max_thread_num;
                         }
 			as_matrix[prev_access.tid][me] = (double) metricThreshold;
-                	fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
+                	//fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
            	}
                	if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (2 * (curTime - lastTime)))) {
                		inter_core_invalidation_count += metricThreshold;
@@ -3679,7 +3679,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                                 as_core_matrix_size =  max_core_num;
                         }
 			as_core_matrix[prev_access.tid][me] = (double) metricThreshold;
-               		fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
+               		//fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
                 }
 	   }
 	   // after

@@ -469,7 +469,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     {
         // fresh creation
         // Create the perf_event for this thread on all CPUs with no event group
-        fprintf(stderr, "watchpoint is created this way\n");
+        //fprintf(stderr, "watchpoint is created this way\n");
 	int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
         if (perf_fd == -1) {
             EMSG("Failed to open perf event file: %s\n",strerror(errno));

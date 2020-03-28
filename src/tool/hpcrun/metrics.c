@@ -528,6 +528,7 @@ hpcrun_metric_std_inc(int metric_id, metric_set_t* set,
 		      hpcrun_metricVal_t incr)
 {
   hpcrun_metric_std(metric_id, set, '+', incr);
+  //fprintf(stderr, "increment is by %0.2lf in real and %ld in integer\n", incr.r, incr.i);
 }
 
 //
