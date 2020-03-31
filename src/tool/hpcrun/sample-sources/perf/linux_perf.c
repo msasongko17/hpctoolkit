@@ -292,7 +292,7 @@ perf_init()
 static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
-  //printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
+  fprintf(stderr, "this is thread %d\n", TD_GET(core_profile_trace_data.id));
   if(mapping_size > 0)
   	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
   et->num_overflows = 0;
@@ -893,6 +893,7 @@ METHOD_FN(gen_event_set, int lush_metrics)
   // if an event cannot be initialized, we still keep it in our list
   //  but there will be no samples
 
+  fprintf(stderr, "in gen_event_set called by thread %d\n", TD_GET(core_profile_trace_data.id));
   for (int i=0; i<nevents; i++)
   {
     // initialize this event. If it's valid, we set the metric for the event

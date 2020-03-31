@@ -138,6 +138,11 @@
 #include <messages/messages.h>
 #include <messages/debug-flag.h>
 #include "mymapping.h"
+#include "sample-sources/reuse.h"
+
+int thread_count;
+
+long thread_id_table[1024][2];
 
 extern void hpcrun_set_retain_recursion_mode(bool mode);
 #ifndef USE_LIBUNW
@@ -388,6 +393,7 @@ dump_interval_handler(int sig, siginfo_t* info, void* ctxt)
 void
 hpcrun_init_internal(bool is_child)
 {
+  fprintf(stderr, "in hpcrun_init_internal\n");
   hpcrun_initLoadmap();
 
   hpcrun_memory_reinit();
@@ -475,8 +481,9 @@ hpcrun_init_internal(bool is_child)
   if (! is_child) {
     SAMPLE_SOURCES(process_event_list, lush_metrics);
   }
+  fprintf(stderr, "spawning gen_event_set\n");
   SAMPLE_SOURCES(gen_event_set, lush_metrics);
-
+  fprintf(stderr, "after spawning gen_event_set\n");
   // set up initial 'epoch' 
   
   TMSG(EPOCH,"process init setting up initial epoch/loadmap");
@@ -788,6 +795,7 @@ monitor_init_process(int *argc, char **argv, void* data)
   char* process_name;
   char  buf[PROC_NAME_LEN];
 
+  thread_count = 0;
   hpcrun_thread_suppress_sample = false;
 
   fork_data_t* fork_data = (fork_data_t*) data;
@@ -1062,6 +1070,7 @@ monitor_thread_post_create(void* data)
 void* 
 monitor_init_thread(int tid, void* data)
 {
+  fprintf(stderr, "in monitor_init_thread, initializing thread %d\n", tid);
 #ifdef USE_GCC_THREAD
   monitor_tid = tid;
 #endif

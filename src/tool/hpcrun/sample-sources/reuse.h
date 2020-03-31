@@ -1,5 +1,5 @@
 typedef struct reuseBBEntry{
-  uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t time __attribute__((aligned(64)));
   int tid;
   int core_id;
   int active_flag;
@@ -12,3 +12,6 @@ typedef struct reuseHashTableStruct{
 } ReuseHashTable_t;
 
 extern ReuseHashTable_t reuseBulletinBoard;
+
+#define TID 0
+#define OS_TID 1

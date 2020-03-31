@@ -119,15 +119,15 @@ typedef struct SampleData{
 } SampleData_t;
 
 typedef struct WatchPointInfo{
-    SampleData_t sample;
+    SampleData_t sample; // ok
 
-    void * va; // access virtual address
-    void * cacheline_va;
-    int64_t startTime;
-    int fileHandle;
-    bool isActive;
-    uint8_t value[MAX_WP_LENGTH]; // value
-    void * mmapBuffer;
+    void * va; // access virtual address // ok
+    //void * cacheline_va;
+    int64_t startTime; // ok
+    int fileHandle; // ok
+    bool isActive; //ok
+    uint8_t value[MAX_WP_LENGTH]; // value// ok
+    void * mmapBuffer; // ok
     uint64_t bulletinBoardTimestamp;
 } WatchPointInfo_t;
 
@@ -163,6 +163,7 @@ typedef void (*ClientConfigOverrideCall_t)(void *);
 extern void WatchpointThreadInit();
 extern void WatchpointThreadTerminate();
 extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue);
+extern bool SubscribeWatchpointOtherThreads(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue);
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);

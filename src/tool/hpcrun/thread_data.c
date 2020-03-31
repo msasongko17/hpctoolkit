@@ -70,8 +70,12 @@
 #include <messages/messages.h>
 #include <trampoline/common/trampoline.h>
 #include <memory/mmap.h>
+#include "sample-sources/reuse.h"
+#include <sys/syscall.h>
 
 //***************************************************************************
+extern int thread_count;
+extern long thread_id_table[1024][2];
 
 enum _local_int_const {
   BACKTRACE_INIT_SZ     = 32,
@@ -215,6 +219,7 @@ static inline void
 core_profile_trace_data_init(core_profile_trace_data_t * cptd, int id, cct_ctxt_t* thr_ctxt) 
 {
 
+  fprintf(stderr, "in core_profile_trace_data_init\n");
   // ----------------------------------------
   // id
   // ----------------------------------------
@@ -264,6 +269,15 @@ static inline void gpu_data_init(gpu_data_t * gpu_data)
 void
 hpcrun_thread_data_init(int id, cct_ctxt_t* thr_ctxt, int is_child, size_t n_sources)
 {
+  if(thread_count < (id + 1))
+	  thread_count = id+1;
+
+  thread_id_table[id][TID] = id;
+  thread_id_table[id][OS_TID] = syscall(SYS_gettid);
+  fprintf(stderr, "in hpcrun_thread_data_init, thread table\n");
+  for(int i = 0; i < thread_count; i++) {
+	  fprintf(stderr, "thread_id_table[%d][%d]: %ld, thread_id_table[%d][%d]: %ld\n", i, TID, thread_id_table[i][TID], i, OS_TID, thread_id_table[i][OS_TID]);
+  }
   hpcrun_meminfo_t memstore;
   thread_data_t* td = hpcrun_get_thread_data();
 
