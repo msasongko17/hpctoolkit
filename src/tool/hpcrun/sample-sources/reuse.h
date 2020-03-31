@@ -2,15 +2,7 @@ typedef struct reuseBBEntry{
   uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
   int tid;
   int core_id;
-  AccessType accessType;
-  void *address;
-  void *cacheLineBaseAddress;
-  int accessLen;
-  cct_node_t * node;
-  uint64_t pmu_counter;
-  uint64_t eventCountBetweenSamples;
-  uint64_t timeBetweenSamples;
-  char dummy[CACHE_LINE_SZ];
+  int active_flag;
 } ReuseBBEntry_t;
 
 typedef struct reuseHashTableStruct{
