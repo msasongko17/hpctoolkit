@@ -18,7 +18,7 @@ mpirun -n <process count> ComDetectiverun <./your_executable> your_args
 
 4. To run ComDetective with ADAMANT:
 
-ComDetective --enable-object-level <./your_executable> your_args
+ComDetectiverun --enable-object-level <./your_executable> your_args
 
 Results
 =====
