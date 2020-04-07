@@ -2083,6 +2083,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 #endif //jqswang
     //fprintf(stderr, "there is a trap\n");
      //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+     //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
+     //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
      uint64_t trapTime = rdtsc();
      uint64_t val[2][3];
      for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
@@ -2137,11 +2139,12 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	   ReuseBBEntry_t prev_access;
            ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
            if(item_not_found_flag == 0) {
-               
+       
+	        //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
 		if(wpi->sample.sampleTime >= prev_access.time) {
 			
 			// after
-			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
+			fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
 			ReuseAddDistance(rd, inc);
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -2159,14 +2162,14 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         	}
                         	as_matrix[prev_access.tid][me] = increment;
 				if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
-					fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
+					//fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
 					invalidation_matrix[prev_access.tid][me] = increment;
 				}
 				if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) && ((prev_access.time - wpi->sample.sampleTime) < wpi->sample.expirationPeriod)) {
-                                        //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d, time gap: %ld\n", me, wpi->sample.accessType, prev_access.tid, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime));
+                                        //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d, time gap: %ld, wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime): %ld\n", me, wpi->sample.accessType, prev_access.tid, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime), wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime));
                                         invalidation_matrix[me][prev_access.tid] = increment;
                                 }
-				//fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime);
+				//fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
                                 //fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld at trap\n", inc);
                         }
                         if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
@@ -2194,7 +2197,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         }
 		}
            } else {
-		   //fprintf(stderr, "reuse distance is %ld due to absence\n", intra_rd);
+		   //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 		   ReuseAddDistance(rd, inc);
 	   }
 
@@ -3601,6 +3604,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                 goto ErrExit; // incorrect access type
         }
 
+	//fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);
 	//fprintf(stderr, "here4\n");
             // Read the reuse distance event counters
             // We assume the reading event is load, store or both.
@@ -3628,7 +3632,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
+		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - lastTime))) {
+			//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
 			//fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
                 	inter_thread_invalidation_count += metricThreshold;
 			int max_thread_num = prev_access.tid;
@@ -3644,7 +3650,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 				//fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
 				invalidation_matrix[prev_access.tid][me] = (double) metricThreshold;
-			} /*else {
+			} /* else {
 				fprintf(stderr, "there is an inter-thread communication, but no invalidation\n");
 			}*/
                 	//fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
@@ -3684,6 +3690,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			.eventCountBetweenSamples=eventDiff,	
 			.timeBetweenSamples=timeDiff,
            	};
+		//fprintf(stderr, "sampled cache line: %lx in thread %d\n", curr_access.cacheLineBaseAddress, curr_access.tid);
 	 	//fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 
 		//prettyPrintReuseHash();
 	   	reuseHashInsert(curr_access);
@@ -3696,6 +3703,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   sd.expirationPeriod=(curTime - lastTime);
 	   prev_event_count = pmu_counter;
 
+	   //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
            SubscribeWatchpoint(&sd, OVERWRITE, false );
 	//fprintf(stderr, "here6\n");
 	lastTime = curTime;
