@@ -148,9 +148,9 @@ hpcrun_stats_reinit(void)
         //OBJECT_THRESHOLD = atoi(getenv(OBJECT_SIZE_THRESHOLD));
   }
 #endif
-  fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
+  //fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
   //fprintf(stderr, "object threshold is %d\n", OBJECT_THRESHOLD);
-  fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
+  //fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
   for(int i = 0; i < HASHTABLESIZE; i++) {
     bulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
   }

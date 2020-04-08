@@ -261,7 +261,7 @@ static void InitConfig(){
     wpConfig.pgsz = sysconf(_SC_PAGESIZE);
     
     // identify max WP supported by the architecture
-    fprintf(stderr, "watchpoints are created\n");
+    //fprintf(stderr, "watchpoints are created\n");
     volatile int wpHandles[MAX_WP_SLOTS];
     int i = 0;
     for(; i < MAX_WP_SLOTS; i++){
@@ -297,7 +297,7 @@ static void InitConfig(){
         wpConfig.maxWP = custom_wp_size;
     else
         wpConfig.maxWP = i;
-    fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
+    //fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
     
     // Should we get the floating point type in an access?
     wpConfig.getFloatType = false;
@@ -319,7 +319,7 @@ static void InitConfig(){
         // default;
         wpConfig.replacementPolicy = AUTO;
     }
-    
+    //fprintf(stderr, "InitConfig is called\n"); 
     // Should we fix IP off by one?
     char * fixIP = getenv("HPCRUN_WP_DONT_FIX_IP");
     if(fixIP){
@@ -380,7 +380,8 @@ void ReuseWPConfigOverride(void *v){
     //wpConfig.dontFixIP = true;
     //wpConfig.dontDisassembleWPAddress = true;
     //wpConfig.isLBREnabled = false; //jqswang
-    
+    fprintf(stderr, "ReuseWPConfigOverride is called\n");
+    wpConfig.replacementPolicy = RDX;
     //wpConfig.replacementPolicy = OLDEST;
 }
 
@@ -611,6 +612,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
         tData.watchPointArray[i].isActive = false;
         tData.watchPointArray[i].fileHandle = -1;
         tData.watchPointArray[i].startTime = 0;
+	tData.numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
     }
     
     //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
@@ -663,8 +665,16 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
     for(int i = 0; i < wpConfig.maxWP; i++){
         if(!tData.watchPointArray[i].isActive) {
             *location = i;
-	    fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.samplePostFull: %ld\n", i, TD_GET(core_profile_trace_data.id), tData.samplePostFull);
-            return EMPTY_SLOT;
+	    //fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+            if(policy == RDX) {
+	    	for(int j = 0; j < wpConfig.maxWP; j++){
+		    if(tData.watchPointArray[j].isActive || (i == j)){
+			    tData.numWatchpointArmingAttempt[j]++;
+		    }
+	    	}
+	    }
+	    //fprintf(stderr, "after empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+	    return EMPTY_SLOT;
         }
     }
     switch (policy) {
@@ -688,10 +698,10 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             drand48_r(&tData.randBuffer, &randValue);
             
             // update tData.samplePostFull
-	    fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
+	    //fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
             tData.samplePostFull++;
             //fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
-	    fprintf(stderr, "probabilityToReplace: %0.2lf\n", probabilityToReplace); 
+	    //fprintf(stderr, "probabilityToReplace: %0.2lf\n", probabilityToReplace); 
             if(randValue <= probabilityToReplace) {
                 return NON_EMPTY_SLOT;
             }
@@ -729,6 +739,49 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             break;
             
         case EMPTY_SLOT_ONLY:{
+            return NONE_AVAILABLE;
+        }
+            break;
+	case RDX:{
+	    // make a random sequence of watchpoints to visit 
+	    // before
+	    int indices[wpConfig.maxWP];
+	    for (int i = 0; i < wpConfig.maxWP; i++) {
+        	indices[i] = i;
+    	    }
+	    //fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+	    int wp_index = wpConfig.maxWP;
+    	    while (wp_index) {
+		long int tmpVal;
+            	lrand48_r(&tData.randBuffer, &tmpVal);
+            	int index = tmpVal % wp_index;
+        	wp_index--;
+        	int swap = indices[index];
+        	indices[index] = indices[wp_index];
+        	indices[wp_index] = swap;
+    	    }
+	    //fprintf(stderr, "in thread %d, after indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+	    // after
+	    // visit each watchpoint according to the sequence
+	    for(int i = 0; i < wpConfig.maxWP; i++) {
+		    int idx = indices[i];
+		    double probabilityToReplace =  1.0/((double)tData.numWatchpointArmingAttempt[idx]);
+		    double randValue;
+            	    drand48_r(&tData.randBuffer, &randValue);
+		    //fprintf(stderr, "i: %d, idx: %d, denominator: %ld, probability: %0.4lf\n", i, idx, tData.numWatchpointArmingAttempt[idx], probabilityToReplace);
+		    if(randValue <= probabilityToReplace) {
+			*location = idx;
+			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
+			for(int j = 0; j < wpConfig.maxWP; j++){
+                            tData.numWatchpointArmingAttempt[j]++;
+                    	}
+                	return NON_EMPTY_SLOT;
+            	    }
+	    }
+	    for(int i = 0; i < wpConfig.maxWP; i++) {
+		    tData.numWatchpointArmingAttempt[i]++;
+            }
+            
             return NONE_AVAILABLE;
         }
             break;
@@ -1115,7 +1168,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             }
             //reset to tData.samplePostFull
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
-	    fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
+	    //tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+	    //fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case DISABLE_ALL_WP: {
@@ -1126,13 +1180,18 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             }
             //reset to tData.samplePostFull to SAMPLES_POST_FULL_RESET_VAL
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
-	    fprintf(stderr, "tData.samplePostFull is reset in DISABLE_ALL_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
+	    //tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+	    //fprintf(stderr, "tData.samplePostFull is reset in DISABLE_ALL_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
             assert(wpi->isActive == false);
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
-	    fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
+	    if (wpConfig.replacementPolicy == RDX) {
+	    	tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+		//fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
+	    }
+	    //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case RETAIN_WP: { // resurrect this wp
