@@ -118,6 +118,7 @@ typedef struct ThreadData{
     void * fs_reg_val;
     void * gs_reg_val;
     uint64_t samplePostFull;
+    uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
     long numWatchpointTriggers;
     long numActiveWatchpointTriggers;
     long numWatchpointImpreciseIP;
