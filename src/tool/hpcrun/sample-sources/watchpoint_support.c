@@ -662,6 +662,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
     for(int i = 0; i < wpConfig.maxWP; i++){
         if(!tData.watchPointArray[i].isActive) {
             *location = i;
+	    fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.samplePostFull: %ld\n", i, TD_GET(core_profile_trace_data.id), tData.samplePostFull);
             return EMPTY_SLOT;
         }
     }
@@ -686,8 +687,10 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             drand48_r(&tData.randBuffer, &randValue);
             
             // update tData.samplePostFull
+	    fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
             tData.samplePostFull++;
-            
+            //fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
+	    fprintf(stderr, "probabilityToReplace: %0.2lf\n", probabilityToReplace); 
             if(randValue <= probabilityToReplace) {
                 return NON_EMPTY_SLOT;
             }
@@ -1111,6 +1114,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             }
             //reset to tData.samplePostFull
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+	    fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case DISABLE_ALL_WP: {
@@ -1121,11 +1125,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             }
             //reset to tData.samplePostFull to SAMPLES_POST_FULL_RESET_VAL
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+	    fprintf(stderr, "tData.samplePostFull is reset in DISABLE_ALL_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
             assert(wpi->isActive == false);
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+	    fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case RETAIN_WP: { // resurrect this wp
