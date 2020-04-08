@@ -667,11 +667,12 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             *location = i;
 	    //fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
             if(policy == RDX) {
-	    	for(int j = 0; j < wpConfig.maxWP; j++){
+	    	/*for(int j = 0; j < wpConfig.maxWP; j++){
 		    if(tData.watchPointArray[j].isActive || (i == j)){
 			    tData.numWatchpointArmingAttempt[j]++;
 		    }
-	    	}
+	    	}*/
+		tData.numWatchpointArmingAttempt[i]++;
 	    }
 	    //fprintf(stderr, "after empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
 	    return EMPTY_SLOT;
