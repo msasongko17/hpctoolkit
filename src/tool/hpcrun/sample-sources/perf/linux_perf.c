@@ -1026,6 +1026,7 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
     // overflow event
     //assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
     int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+    fprintf(stderr, "original counter value %ld\n", scaled_val);
     if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
                     || scaled_val < 0){
             //jqswang: TODO: it does not filter out all the invalid values
@@ -1033,9 +1034,9 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
        hpcrun_stats_num_corrected_reuse_distance_inc(1);
        scaled_val = 0;
     }
-   //fprintf(stderr, "%s: %lu, %lu(%ld) %lu %lu ->", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
+   fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
     val[0] = current->num_overflows * sample_period + scaled_val;
-    //fprintf(stderr, " %lu\n", val[0]);
+    fprintf(stderr, "val[0]: %lu\n", val[0]);
     val[1] = 0;
     val[2] = 0;
     return 0;

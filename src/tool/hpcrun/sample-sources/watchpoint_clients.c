@@ -202,6 +202,18 @@ int pebs_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
 extern long load_and_store_all_load;
 extern long load_and_store_all_store;
 extern long store_all_store;
+extern __thread uint64_t create_wp_count;
+extern __thread uint64_t arm_wp_count;
+extern __thread uint64_t sub_wp_count1;
+extern __thread uint64_t sub_wp_count2;
+extern __thread uint64_t sub_wp_count3;
+extern __thread uint64_t overlap_count;
+extern __thread uint64_t none_available_count;
+extern __thread uint64_t wp_count;
+extern __thread uint64_t wp_count1;
+extern __thread uint64_t wp_count2;
+extern __thread uint64_t wp_dropped;
+extern __thread uint64_t wp_active;
 
 void SetupWatermarkMetric(int metricId){
   if (curWatermarkId == NUM_WATERMARK_METRICS) {
@@ -327,6 +339,9 @@ __thread uint64_t inter_core_ts_num = 0;
 __thread uint64_t as_num = 0;
 __thread uint64_t inter_core_as_num = 0;
 __thread uint64_t line_transfer_num = 0;
+__thread uint64_t sample_count = 0;
+__thread uint64_t trap_count = 0;
+__thread uint64_t wp_arming_count = 0;
 // ComDetective stats end
 
 // Some stats
@@ -487,7 +502,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
+	fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
 }
 #endif
 
@@ -787,6 +802,7 @@ static void ClientTermination(){
       hpcrun_stats_num_falseWWIns_inc(falseWWIns);
       hpcrun_stats_num_falseRWIns_inc(falseRWIns);
       hpcrun_stats_num_falseWRIns_inc(falseWRIns);
+      fprintf(stderr, "sample_count: %ld\n", sample_count);
       break;
     case WP_TRUE_SHARING:
     case WP_IPC_TRUE_SHARING:
@@ -828,6 +844,23 @@ static void ClientTermination(){
     case WP_MT_REUSE:
         {
 #ifdef REUSE_HISTO
+	    //sample_count++;
+	    fprintf(stderr, "sample_count: %ld\n", sample_count);
+	    fprintf(stderr, "wp_arming_count: %ld\n", wp_arming_count);
+	    fprintf(stderr, "trap_count: %ld\n", trap_count);
+	    fprintf(stderr, "create_wp_count: %ld\n", create_wp_count);
+	    fprintf(stderr, "arm_wp_count: %ld\n", arm_wp_count);
+	    fprintf(stderr, "sub_wp_count1: %ld\n", sub_wp_count1);
+	    fprintf(stderr, "sub_wp_count2: %ld\n", sub_wp_count2);
+	    fprintf(stderr, "overlap_count: %ld\n", overlap_count);
+	    fprintf(stderr, "none_available_count: %ld\n", none_available_count);
+	    fprintf(stderr, "sub_wp_count3: %ld\n", sub_wp_count3);
+	    fprintf(stderr, "wp_count: %ld\n", wp_count);
+	    fprintf(stderr, "wp_count1: %ld\n", wp_count1);
+	    fprintf(stderr, "wp_count2: %ld\n", wp_count2);
+	    fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
+	    fprintf(stderr, "wp_active: %ld\n", wp_active);
+
 	    //fprintf(stderr, "in WP_MT_REUSE\n");
             uint64_t val[3];
             //fprintf(stderr, "FINAL_COUNTING:");
@@ -2072,8 +2105,16 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   return ALREADY_DISABLED;
 }
 
+/*
 static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in MtReuseWPCallback\n");
+	trap_count++;
+	return ALREADY_DISABLED;
+}*/
+
+
+static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+  fprintf(stderr, "in MtReuseWPCallback\n");
+  trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
         // if the ip is 0, let's drop the WP
@@ -2082,7 +2123,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     }
 #endif //jqswang
     //fprintf(stderr, "there is a trap\n");
-     //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+     fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
      //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
      //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
      uint64_t trapTime = rdtsc();
@@ -2090,13 +2131,17 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
      for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 	     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
 	     for(int j=0; j < 3; j++){
-		     if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
+		     /*if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
 			     val[i][j] -= wpi->sample.reuseDistance[i][j];
 		     } 
 		     else { //Something wrong happens here and the record is not reliable. Drop it!
-			     //fprintf(stderr, "Something wrong happens here and the record is not reliable\n");
+			     fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
 			     return ALREADY_DISABLED;
-		     }
+		     }*/
+		     if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
+                             fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
+                             return ALREADY_DISABLED;
+                     }
 	     }
      }
      uint64_t rd = 0;
@@ -2119,7 +2164,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 #ifdef REUSE_HISTO
 
-    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
     cct_node_t *reuseNode = v.sample_node;
     
     if (reuse_output_trace){
@@ -2134,17 +2179,18 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	int item_not_found_flag = 0;
            int me = TD_GET(core_profile_trace_data.id);
            int my_core = sched_getcpu();
-	   //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
+	   fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
 	   //prettyPrintReuseHash();
 	   ReuseBBEntry_t prev_access;
            ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
+	   fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
            if(item_not_found_flag == 0) {
        
-	        //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
+	        fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
 		if(wpi->sample.sampleTime >= prev_access.time) {
 			
 			// after
-			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
+			fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
 			ReuseAddDistance(rd, inc);
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -2197,7 +2243,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         }
 		}
            } else {
-		   //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
+		   fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 		   ReuseAddDistance(rd, inc);
 	   }
 
@@ -2226,23 +2272,23 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
     cct_node_t *reusePairNode;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
-        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
 	fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
         if (reuse_concatenate_use_reuse){
-            reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+            reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx]);
         }else{
-            reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+            reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
         }
     }
     else { // REUSE_SPATIAL
-        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
 	fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
         if (reuse_concatenate_use_reuse){
-            reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+            reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx]);
         }else{
-            reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+            reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
         }
     }
     cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
@@ -3347,6 +3393,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     goto ErrExit; // incorrect access type
   }
 
+  //fprintf(stderr, "A sample is handled in OnSample\n");
   // if the context PC and precise PC are not in the same function, then the sample point is inaccurate.
   bool isSamplePointAccurate;
   FunctionType ft = is_same_function(contextPC, precisePC);
@@ -3534,7 +3581,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     }
     break;
     case WP_MT_REUSE: {
-	//fprintf(stderr, "WP_REUSE in OnSample\n");
+	sample_count++;
+	fprintf(stderr, "WP_REUSE in OnSample\n");
 	//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 	#ifdef REUSE_HISTO
 #else
@@ -3705,6 +3753,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   prev_event_count = pmu_counter;
 
 	   //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
+	   wp_arming_count++;
            SubscribeWatchpoint(&sd, OVERWRITE, false );
 	//fprintf(stderr, "here6\n");
 	lastTime = curTime;
@@ -3768,6 +3817,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     case WP_FALSE_SHARING:
     case WP_TRUE_SHARING:
     case WP_ALL_SHARING:{
+			  sample_count++;
 			  //fprintf(stderr, "SHARING in OnSample\n");
 			  // Is the published address old enough (stayed for > 1 sample time span)
 			  int64_t curTime = rdtsc();

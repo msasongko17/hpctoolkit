@@ -134,6 +134,18 @@ typedef struct ThreadData{
 } ThreadData_t;
 
 static __thread ThreadData_t tData;
+__thread uint64_t create_wp_count = 0;
+__thread uint64_t arm_wp_count = 0;
+__thread uint64_t sub_wp_count1 = 0;
+__thread uint64_t sub_wp_count2 = 0;
+__thread uint64_t sub_wp_count3 = 0;
+__thread uint64_t overlap_count = 0;
+__thread uint64_t none_available_count = 0;
+__thread uint64_t wp_count = 0;
+__thread uint64_t wp_count1 = 0;
+__thread uint64_t wp_count2 = 0;
+__thread uint64_t wp_active = 0;
+__thread uint64_t wp_dropped = 0;
 
 bool IsAltStackAddress(void *addr){
     if((addr >= tData.ss.ss_sp) && (addr < tData.ss.ss_sp + tData.ss.ss_size))
@@ -425,6 +437,7 @@ void SpatialReuseWPConfigOverride(void *v){
 
 static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, bool modify) {
     // Perf event settings
+    create_wp_count++;
     struct perf_event_attr pe = {
         .type                   = PERF_TYPE_BREAKPOINT,
         .size                   = sizeof(struct perf_event_attr),
@@ -463,6 +476,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         assert(wpi->mmapBuffer != 0);
         //DisableWatchpoint(wpi);
 	//fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
+	//create_wp_count++;
         CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
         //if(wpi->isActive == false) {
         //EnableWatchpoint(wpi->fileHandle);
@@ -470,6 +484,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     } else
 #endif
     {
+	//create_wp_count++;
         // fresh creation
         // Create the perf_event for this thread on all CPUs with no event group
         //fprintf(stderr, "watchpoint is created with perf_event_open\n");
@@ -504,6 +519,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         }
     }
     
+    wp_active++;
     wpi->isActive = true;
     wpi->va = (void *) pe.bp_addr;
     wpi->sample = *sampleData;
@@ -561,7 +577,7 @@ static void DisArm(WatchPointInfo_t * wpi){
 static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
     // if WP modification is suppoted use it
     //void * cacheLineBaseAddress = (void *) ((uint64_t)((size_t)sampleData->va) & (~(64-1)));
-
+    arm_wp_count++;
     if(wpConfig.isWPModifyEnabled){
         // Does not matter whether it was active or not.
         // If it was not active, enable it.
@@ -702,7 +718,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
             tData.samplePostFull++;
             //fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
 	    //fprintf(stderr, "probabilityToReplace: %0.2lf\n", probabilityToReplace); 
-            if(randValue <= probabilityToReplace) {
+            if(/*randValue <= probabilityToReplace*/ 1) {
                 return NON_EMPTY_SLOT;
             }
             // this is an indication not to replace, but if the client chooses to force, they can
@@ -769,7 +785,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
 		    double randValue;
             	    drand48_r(&tData.randBuffer, &randValue);
 		    //fprintf(stderr, "i: %d, idx: %d, denominator: %ld, probability: %0.4lf\n", i, idx, tData.numWatchpointArmingAttempt[idx], probabilityToReplace);
-		    if(randValue <= probabilityToReplace) {
+		    if(/*randValue <= probabilityToReplace*/ 1) {
 			*location = idx;
 			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
 			for(int j = 0; j < wpConfig.maxWP; j++){
@@ -1099,9 +1115,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     // If the interrupt came from inside our code, then drop the sample
     // and return and avoid any MSG.
     //fprintf(stderr, "in OnWatchpoint\n");
+    wp_count++;
     void* pc = hpcrun_context_pc(context);
     if (!hpcrun_safe_enter_async(pc)) return 0;
-    
+    wp_count1++;
+
     linux_perf_events_pause();
     
     tData.numWatchpointTriggers++;
@@ -1115,9 +1133,18 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
         }
     }
-    //fprintf(stderr, "in OnWatchpoint at this point\n");
+    fprintf(stderr, "in OnWatchpoint at this point\n");
     // Ensure it is an active WP
     if(location == -1) {
+	// before
+	for(int i = 0 ; i < wpConfig.maxWP; i++) {
+        	//if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
+            		//location = i;
+            		//break;
+			fprintf(stderr, "tData.watchPointArray[%d].isActive = %d and info->si_fd = %d and tData.watchPointArray[%d].fileHandle = %d monitored address: %lx\n", i, tData.watchPointArray[i].isActive, info->si_fd, i, tData.watchPointArray[i].fileHandle, (long) tData.watchPointArray[i].va);
+        	//}
+    	}
+	// after
         EMSG("\n WP trigger did not match any known active WP\n");
         //monitor_real_abort();
         hpcrun_safe_exit();
@@ -1125,7 +1152,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         //fprintf("\n WP trigger did not match any known active WP\n");
         return 0;
     }
-    
+    wp_count2++;
+
     WatchPointTrigger_t wpt;
     WPTriggerActionType retVal;
     WatchPointInfo_t *wpi = &tData.watchPointArray[location];
@@ -1152,6 +1180,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 	//fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
         tData.numWatchpointDropped++;
         retVal = DISABLE_WP; // disable if unable to collect any info.
+	wp_dropped++;
     } else {
 	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
 	tData.numActiveWatchpointTriggers++;
@@ -1240,6 +1269,9 @@ static bool IsOveralpped(SampleData_t * sampleData){
     for (int i = 0;  i < wpConfig.maxWP; i++) {
         if(tData.watchPointArray[i].isActive){
             if(ADDRESSES_OVERLAP(tData.watchPointArray[i].sample.va, tData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
+	
+	    fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
+	    overlap_count++;    
                 return true;
             }
         }
@@ -1261,18 +1293,21 @@ void CaptureValue(SampleData_t * sampleData, WatchPointInfo_t * wpi){
 
 
 bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue){
+    sub_wp_count1++;
     if(ValidateWPData(sampleData) == false) {
         return false;
     }
+    //sub_wp_count2++;
     if(IsOveralpped(sampleData)){
         return false; // drop the sample if it overlaps an existing address
     }
-    
+    sub_wp_count2++;
+
     // No overlap, look for a victim slot
     int victimLocation = -1;
     // Find a slot to install WP
     VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
-    
+    sub_wp_count3++;
     if(r != NONE_AVAILABLE) {
         // VV IMP: Capture value before arming the WP.
         if(captureValue) {
@@ -1290,6 +1325,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
         }
         return true;
     }
+    none_available_count++;
     return false;
 }
 
