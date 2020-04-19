@@ -167,7 +167,6 @@
 // type declarations
 //******************************************************************************
 
-
 enum threshold_e { PERIOD, FREQUENCY };
 struct event_threshold_s {
   long             threshold_num;
@@ -296,6 +295,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
   if(mapping_size > 0)
   	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
   et->num_overflows = 0;
+  et->prev_num_overflows = 0;
   et->event = event;
   // ask sys to "create" the event
   // it returns -1 if it fails.
@@ -1035,8 +1035,10 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
        scaled_val = 0;
     }
    //fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
-    val[0] = current->num_overflows * sample_period + scaled_val;
-    //fprintf(stderr, "val[0]: %lu\n", val[0]);
+    fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
+    val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+    fprintf(stderr, "val[0]: %ld\n", val[0]);
+    current->prev_num_overflows = current->num_overflows;
     val[1] = 0;
     val[2] = 0;
     return 0;

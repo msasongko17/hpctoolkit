@@ -2113,7 +2113,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 
 static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in MtReuseWPCallback\n");
+  fprintf(stderr, "in MtReuseWPCallback\n");
   trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
@@ -2130,18 +2130,19 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
      uint64_t val[2][3];
      for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 	     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
+	     fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
 	     for(int j=0; j < 3; j++){
-		     /*if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
+		     if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
 			     val[i][j] -= wpi->sample.reuseDistance[i][j];
 		     } 
 		     else { //Something wrong happens here and the record is not reliable. Drop it!
 			     fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
 			     return ALREADY_DISABLED;
-		     }*/
-		     if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
+		     }
+		     /*if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
                              fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
                              return ALREADY_DISABLED;
-                     }
+                     }*/
 	     }
      }
      uint64_t rd = 0;
@@ -3582,7 +3583,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     break;
     case WP_MT_REUSE: {
 	sample_count++;
-	//fprintf(stderr, "WP_REUSE in OnSample\n");
+	fprintf(stderr, "WP_REUSE in OnSample\n");
 	//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 	#ifdef REUSE_HISTO
 #else
@@ -3664,6 +3665,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		//fprintf(stderr, "after assert\n");
                 //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
                 //fprintf(stderr, "USE %lx -- ", val[0]);
+		fprintf(stderr, "USE counter %ld\n", val[0]);
                 memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);
 		pmu_counter += val[0];
            }
