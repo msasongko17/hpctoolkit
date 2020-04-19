@@ -1133,7 +1133,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
         }
     }
-    fprintf(stderr, "in OnWatchpoint at this point\n");
+    //fprintf(stderr, "in OnWatchpoint at this point\n");
     // Ensure it is an active WP
     if(location == -1) {
 	// before
@@ -1141,7 +1141,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         	//if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
             		//location = i;
             		//break;
-			fprintf(stderr, "tData.watchPointArray[%d].isActive = %d and info->si_fd = %d and tData.watchPointArray[%d].fileHandle = %d monitored address: %lx\n", i, tData.watchPointArray[i].isActive, info->si_fd, i, tData.watchPointArray[i].fileHandle, (long) tData.watchPointArray[i].va);
+			//fprintf(stderr, "tData.watchPointArray[%d].isActive = %d and info->si_fd = %d and tData.watchPointArray[%d].fileHandle = %d monitored address: %lx\n", i, tData.watchPointArray[i].isActive, info->si_fd, i, tData.watchPointArray[i].fileHandle, (long) tData.watchPointArray[i].va);
         	//}
     	}
 	// after

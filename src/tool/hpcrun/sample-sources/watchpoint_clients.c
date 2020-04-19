@@ -502,7 +502,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
+	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
 }
 #endif
 
@@ -1980,7 +1980,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
   const void* joinNode;
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
-  fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+  //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
   if(wt->accessType == LOAD){
     falseWRIns ++;
     metricId = false_wr_metric_id;
@@ -2113,7 +2113,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 
 static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  fprintf(stderr, "in MtReuseWPCallback\n");
+  //fprintf(stderr, "in MtReuseWPCallback\n");
   trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
@@ -2123,7 +2123,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     }
 #endif //jqswang
     //fprintf(stderr, "there is a trap\n");
-     fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+     //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
      //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
      //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
      uint64_t trapTime = rdtsc();
@@ -2179,18 +2179,18 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	int item_not_found_flag = 0;
            int me = TD_GET(core_profile_trace_data.id);
            int my_core = sched_getcpu();
-	   fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
+	   //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
 	   //prettyPrintReuseHash();
 	   ReuseBBEntry_t prev_access;
            ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
-	   fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
+	   //fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
            if(item_not_found_flag == 0) {
        
-	        fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
+	        //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
 		if(wpi->sample.sampleTime >= prev_access.time) {
 			
 			// after
-			fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
+			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
 			ReuseAddDistance(rd, inc);
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -2243,7 +2243,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         }
 		}
            } else {
-		   fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
+		   //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 		   ReuseAddDistance(rd, inc);
 	   }
 
@@ -3582,7 +3582,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     break;
     case WP_MT_REUSE: {
 	sample_count++;
-	fprintf(stderr, "WP_REUSE in OnSample\n");
+	//fprintf(stderr, "WP_REUSE in OnSample\n");
 	//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 	#ifdef REUSE_HISTO
 #else
