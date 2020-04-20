@@ -1218,7 +1218,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
 	    if (wpConfig.replacementPolicy == RDX) {
 	    	tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-		fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
+		//fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
 	    }
 	    //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
         }

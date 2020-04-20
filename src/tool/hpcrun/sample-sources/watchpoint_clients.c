@@ -477,8 +477,9 @@ void ExpandReuseBinList(){
 }
 
 int FindReuseBinIndex(uint64_t distance){
-
+	//fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[0]: %0.2lf\n", distance, reuse_bin_pivot_list[0]);
         if (distance < reuse_bin_pivot_list[0]){
+		//fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf\n", reuse_bin_pivot_list[0]);
                 return 0;
         }
         if (distance >= reuse_bin_pivot_list[reuse_bin_size - 1]){
@@ -489,6 +490,7 @@ int FindReuseBinIndex(uint64_t distance){
         int left = 0, right = reuse_bin_size - 1;
         while(left + 1 < right){
                 int mid = (left + right) / 2;
+		//fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
                 if ( distance < reuse_bin_pivot_list[mid]){
                         right = mid;
                 } else {
@@ -502,7 +504,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
+	fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 #endif
 
@@ -1232,11 +1234,13 @@ METHOD_FN(process_event_list, int lush_metrics)
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 4000;
+                                //reuse_bin_start = 4000;
+				reuse_bin_start = 4;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
 			if (reuse_output_trace == false){
+				
                                 reuse_bin_size = 20;
                                 reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
                                 memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
@@ -1378,18 +1382,21 @@ case WP_MT_REUSE:
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 4000;
+                                reuse_bin_start = 4;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
 			if (reuse_output_trace == false){
+				//fprintf(stderr, "reuse_output_trace is false\n");
                                 reuse_bin_size = 20;
                                 reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
                                 memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
                                 reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
                                 reuse_bin_pivot_list[0] = reuse_bin_start;
+			//	fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf, reuse_bin_start: %0.2lf\n", reuse_bin_pivot_list[0], reuse_bin_start);
                                 for(int i=1; i < reuse_bin_size; i++){
                                         reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+					//fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
                                 }
                         }
 
@@ -2113,7 +2120,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 
 static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  fprintf(stderr, "in MtReuseWPCallback\n");
+  //fprintf(stderr, "in MtReuseWPCallback\n");
   trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
@@ -2130,7 +2137,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
      uint64_t val[2][3];
      for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 	     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
-	     fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
+	     //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
 	     for(int j=0; j < 3; j++){
 		     if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
 			     val[i][j] -= wpi->sample.reuseDistance[i][j];
@@ -2193,6 +2200,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 			// after
 			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
 			ReuseAddDistance(rd, inc);
+			//for(int i = 0; i < reuse_bin_size; i++)
+				//fprintf(stderr, "reuse_bin_pivot_list[%d]: %d\n", i, reuse_bin_pivot_list[i]);
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 			// validate the invalidation by checking the execution time
@@ -3583,8 +3592,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     break;
     case WP_MT_REUSE: {
 	sample_count++;
-	fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
-	fprintf(stderr, "WP_REUSE in OnSample\n");
+	//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
+	//fprintf(stderr, "WP_REUSE in OnSample\n");
 	//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 	#ifdef REUSE_HISTO
 #else
@@ -3666,7 +3675,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		//fprintf(stderr, "after assert\n");
                 //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
                 //fprintf(stderr, "USE %lx -- ", val[0]);
-		fprintf(stderr, "USE counter %ld\n", val[0]);
+		//fprintf(stderr, "USE counter %ld\n", val[0]);
                 memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);
 		pmu_counter += val[0];
            }
@@ -3683,7 +3692,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
-		fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
+		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - lastTime))) {
 			//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
 			//fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
