@@ -785,7 +785,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
 		    double randValue;
             	    drand48_r(&tData.randBuffer, &randValue);
 		    //fprintf(stderr, "i: %d, idx: %d, denominator: %ld, probability: %0.4lf\n", i, idx, tData.numWatchpointArmingAttempt[idx], probabilityToReplace);
-		    if(/*randValue <= probabilityToReplace*/ 1) {
+		    if(randValue <= probabilityToReplace /* 1 */) {
 			*location = idx;
 			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
 			for(int j = 0; j < wpConfig.maxWP; j++){
@@ -1198,7 +1198,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             //reset to tData.samplePostFull
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
 	    //tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-	    //fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
+	    fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
         break;
         case DISABLE_ALL_WP: {
@@ -1218,7 +1218,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
 	    if (wpConfig.replacementPolicy == RDX) {
 	    	tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-		//fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
+		fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
 	    }
 	    //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
         }
