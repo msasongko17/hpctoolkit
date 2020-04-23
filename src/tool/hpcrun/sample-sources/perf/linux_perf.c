@@ -300,6 +300,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
   // ask sys to "create" the event
   // it returns -1 if it fails.
   //fprintf(stderr, "monitoring a sample\n");
+  event->attr.wakeup_events = 1;
   et->fd = perf_event_open(&event->attr,
             THREAD_SELF, CPU_ANY, GROUP_FD, PERF_FLAGS);
   TMSG(LINUX_PERF, "dbg register event %d, fd: %d, skid: %d, c: %d, t: %d, period: %d, freq: %d",

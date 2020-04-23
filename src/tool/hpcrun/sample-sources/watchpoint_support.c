@@ -1115,12 +1115,16 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     // If the interrupt came from inside our code, then drop the sample
     // and return and avoid any MSG.
     //fprintf(stderr, "in OnWatchpoint\n");
+    linux_perf_events_pause();
     wp_count++;
     void* pc = hpcrun_context_pc(context);
-    if (!hpcrun_safe_enter_async(pc)) return 0;
+    if (!hpcrun_safe_enter_async(pc)) {
+	linux_perf_events_resume();
+	return 0;
+    }
     wp_count1++;
 
-    linux_perf_events_pause();
+    //linux_perf_events_pause();
     
     tData.numWatchpointTriggers++;
     //fprintf(stderr, " numWatchpointTriggers = %lu, \n", tData.numWatchpointTriggers);
@@ -1234,8 +1238,9 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
     }
     //    hpcrun_all_sources_start();
-    linux_perf_events_resume();
+    //linux_perf_events_resume();
     hpcrun_safe_exit();
+    linux_perf_events_resume();
     return 0;
 }
 
