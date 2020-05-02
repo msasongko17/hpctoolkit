@@ -190,7 +190,7 @@ int reuse_bin_size = 0;
 
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
-ReuseType reuse_profile_type = REUSE_BOTH; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+ReuseType reuse_profile_type = REUSE_CACHELINE; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
 //#endif
 
@@ -1235,7 +1235,7 @@ METHOD_FN(process_event_list, int lush_metrics)
                         } else { //default
                                 reuse_output_trace = false;
                                 //reuse_bin_start = 4000;
-				reuse_bin_start = 4;
+				reuse_bin_start = 16;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
@@ -1264,12 +1264,12 @@ METHOD_FN(process_event_list, int lush_metrics)
                             reuse_profile_type = REUSE_BOTH;
                          } else {
                             // default;
-                            reuse_profile_type = REUSE_BOTH;
+                            reuse_profile_type = REUSE_CACHELINE;
                         }
                     } else{
                         // default
 			//fprintf(stderr, "reuse_profile_type is REUSE_BOTH\n");
-                        reuse_profile_type = REUSE_BOTH;
+                        reuse_profile_type = REUSE_CACHELINE;
                     }
 		}
 
@@ -1345,6 +1345,7 @@ METHOD_FN(process_event_list, int lush_metrics)
             break;
 case WP_MT_REUSE:
             {
+		//reuse_profile_type = REUSE_TEMPORAL;
 #ifdef REUSE_HISTO
                 {
                         char * bin_scheme_str = getenv("HPCRUN_WP_REUSE_BIN_SCHEME");
@@ -1413,12 +1414,12 @@ case WP_MT_REUSE:
                             reuse_profile_type = REUSE_BOTH;
                          } else {
                             // default;
-                            reuse_profile_type = REUSE_BOTH;
+                            reuse_profile_type = REUSE_CACHELINE;
                         }
                     } else{
                         // default
 			//fprintf(stderr, "reuse_profile_type is REUSE_BOTH\n");
-                        reuse_profile_type = REUSE_BOTH;
+                        reuse_profile_type = REUSE_CACHELINE;
                     }
 		}
 
@@ -2758,6 +2759,7 @@ typedef struct FalseSharingLocs{
   int wpLen;
 }FalseSharingLocs;
 
+// getting all false sharing memory regions
 static inline void GetAllFalseSharingLocations(size_t va, int accessLen, size_t baseAddr, int maxFSLength, int * wpSizes, int curWPSizeIdx, int totalWPSizes, FalseSharingLocs * fsl, int * numFSLocs){
   int curWPSize = wpSizes[curWPSizeIdx];
   for(int i = 0; i < maxFSLength/curWPSize; i ++) {
@@ -3623,15 +3625,26 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	bool isProfileSpatial;
         if (reuse_profile_type == REUSE_TEMPORAL){
         	isProfileSpatial = false;
+		//fprintf(stderr, "temporal reuse distance\n");
         } else if (reuse_profile_type == REUSE_SPATIAL){
                 isProfileSpatial = true;
-        } else {
+		//fprintf(stderr, "spatial reuse distance\n");
+        } else if (reuse_profile_type == REUSE_BOTH){
 		//fprintf(stderr, "50 50\n");
                 isProfileSpatial = (rdtsc() & 1);
-        }
+        } else {
+		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+		int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                sd.reuseType = REUSE_CACHELINE;
+		sd.wpLength = MAX_WP_LENGTH;
+		//fprintf(stderr, "REUSE_CACHELINE is activated, sampled address: %ld, access length: %d, address to trapped: %ld, wp length: %d, idx: %d\n", (long) data_addr, accessLen, (long) sd.va, (int) sd.wpLength, idx);	
+	}
 
 	//fprintf(stderr, "here2 data_addr: %lx\n", (uint64_t) data_addr);
+	if(reuse_profile_type != REUSE_CACHELINE) {
 	if (isProfileSpatial) {// detect spatial reuse
+		//fprintf(stderr, "spatial reuse distance is searched\n");
                 int wpSizes[] = {8, 4, 2, 1};
                 FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
                 int numFSLocs = 0;
@@ -3641,6 +3654,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                     sd.reuseType = REUSE_TEMPORAL;
 		    //fprintf(stderr, "REUSE_TEMPORAL is activated\n");
                 } else {
+		    //fprintf(stderr, "false sharing is searched\n");
                     int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
                     sd.va = (void *)falseSharingLocs[idx].va;
                     sd.reuseType = REUSE_SPATIAL;
@@ -3654,10 +3668,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 #endif
                 }
             } else {
+		//fprintf(stderr, "temporal reuse distance is searched\n");
                 sd.va = data_addr;
                 sd.reuseType = REUSE_TEMPORAL;
 		//fprintf(stderr, "REUSE_TEMPORAL is activated\n");
             }
+	}
 	//fprintf(stderr, "here3\n");
 	if (!IsValidAddress(sd.va, precisePC)) {
                 goto ErrExit; // incorrect access type
