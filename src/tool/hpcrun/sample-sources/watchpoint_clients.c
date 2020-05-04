@@ -190,7 +190,7 @@ int reuse_bin_size = 0;
 
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
-ReuseType reuse_profile_type = REUSE_CACHELINE; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
 //#endif
 
@@ -1383,7 +1383,7 @@ case WP_MT_REUSE:
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 4;
+                                reuse_bin_start = 81;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
@@ -3708,8 +3708,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
-		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
+		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, time gap: %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - lastTime) - (curTime - prev_access.time));
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - lastTime))) {
+			//fprintf(stderr, "fulfilled condition\n");
 			//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
 			//fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
                 	inter_thread_invalidation_count += metricThreshold;
