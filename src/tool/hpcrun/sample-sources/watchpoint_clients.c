@@ -1235,7 +1235,7 @@ METHOD_FN(process_event_list, int lush_metrics)
                         } else { //default
                                 reuse_output_trace = false;
                                 //reuse_bin_start = 4000;
-				reuse_bin_start = 16;
+				reuse_bin_start = 82;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
@@ -1383,7 +1383,7 @@ case WP_MT_REUSE:
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 81;
+                                reuse_bin_start = 67;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
@@ -2206,7 +2206,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 			// validate the invalidation by checking the execution time
-                        if((me != prev_access.tid) && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
+                        if((me != prev_access.tid) && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)/*wpi->sample.expirationPeriod*/)) {
                                 inter_thread_invalidation_count += inc;
 				int max_thread_num = prev_access.tid;
                         	if(max_thread_num < me)
@@ -2217,19 +2217,23 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         	{
                                 	as_matrix_size =  max_thread_num;
                         	}
-                        	as_matrix[prev_access.tid][me] = increment;
+				fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
+                        	as_matrix[prev_access.tid][me] += increment;
 				if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 					//fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
-					invalidation_matrix[prev_access.tid][me] = increment;
+					invalidation_matrix[prev_access.tid][me] += increment;
 				}
-				if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) && ((prev_access.time - wpi->sample.sampleTime) < wpi->sample.expirationPeriod)) {
+				if((prev_access.time - wpi->sample.sampleTime) < /*wpi->sample.expirationPeriod*/(trapTime - wpi->sample.sampleTime)) {
+					as_matrix[me][prev_access.tid] += increment;
+					if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) /*&& ((prev_access.time - wpi->sample.sampleTime) < (trapTime - wpi->sample.sampleTime))*/) {
                                         //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d, time gap: %ld, wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime): %ld\n", me, wpi->sample.accessType, prev_access.tid, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime), wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime));
-                                        invalidation_matrix[me][prev_access.tid] = increment;
-                                }
+                                        	invalidation_matrix[me][prev_access.tid] += increment;
+                                	}
+				}
 				//fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
                                 //fprintf(stderr, "as_matrix is incremented by %0.2lf at trap\n", increment);
                         }
-                        if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < wpi->sample.expirationPeriod)) {
+                        if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess) /*wpi->sample.expirationPeriod*/)) {
                                 inter_core_invalidation_count += inc;
 				int max_core_num = prev_access.core_id;
                                 if(max_core_num < my_core)
@@ -2240,15 +2244,18 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                                 {
                                         as_core_matrix_size =  max_core_num;
                                 }
-                                as_core_matrix[prev_access.core_id][my_core] = increment;
+                                as_core_matrix[prev_access.core_id][my_core] += increment;
 				if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 					//fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
-                                        invalidation_core_matrix[prev_access.core_id][my_core] = increment;
+                                        invalidation_core_matrix[prev_access.core_id][my_core] += increment;
                                 }
-				if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) && ((prev_access.time - wpi->sample.sampleTime) < wpi->sample.expirationPeriod)) {
+				if((prev_access.time - wpi->sample.sampleTime) < /*wpi->sample.expirationPeriod*/(trapTime - wpi->sample.sampleTime)) {
+					as_core_matrix[my_core][prev_access.core_id] += increment;	
+					if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) /*&& ((prev_access.time - wpi->sample.sampleTime) < (trapTime - wpi->sample.sampleTime))*/) {
                                         //fprintf(stderr, "a core invalidation is detected in core %d with access type: %d due to access in core %d with access type %d, time gap: %ld\n", my_core, wpi->sample.accessType, prev_access.core_id, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime));
-                                        invalidation_core_matrix[my_core][prev_access.core_id] = increment;
-                                }
+                                        	invalidation_core_matrix[my_core][prev_access.core_id] += increment;
+                                	}
+				}
 				//fprintf(stderr, "inter-core communication is detected between core %d and core %d because prev_access.time - wpi->sample.sampleTime = %ld\n", prev_access.core_id, my_core, prev_access.time - wpi->sample.sampleTime);
                                 //fprintf(stderr, "as_core_matrix is incremented by %0.2lf at trap\n", increment);
                         }
@@ -2285,7 +2292,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
         sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
-	fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+	//fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
         if (reuse_concatenate_use_reuse){
             reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx]);
         }else{
@@ -2295,7 +2302,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     else { // REUSE_SPATIAL
         sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
-	fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+	//fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
         if (reuse_concatenate_use_reuse){
             reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx]);
         }else{
@@ -2303,16 +2310,16 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
         }
     }
     cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
-    fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+    //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
     cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
     reuseTemporal += inc;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
         cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-	fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+	//fprintf(stderr, "reuse distance temporal: %ld\n", inc);
     } else {
         cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-	fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+	//fprintf(stderr, "reuse distance spatial: %ld\n", inc);
     }
     cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
     cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
@@ -3597,6 +3604,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 	//fprintf(stderr, "WP_REUSE in OnSample\n");
 	//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
+	int64_t storeCurTime = 0;
+        if(accessType == STORE || accessType == LOAD_AND_STORE)
+        	storeCurTime = curTime;
 	#ifdef REUSE_HISTO
 #else
         if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
@@ -3708,10 +3718,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
-		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, time gap: %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - lastTime) - (curTime - prev_access.time));
-           	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - lastTime))) {
+		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
+           	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
 			//fprintf(stderr, "fulfilled condition\n");
-			//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
+			//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time) = %\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
 			//fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
                 	inter_thread_invalidation_count += metricThreshold;
 			int max_thread_num = prev_access.tid;
@@ -3723,16 +3733,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                         {
                         	as_matrix_size =  max_thread_num;
                         }
-			as_matrix[prev_access.tid][me] = (double) metricThreshold;
+			//fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d in OnSample\n", (double) metricThreshold, prev_access.tid, me);
+			as_matrix[prev_access.tid][me] += (double) metricThreshold;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 				//fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
-				invalidation_matrix[prev_access.tid][me] = (double) metricThreshold;
+				invalidation_matrix[prev_access.tid][me] += (double) metricThreshold;
 			} /* else {
 				fprintf(stderr, "there is an inter-thread communication, but no invalidation\n");
 			}*/
                 	//fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
            	}
-               	if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (curTime - lastTime))) {
+               	if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
                		inter_core_invalidation_count += metricThreshold;
 			int max_core_num = prev_access.core_id;
                         if(max_core_num < my_core)
@@ -3743,11 +3754,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                         {
                                 as_core_matrix_size =  max_core_num;
                         }
-			as_core_matrix[prev_access.core_id][my_core] = (double) metricThreshold;
+			as_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
 			//fprintf(stderr, "there are %0.2lf inter-core communications\n", (double) metricThreshold);
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 				//fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
-                                invalidation_core_matrix[prev_access.core_id][my_core] = (double) metricThreshold;
+                                invalidation_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
                         } /*else {
 				fprintf(stderr, "there is an inter-core communication, but no invalidation\n");
 			}*/
@@ -3772,12 +3783,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	 	//fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 
 		//prettyPrintReuseHash();
 	   	reuseHashInsert(curr_access);
+		storeLastTime = storeCurTime;
 		//fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
 		//prettyPrintReuseHash();
 	   }
 	   sd.eventCountBetweenSamples=eventDiff;
 	   sd.timeBetweenSamples=timeDiff;
 	   sd.sampleTime=curTime;
+	   sd.prevStoreAccess = storeLastTime;
 	   sd.expirationPeriod=(curTime - lastTime);
 	   prev_event_count = pmu_counter;
 
