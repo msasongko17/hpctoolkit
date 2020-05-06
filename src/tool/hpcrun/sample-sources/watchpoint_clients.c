@@ -504,7 +504,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+	//fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 #endif
 
@@ -2217,7 +2217,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         	{
                                 	as_matrix_size =  max_thread_num;
                         	}
-				fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
+				//fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
                         	as_matrix[prev_access.tid][me] += increment;
 				if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 					//fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
@@ -2288,6 +2288,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     }
     #else
 
+    //fprintf(stderr, "this region is executed\n");
     cct_node_t *reusePairNode;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
         sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
