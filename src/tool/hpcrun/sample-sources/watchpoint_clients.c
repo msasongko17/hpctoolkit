@@ -4641,7 +4641,6 @@ void dump_comdetective_matrices() {
     dump_waw_as_matrix();
     dump_waw_as_core_matrix();
     }
-  }
   if(theWPConfig->id == WP_MT_REUSE) {
 	  dump_as_matrix();
 	  dump_as_core_matrix();
