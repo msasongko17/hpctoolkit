@@ -1275,7 +1275,7 @@ static bool IsOveralpped(SampleData_t * sampleData){
         if(tData.watchPointArray[i].isActive){
             if(ADDRESSES_OVERLAP(tData.watchPointArray[i].sample.va, tData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
 	
-	    fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
+	    //fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
 	    overlap_count++;    
                 return true;
             }
