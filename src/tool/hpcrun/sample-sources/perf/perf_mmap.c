@@ -321,6 +321,32 @@ skip_perf_data(pe_mmap_t *current_perf_mmap, size_t sz)
   hdr->data_tail += sz;
 }
 
+// read the counter value of the event
+// val is an array of uint64_t, at least has a length of 3
+int perf_read_event_counter(event_thread_t *current, uint64_t *val){
+
+  pe_mmap_t *current_perf_mmap = current->mmap;
+  //rdpmc(current_perf_mmap, val); //something wrong when using rdpmc
+
+  if (current->fd < 0){
+    EMSG("Error: unable to open the event %d file descriptor", current->event->id);
+    return -1;
+  }
+  //fprintf(stderr, "val[0] 1: %ld\n", val[0]);
+  //fprintf(stderr, "val[1] 1: %ld\n", val[1]);
+  //fprintf(stderr, "val[2] 1: %ld\n", val[2]);
+  int ret = read(current->fd, val, sizeof(uint64_t) * 3 );
+  //fprintf(stderr, "val[0] 2: %ld\n", val[0]);
+  //fprintf(stderr, "val[1] 2: %ld\n", val[1]);
+  //fprintf(stderr, "val[2] 2: %ld\n", val[2]);
+  //fprintf(stderr, "ret: %d\n", ret);
+  if (/*ret < sizeof(uint64_t)*3*/ret < sizeof(uint64_t)) {
+    EMSG("Error: unable to read event %d", current->event->id);
+    return -1;
+  }
+  return 0;
+}
+
 /**
  * parse mmapped buffer and copy the values into perf_mmap_data_t mmap_info.
  * we assume mmap_info is already initialized.

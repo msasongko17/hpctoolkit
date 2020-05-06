@@ -80,11 +80,12 @@ typedef enum SampleType {ALL_LOAD, ALL_STORE, UNKNOWN_SAMPLE_TYPE} SampleType;
 typedef enum FunctionType {SAME_FN, DIFF_FN, UNKNOWN_FN} FunctionType;
 typedef enum FloatType {ELEM_TYPE_FLOAT16, ELEM_TYPE_SINGLE, ELEM_TYPE_DOUBLE, ELEM_TYPE_LONGDOUBLE, ELEM_TYPE_LONGBCD, ELEM_TYPE_UNKNOWN} FloatType;
 typedef enum WatchPointType {WP_READ, WP_WRITE, WP_RW, WP_INVALID } WatchPointType;
-typedef enum ReplacementPolicy {AUTO, EMPTY_SLOT_ONLY, OLDEST, NEWEST} ReplacementPolicy;
+typedef enum ReplacementPolicy {AUTO, EMPTY_SLOT_ONLY, OLDEST, NEWEST, RDX} ReplacementPolicy;
 typedef enum MergePolicy {AUTO_MERGE, NO_MERGE, CLIENT_ACTION} MergePolicy;
 typedef enum OverwritePolicy {OVERWRITE, NO_OVERWRITE} OverwritePolicy;
 typedef enum VictimType {EMPTY_SLOT, NON_EMPTY_SLOT, NONE_AVAILABLE} VictimType;
 typedef enum WPTriggerActionType {DISABLE_WP, ALREADY_DISABLED, DISABLE_ALL_WP, RETAIN_WP} WPTriggerActionType;
+typedef enum ReuseType { REUSE_TEMPORAL, REUSE_SPATIAL, REUSE_BOTH, REUSE_CACHELINE} ReuseType;
 
 // Data structure that is given by clients to set a WP
 typedef struct SampleData{
@@ -97,6 +98,7 @@ typedef struct SampleData{
     int first_accessing_tid;
     int first_accessing_core_id;
     uint64_t bulletinBoardTimestamp;
+    uint64_t prevStoreAccess;
     uint64_t expirationPeriod;
     AccessType accessType; // load or store
     AccessType samplerAccessType;
@@ -110,6 +112,11 @@ typedef struct SampleData{
     WPTriggerActionType preWPAction;
     bool isSamplePointAccurate;
     bool isBackTrace;
+    ReuseType reuseType;
+    uint64_t eventCountBetweenSamples;
+    uint64_t timeBetweenSamples;
+    uint64_t reuseDistance[2][3];
+    uint64_t sampleTime;
 } SampleData_t;
 
 typedef struct WatchPointInfo{
@@ -164,7 +171,7 @@ extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);
 extern double ProportionOfWatchpointAmongOthersSharingTheSameContext(WatchPointInfo_t *wpi);
 
-
+extern void ReuseWPConfigOverride(void*);
 extern void TemporalReuseWPConfigOverride(void*);
 extern void SpatialReuseWPConfigOverride(void*);
 extern void FalseSharingWPConfigOverride(void*);

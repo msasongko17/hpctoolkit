@@ -65,6 +65,7 @@
 #include "frame.h"
 #include <unwind/common/backtrace_info.h>
 #include <unwind/common/fence_enum.h>
+#include <sys/syscall.h>
 #include "cct_insert_backtrace.h"
 #include "cct_backtrace_finalize.h"
 
@@ -191,7 +192,13 @@ hpcrun_cct_insert_backtrace_w_metric(cct_node_t* treenode,
 
   metric_upd_proc_t* upd_proc = hpcrun_get_metric_proc(metric_id);
   if (upd_proc) {
+    //fprintf(stderr, "datum value is incremented by %0.2lf in path with id: %d\n", datum.r, hpcrun_cct_persistent_id(path));
+    hpcrun_metricVal_t* v = hpcrun_metric_set_loc(mset, metric_id);
+    //fprintf(stderr, "value of metric: %d in path id: %d before increment: %0.2lf in thread %d\n", metric_id, hpcrun_cct_persistent_id(path), v->r, syscall(SYS_gettid));
+    //fprintf(stderr, "path id: %d is reached by thread %d\n", hpcrun_cct_persistent_id(path), syscall(SYS_gettid));
     upd_proc(metric_id, mset, datum);
+    //fprintf(stderr, "value of metric: %d in path id: %d after increment: %0.2lf in thread %d\n", metric_id, hpcrun_cct_persistent_id(path), v->r, syscall(SYS_gettid));
+    hpcrun_metricVal_t* loc = hpcrun_metric_set_loc(mset, metric_id);
   }
 
   // POST-INVARIANT: metric set has been allocated for 'path'
@@ -240,12 +247,14 @@ hpcrun_backtrace2cct(cct_bundle_t* cct, ucontext_t* context,
     TMSG(LUSH,"lush backtrace2cct invoked");
     n = lush_backtrace2cct(cct, context, metricId, metricIncr, skipInner,
 			   isSync);
+    fprintf(stderr, "lush_backtrace2cct\n");
   }
   else {
     TMSG(BT_INSERT,"regular (NON-lush) backtrace2cct invoked");
     n = help_hpcrun_backtrace2cct(cct, context,
 				  metricId, metricIncr,
 				  skipInner, isSync, data);
+   //fprintf(stderr, "help_hpcrun_backtrace2cct\n");
   }
 
   // N.B.: for lush_backtrace() it may be that n = NULL

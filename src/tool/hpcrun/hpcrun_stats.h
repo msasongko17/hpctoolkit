@@ -72,6 +72,7 @@ void hpcrun_stats_num_sample_triggering_watchpoints_inc(long val);
 long hpcrun_stats_num_sample_triggering_watchpoints(void);
 void hpcrun_stats_num_insane_ip_inc(long val);
 long hpcrun_stats_num_insane_ip(void);
+void hpcrun_stats_num_corrected_reuse_distance_inc(long val);
 void hpcrun_stats_num_falseWWIns_inc(long val);
 void hpcrun_stats_num_falseRWIns_inc(long val);
 void hpcrun_stats_num_falseWRIns_inc(long val);
@@ -86,6 +87,8 @@ void hpcrun_stats_num_newBytes_inc(long val);
 void hpcrun_stats_num_oldBytes_inc(long val);
 void hpcrun_stats_num_oldAppxBytes_inc(long val);
 void hpcrun_stats_num_reuse_inc(long val);
+void hpcrun_stats_num_reuseTemporal_inc(long val);
+void hpcrun_stats_num_reuseSpatial_inc(long val);
 void hpcrun_stats_num_loadedBytes_inc(long val);
 
 

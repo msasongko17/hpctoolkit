@@ -9,16 +9,19 @@ extern int as_matrix_size;
 extern int fs_core_matrix_size;
 extern int ts_core_matrix_size;
 extern int as_core_matrix_size;
+extern int invalidation_core_matrix_size;
 
 extern int max_consecutive_count;
 
 extern double fs_matrix[2000][2000];
 extern double ts_matrix[2000][2000];
 extern double as_matrix[2000][2000];
+extern double invalidation_matrix[2000][2000];
 
 extern double fs_core_matrix[2000][2000];
 extern double ts_core_matrix[2000][2000];
 extern double as_core_matrix[2000][2000];
+extern double invalidation_core_matrix[2000][2000];
 
 extern double war_fs_matrix[2000][2000];
 extern double war_ts_matrix[2000][2000];
@@ -66,10 +69,12 @@ extern int consecutive_wasted_trap_array[50];
 void dump_fs_matrix();
 void dump_ts_matrix();
 void dump_as_matrix();
+void dump_invalidation_matrix();
 
 void dump_fs_core_matrix();
 void dump_ts_core_matrix();
 void dump_as_core_matrix();
+void dump_invalidation_core_matrix();
 
 void dump_war_fs_matrix();
 void dump_war_ts_matrix();
@@ -97,6 +102,8 @@ extern double ts_volume;
 extern double ts_core_volume;
 extern double as_volume;
 extern double as_core_volume;
+extern double invalidation_volume;
+extern double invalidation_core_volume;
 extern double cache_line_transfer;
 extern double cache_line_transfer_millions;
 extern double cache_line_transfer_gbytes;
