@@ -1116,7 +1116,7 @@ static inline void SetUpFalseSharingMetrics(){
 
 static inline void SetUpMRDXCommunicationMetrics(){
   communication_metric_id = hpcrun_new_metric();
-  hpcrun_set_metric_info_and_period(communication_metric_id, "COMMUNICATION_COUNT", MetricFlags_ValFmt_Int, 1, metric_property_none);
+  hpcrun_set_metric_info_and_period(communication_metric_id, "COMMUNICATION", MetricFlags_ValFmt_Int, 1, metric_property_none);
   invalidation_metric_id = hpcrun_new_metric();
   hpcrun_set_metric_info_and_period(invalidation_metric_id, "INVALIDATION_COUNT", MetricFlags_ValFmt_Int, 1, metric_property_none);
   core_communication_metric_id = hpcrun_new_metric();
@@ -2267,7 +2267,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 				//fprintf(stderr, "reuse_bin_pivot_list[%d]: %d\n", i, reuse_bin_pivot_list[i]);
 		} else {
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-			sample_val_t v_comm = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+			//sample_val_t v_comm = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
 			/*sample_val_t v_core_comm = hpcrun_sample_callpath(wt->ctxt, core_communication_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
 			sample_val_t v_inv = hpcrun_sample_callpath(wt->ctxt, invalidation_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
                         sample_val_t v_core_inv = hpcrun_sample_callpath(wt->ctxt, core_invalidation_metric_id, SAMPLE_NO_INC, 0, 1, NULL);*/
@@ -2286,17 +2286,11 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 				//fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
                         	as_matrix[prev_access.tid][me] += increment;
 
-				// before
-				//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_UNIT_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
-  				//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
-				// insert a special node
-				// UpdateConcatenatedPathPair(wt->ctxt, wpi->sample.node /* oldNode*/, joinNodes[E_TEPORALLY_REUSED][joinNodeIdx] /* joinNode*/, temporal_metric_id /* checkedMetric */, inc);
-				//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+				/*sample_val_t v_comm = hpcrun_sample_callpath(wt->ctxt, communication_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
   				cct_node_t *node = hpcrun_insert_special_node(v_comm.sample_node, joinNodes[E_COMMUNICATION_SHARE][joinNodeIdx]);
-  				node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+  				node = hpcrun_cct_insert_path_return_leaf(prev_access.node, node);
   				// update the metricId
-  				cct_metric_data_increment(communication_metric_id, node, (cct_metric_data_t){.i = 1});
-				// after
+  				cct_metric_data_increment(communication_metric_id, node, (cct_metric_data_t){.i = 1});*/
 
 				if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 					//fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
@@ -2400,7 +2394,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     //fprintf(stderr, "this region is executed\n");
     cct_node_t *reusePairNode;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
-        //sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
 	//fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
         if (reuse_concatenate_use_reuse){
@@ -2410,7 +2404,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
         }
     }
     else { // REUSE_SPATIAL
-        //sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+        sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
         cct_node_t *reuseNode = v.sample_node;
 	//fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
         if (reuse_concatenate_use_reuse){
@@ -2419,9 +2413,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
             reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
         }
     }
-    /*cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
+    //cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
     //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
-    cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});*/
+    //cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
     reuseTemporal += inc;
     if (wpi->sample.reuseType == REUSE_TEMPORAL){
