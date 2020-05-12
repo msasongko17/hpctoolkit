@@ -4336,7 +4336,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
 				  int metricId = -1;
-				  double increment = global_sampling_period * thread_coefficient(as_matrix_size);
+				  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
 #if ADAMANT_USED
@@ -4471,7 +4471,7 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
 				  int metricId = -1;
-				  double increment = global_sampling_period * thread_coefficient(as_matrix_size);
+				  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
 #if ADAMANT_USED
