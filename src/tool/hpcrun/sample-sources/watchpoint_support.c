@@ -119,6 +119,7 @@ typedef struct ThreadData{
     void * gs_reg_val;
     uint64_t samplePostFull;
     uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
+    pid_t os_tid;
     long numWatchpointTriggers;
     long numActiveWatchpointTriggers;
     long numWatchpointImpreciseIP;
@@ -132,6 +133,16 @@ typedef struct ThreadData{
     WatchPointUpCall_t fptr;
     char dummy[CACHE_LINE_SZ];
 } ThreadData_t;
+
+typedef struct threadDataTableStruct{
+  volatile uint64_t counter __attribute__((aligned(64)));
+  struct ThreadData hashTable[503];
+  //struct SharedData * hashTable;
+} ThreadDataTable_t;
+
+ThreadDataTable_t threadDataTable = {.counter = 0};
+
+int global_thread_count;
 
 static __thread ThreadData_t tData;
 __thread uint64_t create_wp_count = 0;
@@ -209,6 +220,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context);
 
 __attribute__((constructor))
 static void InitConfig(){
+    //printf("InitConfig is called\n");
+    global_thread_count = 0;
     /*if(!init_adamant) {
 	init_adamant = 1;*/
     	//adm_initialize();
@@ -598,7 +611,8 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 // Per thread initialization
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
-    printf("WatchpointThreadInit is called by thread with os id %d and id %d\n", gettid(), TD_GET(core_profile_trace_data.id));
+    global_thread_count++;
+    //printf("WatchpointThreadInit is called by thread with os id %d and id %d, thread count %d\n", gettid(), TD_GET(core_profile_trace_data.id), global_thread_count);
     tData.ss.ss_sp = malloc(ALT_STACK_SZ);
     if (tData.ss.ss_sp == NULL){
         EMSG("Failed to malloc ALT_STACK_SZ");
