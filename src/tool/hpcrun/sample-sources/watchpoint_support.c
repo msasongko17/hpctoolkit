@@ -513,6 +513,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         //       CHECK(fcntl(perf_fd, F_SETOWN, gettid()));
         
         wpi->fileHandle = perf_fd;
+	// insert to perf_fd - tid table here
         // mmap the file if lbr is enabled
         if(wpConfig.isLBREnabled) {
             wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
@@ -597,6 +598,7 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 // Per thread initialization
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
+    printf("WatchpointThreadInit is called by thread with os id %d and id %d\n", gettid(), TD_GET(core_profile_trace_data.id));
     tData.ss.ss_sp = malloc(ALT_STACK_SZ);
     if (tData.ss.ss_sp == NULL){
         EMSG("Failed to malloc ALT_STACK_SZ");
