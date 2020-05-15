@@ -234,13 +234,15 @@ hpcrun_sample_callpath(void* context, int metricId,
 
       node  = hpcrun_backtrace2cct(&(epoch->csdata), context, metricId,
                                    metricIncr, skipInner, isSync, data_aux);
-
+      
+     // fprintf(stderr, "this spot\n");
       if (ENABLED(DUMP_BACKTRACES)) {
         hpcrun_bt_dump(td->btbuf_cur, "UNWIND");
       }
     }
   }
   else {
+    //fprintf(stderr, "that spot\n");
     cct_bundle_t* cct = &(td->core_profile_trace_data.epoch->csdata);
     node = record_partial_unwind(cct, td->btbuf_beg, td->btbuf_cur - 1,
         metricId, metricIncr, skipInner, NULL);

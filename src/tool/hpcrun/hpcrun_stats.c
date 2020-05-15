@@ -107,8 +107,11 @@ static atomic_long num_falseWWIns = ATOMIC_VAR_INIT(0);
 static atomic_long num_falseRWIns = ATOMIC_VAR_INIT(0);
 static atomic_long num_falseWRIns = ATOMIC_VAR_INIT(0);
 
+static atomic_long num_reuseSpatial = ATOMIC_VAR_INIT(0);
+static atomic_long num_reuseTemporal =  ATOMIC_VAR_INIT(0);
 static atomic_long num_reuse = ATOMIC_VAR_INIT(0);
 static atomic_long num_latency = ATOMIC_VAR_INIT(0);
+static atomic_long num_corrected_reuse_distance = ATOMIC_VAR_INIT(0);
 
 static atomic_long num_unwind_intervals_total = ATOMIC_VAR_INIT(0);
 static atomic_long num_unwind_intervals_suspicious = ATOMIC_VAR_INIT(0);
@@ -136,6 +139,7 @@ hpcrun_stats_reinit(void)
   fs_matrix_size =  0;
   ts_matrix_size =  0;
   as_matrix_size =  0;
+  as_core_matrix_size = 0;
   HASHTABLESIZE = atoi(getenv(BULLETIN_BOARD_SIZE));
 #if ADAMANT_USED
   if(getenv(HPCRUN_OBJECT_LEVEL)) {
@@ -144,9 +148,9 @@ hpcrun_stats_reinit(void)
         //OBJECT_THRESHOLD = atoi(getenv(OBJECT_SIZE_THRESHOLD));
   }
 #endif
-  fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
+  //fprintf(stderr, "bulletin board size is %d\n", HASHTABLESIZE);
   //fprintf(stderr, "object threshold is %d\n", OBJECT_THRESHOLD);
-  fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
+  //fprintf(stderr, "watchpoint size is %d\n", atoi(getenv(WATCHPOINT_SIZE)));
   for(int i = 0; i < HASHTABLESIZE; i++) {
     bulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
   }
@@ -186,6 +190,11 @@ hpcrun_stats_reinit(void)
   atomic_store_explicit(&num_trueWWIns, 0, memory_order_relaxed);
   atomic_store_explicit(&num_trueRWIns, 0, memory_order_relaxed);
   atomic_store_explicit(&num_trueWRIns, 0, memory_order_relaxed);
+
+  atomic_store_explicit(&num_reuseSpatial, 0, memory_order_relaxed);
+  atomic_store_explicit(&num_reuseTemporal, 0, memory_order_relaxed);
+  atomic_store_explicit(&num_latency, 0, memory_order_relaxed);
+  atomic_store_explicit(&num_corrected_reuse_distance, 0, memory_order_relaxed);
 }
 
 
@@ -371,10 +380,28 @@ hpcrun_stats_num_reuse_inc(long val)
 }            
 
 void
+hpcrun_stats_num_reuseTemporal_inc(long val)
+{
+  atomic_fetch_add_explicit(&num_reuseTemporal, val, memory_order_relaxed);
+}
+
+void
+hpcrun_stats_num_reuseSpatial_inc(long val)
+{
+  atomic_fetch_add_explicit(&num_reuseSpatial, val, memory_order_relaxed);
+}
+
+void
 hpcrun_stats_num_latency_inc(long val)
 {
   atomic_fetch_add_explicit(&num_latency, val, memory_order_relaxed);
 }            
+
+void
+hpcrun_stats_num_corrected_reuse_distance_inc(long val)
+{
+  atomic_fetch_add_explicit(&num_corrected_reuse_distance, val, memory_order_relaxed);
+}
 
 void
 hpcrun_stats_num_falseWWIns_inc(long val)
@@ -675,13 +702,13 @@ hpcrun_stats_print_summary(void)
   struct rusage rusage;
   getrusage(RUSAGE_SELF, &rusage);
 
-  fprintf(stderr, "load_and_store_all_load: %ld\n", load_and_store_all_load);
-  fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);
-  fprintf(stderr, "store_all_store: %ld\n", store_all_store);
+  //fprintf(stdierr, "load_and_store_all_load: %ld\n", load_and_store_all_load);
+  //fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);
+  //fprintf(stderr, "store_all_store: %ld\n", store_all_store);
   //AMSG("WATCHPOINT ANOMALIES: samples:%ld, SM_imprecise:%ld, WP_Set:%ld, WP_triggered:%ld, WP_SampleTriggering:%ld, WP_ImpreciseIP:%ld, WP_InsaneIP:%ld, WP_Off8Addr:%ld, WP_ImpreciseAddr:%ld, WP_Dropped:%ld", num_samples_total, num_samples_imprecise, num_watchpoints_set, num_watchpoints_triggered, num_sample_triggering_watchpoints,  num_watchpoints_imprecise, num_insane_ip, num_watchpoints_imprecise_address_8_byte, num_watchpoints_imprecise_address, num_watchpoints_dropped);
   AMSG("WATCHPOINT ANOMALIES: samples:%.2e, SM_imprecise:%.2e, WP_Set:%.2e, WP_triggered:%.2e, WP_SampleTriggering:%.2e, WP_ImpreciseIP:%.2e, WP_InsaneIP:%.2e, WP_Off8Addr:%.2e, WP_ImpreciseAddr:%.2e, WP_Dropped:%.2e", (double)atomic_load(&num_samples_total), (double)atomic_load(&num_samples_imprecise), (double)atomic_load(&num_watchpoints_set), (double)atomic_load(&num_watchpoints_triggered), (double)atomic_load(&num_sample_triggering_watchpoints),  (double)atomic_load(&num_watchpoints_imprecise), (double)atomic_load(&num_insane_ip), (double)atomic_load(&num_watchpoints_imprecise_address_8_byte), (double)atomic_load(&num_watchpoints_imprecise_address), (double)atomic_load(&num_watchpoints_dropped));
 
-  AMSG("WATCHPOINT STATS: writtenBytes:%ld, usedBytes:%ld, deadBytes:%ld, newBytes:%ld, oldBytes:%ld, oldAppxBytes:%ld, loadedBytes:%ld, accessedIns:%ld, falseWWIns:%ld, falseRWIns:%ld, falseWRIns:%ld, trueWWIns:%ld, trueRWIns:%ld, trueWRIns:%ld, RSS:%ld, reuse:%ld, latency:%ld", num_writtenBytes, num_usedBytes, num_deadBytes, num_newBytes, num_oldBytes, num_oldAppxBytes, num_loadedBytes, num_accessedIns, num_falseWWIns, num_falseRWIns, num_falseWRIns, num_trueWWIns, num_trueRWIns, num_trueWRIns,  (size_t)(rusage.ru_maxrss), num_reuse, num_latency);
+  AMSG("WATCHPOINT STATS: writtenBytes:%ld, usedBytes:%ld, deadBytes:%ld, newBytes:%ld, oldBytes:%ld, oldAppxBytes:%ld, loadedBytes:%ld, accessedIns:%ld, falseWWIns:%ld, falseRWIns:%ld, falseWRIns:%ld, trueWWIns:%ld, trueRWIns:%ld, trueWRIns:%ld, RSS:%ld, reuse:%ld, reuseTemporal:%ld, reuseSpatial:%ld, latency:%ld", num_writtenBytes, num_usedBytes, num_deadBytes, num_newBytes, num_oldBytes, num_oldAppxBytes, num_loadedBytes, num_accessedIns, num_falseWWIns, num_falseRWIns, num_falseWRIns, num_trueWWIns, num_trueRWIns, num_trueWRIns,  (size_t)(rusage.ru_maxrss), num_reuse, num_reuseTemporal, num_reuseSpatial, num_latency);
 
   AMSG("COMDETECTIVE STATS: fs_volume:%0.2lf, fs_core_volume:%0.2lf, ts_volume:%0.2lf, ts_core_volume:%0.2lf, as_volume:%0.2lf, as_core_volume:%0.2lf, cache_line_transfer:%0.2lf, cache_line_transfer_millions:%0.2lf, cache_line_transfer_gbytes:%0.2lf", fs_volume, fs_core_volume, ts_volume, ts_core_volume, as_volume, as_core_volume, cache_line_transfer, cache_line_transfer_millions, cache_line_transfer_gbytes);
 

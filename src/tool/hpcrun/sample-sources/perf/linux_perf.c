@@ -167,7 +167,6 @@
 // type declarations
 //******************************************************************************
 
-
 enum threshold_e { PERIOD, FREQUENCY };
 struct event_threshold_s {
   long             threshold_num;
@@ -295,9 +294,13 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
   //printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
   if(mapping_size > 0)
   	stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
+  et->num_overflows = 0;
+  et->prev_num_overflows = 0;
   et->event = event;
   // ask sys to "create" the event
   // it returns -1 if it fails.
+  //fprintf(stderr, "monitoring a sample\n");
+  event->attr.wakeup_events = 1;
   et->fd = perf_event_open(&event->attr,
             THREAD_SELF, CPU_ANY, GROUP_FD, PERF_FLAGS);
   TMSG(LINUX_PERF, "dbg register event %d, fd: %d, skid: %d, c: %d, t: %d, period: %d, freq: %d",
@@ -391,7 +394,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
   uint64_t metric_inc = 1;
   if (current->event->attr.freq==1 && mmap_data->period > 0)
     metric_inc = mmap_data->period;
-
+  //fprintf(stderr, "metric_inc: %ld\n", metric_inc);
   // ----------------------------------------------------------------------------
   // record time enabled and time running
   // if the time enabled is not the same as running time, then it's multiplexed
@@ -413,6 +416,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     scale_f = 1.0;
 
   double counter = scale_f * metric_inc;
+  //fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
 
   // ----------------------------------------------------------------------------
   // set additional information for the metric description
@@ -446,7 +450,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     } else {
         td->precise_pc = 0;
     }
-    
+  //fprintf(stderr, "counter: %0.2lf\n", counter); 
   *sv = hpcrun_sample_callpath(context, current->event->metric,
         (hpcrun_metricVal_t) {.r=counter},
         0/*skipInner*/, 0/*isSync*/, &info);
@@ -743,6 +747,15 @@ METHOD_FN(process_event_list, int lush_metrics)
   }
   memset(event_desc, 0, size);
 
+  extern int *reuse_distance_events;
+  extern int reuse_distance_num_events;
+  reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
+  reuse_distance_num_events = 0;
+  if (reuse_distance_events == NULL){
+      EMSG("Unable to allocate %d bytes", sizeof(int)*num_events);
+      return;
+  }
+
   int i=0;
 
   default_threshold = init_default_count();
@@ -811,6 +824,18 @@ METHOD_FN(process_event_list, int lush_metrics)
                                    // since the OS will free it, we don't have to do it in hpcrun
     // set the metric for this perf event
     event_desc[i].metric = hpcrun_new_metric();
+
+    /******** For witch client WP_REUSE ***************/
+#ifdef REUSE_HISTO
+    if (strstr(name, "MEM_UOPS_RETIRED") != NULL)
+#else
+    if (strstr(name, "MEM_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+#endif
+    {
+        reuse_distance_events[reuse_distance_num_events++] = i;
+    }
+    /**************************************************/
+
    
     // ------------------------------------------------------------
     // if we use frequency (event_type=1) then the period is not deterministic,
@@ -976,6 +1001,52 @@ void linux_perf_events_resume(){
   perf_start_all(nevents, event_thread);
 }
 
+
+// OUTPUT: val, it is a uint64_t array and has at least 3 elements.
+// For a counting event, val[0] is the actual value read from counter; val[1] is the time enabling; val[2] is time running
+// For a overflow event, val[0] is the actual scaled value; val[1] and val[2] are set to 0
+// RETURN: 0, sucess; -1, error
+int linux_perf_read_event_counter(int event_index, uint64_t *val){
+  //fprintf(stderr, "this function is executed\n");
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+
+  event_thread_t *current = &(event_thread[event_index]);
+
+  int ret = perf_read_event_counter(current, val);
+
+  if (ret < 0) {
+	fprintf(stderr, "problem here\n");
+ 	return -1; // something wrong here
+  }
+
+  uint64_t sample_period = current->event->attr.sample_period;
+  if (sample_period == 0){ // counting event
+    return 0;
+  } else {
+    // overflow event
+    //assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+    int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+    //fprintf(stderr, "original counter value %ld\n", scaled_val);
+    if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+                    || scaled_val < 0){
+            //jqswang: TODO: it does not filter out all the invalid values
+        //fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+       hpcrun_stats_num_corrected_reuse_distance_inc(1);
+       scaled_val = 0;
+    }
+   //fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
+    //fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
+    val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+    //fprintf(stderr, "val[0]: %ld\n", val[0]);
+    current->prev_num_overflows = current->num_overflows;
+    val[1] = 0;
+    val[2] = 0;
+    return 0;
+  }
+}
+
+
 // ---------------------------------------------
 // signal handler
 // ---------------------------------------------
@@ -1071,6 +1142,9 @@ perf_event_handler(
     return 1; // tell monitor the signal has not been handled.
   }
 
+
+  // Increment the number of overflows for the current event
+  current->num_overflows++;
   // ----------------------------------------------------------------------------
   // parse the buffer until it finishes reading all buffers
   // ----------------------------------------------------------------------------

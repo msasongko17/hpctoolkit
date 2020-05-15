@@ -511,6 +511,7 @@ hpcrun_get_weighted_metric_diff(int metric_id1, int metric_id2,
         case MetricFlags_ValFmt_Real:
             assert(loc1->r >= loc2->r);
             diff->r = (loc1->r - loc2->r);
+	    //fprintf(stderr,"loc1->r: %0.2lf, loc2->r: %0.2lf, diff->r: %0.2lf\n", loc1->r, loc2->r, diff->r);
             diffWithPeriod->r = (loc1->r - loc2->r) * minfo1->period;
             break;
         default:
@@ -527,6 +528,7 @@ hpcrun_metric_std_inc(int metric_id, metric_set_t* set,
 		      hpcrun_metricVal_t incr)
 {
   hpcrun_metric_std(metric_id, set, '+', incr);
+  //fprintf(stderr, "increment is by %0.2lf in real and %ld in integer\n", incr.r, incr.i);
 }
 
 //
