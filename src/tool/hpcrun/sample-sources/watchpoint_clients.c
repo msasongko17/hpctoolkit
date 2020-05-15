@@ -1182,7 +1182,7 @@ METHOD_FN(process_event_list, int lush_metrics)
       // must have a canonical load map across processes
       hpcrun_set_ipc_load_map(true);
       measured_metric_id = hpcrun_new_metric();
-      hpcrun_set_metric_info_and_period(measured_metric_id, "MONITORED", MetricFlags_ValFmt_Int, 1, metric_property_none);
+      hpcrun_set_metric_info_and_period(measured_metric_id, "COMMUNICATION", MetricFlags_ValFmt_Int, 1, metric_property_none);
       SetUpFalseSharingMetrics();
       SetUpTrueSharingMetrics();
       break;
@@ -2414,9 +2414,9 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
       int id = -1;
       // Record true sharing
-      trueWWIns ++;
-      metricId =  true_ww_metric_id;
-      joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+      trueWRIns ++;
+      metricId =  true_wr_metric_id;
+      joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
 #if ADAMANT_USED
       if(getenv(HPCRUN_OBJECT_LEVEL)) {
         inc_true_matrix( (uint64_t) wt->va, index1, index2, increment);
@@ -2470,9 +2470,9 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
     } else {
       int id = -1;
       // Record false sharing
-      falseWWIns ++;
-      metricId =  false_ww_metric_id;
-      joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+      falseWRIns ++;
+      metricId =  false_wr_metric_id;
+      joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
 #if ADAMANT_USED
       if(getenv(HPCRUN_OBJECT_LEVEL)) {
         inc_false_matrix((uint64_t) wpi->sample.target_va, (uint64_t) wt->va, index1, index2, increment);
@@ -3528,7 +3528,8 @@ double thread_coefficient(int as_matrix_size) {
 }
 
 
-bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId) {
+bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, cct_node_t *node, int sampledMetricId) {
+  void * contextPC = hpcrun_context_pc(context); 
   void * data_addr = mmap_data->addr; 
   void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
@@ -4156,6 +4157,11 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               if(sType == ALL_STORE)
                                 store_all_store++;
                             }
+
+			    int metricId = -1;
+  			    const void* joinNode;
+  			    int joinNodeIdx = isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
 			    uint64_t curtime = rdtsc(); 
 
 			    int64_t storeCurTime = 0;
@@ -4266,8 +4272,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                     }
 #endif
                                     // ends
+				    trueWRIns ++;
+    				    metricId = true_wr_metric_id;
+    				    joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
+
+
 				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
-	                war_ts_matrix[item.tid][me] = war_ts_matrix[item.tid][me] + increment;
+	                	    war_ts_matrix[item.tid][me] = war_ts_matrix[item.tid][me] + increment;
     if(item.core_id != current_core) {
 #if ADAMANT_USED
                                       if(getenv(HPCRUN_OBJECT_LEVEL)) {
@@ -4325,8 +4336,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                         }
                                     }
 #endif
-				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
-	                war_fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
+
+				   falseWRIns ++;
+    				   metricId = false_wr_metric_id;
+    				   joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
+
+				   fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
+	                	   war_fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
 			    if(item.core_id != current_core) {
 #if ADAMANT_USED
                                       if(getenv(HPCRUN_OBJECT_LEVEL)) {
@@ -4351,7 +4367,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                       }
 #endif
 				      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + increment;
-	war_fs_core_matrix[item.core_id][current_core] = war_fs_core_matrix[item.core_id][current_core] + increment;
+				      war_fs_core_matrix[item.core_id][current_core] = war_fs_core_matrix[item.core_id][current_core] + increment;
 			    }
 				  }
 				  as_matrix[item.tid][me] = as_matrix[item.tid][me] + increment;
@@ -4362,14 +4378,14 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
 				  }	
 				  // tprev = ts2
 				  prev_timestamp = item.time;
-				  /*
-				     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+				  
+				     //sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
 				  // insert a special node
-				  cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
-				  node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+				  /*cct_node_t *node1 = hpcrun_insert_special_node(node, joinNode);
+				  node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
 				  // update the metricId
-				  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
-				  */
+				  cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});*/
+				  
 				}
                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
@@ -4401,6 +4417,11 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
                                     }
 #endif
                                     // ends
+				    
+				    trueWWIns ++;
+    				    metricId = true_ww_metric_id;
+    				    joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+				    
 				    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
 	                waw_ts_matrix[item.tid][me] = waw_ts_matrix[item.tid][me] + increment;
                                 if(item.core_id != current_core) {
@@ -4460,6 +4481,11 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
                                         }
                                     }
 #endif
+
+				    falseWWIns ++;
+    				    metricId = false_ww_metric_id;
+    				    joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+
 				    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
 	                waw_fs_matrix[item.tid][me] = waw_fs_matrix[item.tid][me] + increment;
     if(item.core_id != current_core) {
@@ -4506,7 +4532,22 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
 				  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
 				  */
 				}
-
+				
+				// before
+				/*
+				sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+  // insert a special node
+  cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
+  node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+  // update the metricId
+  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+  */
+		                sample_val_t v = hpcrun_sample_callpath(context, measured_metric_id, SAMPLE_UNIT_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+		                cct_node_t *node1 = hpcrun_insert_special_node(v.sample_node, joinNode);
+                                  node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
+                                  // update the metricId
+                                  cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});
+				// after
 			      } else {
 				// TryArmWatchpoint(T1)
 				arm_watchpoint_flag = 1;
