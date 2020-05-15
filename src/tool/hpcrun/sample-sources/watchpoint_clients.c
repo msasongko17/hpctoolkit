@@ -767,11 +767,11 @@ METHOD_FN(start)
 
 static void ClientTermination(){
   // Cleanup the watchpoint data
-  fprintf(stderr, "ClientTermination is executed here\n");
+  //fprintf(stderr, "ClientTermination is executed here\n");
   hpcrun_stats_num_samples_imprecise_inc(wpStats.numImpreciseSamples);
   hpcrun_stats_num_watchpoints_set_inc(wpStats.numWatchpointsSet);
   WatchpointThreadTerminate();
-  fprintf(stderr, "after WatchpointThreadTerminate\n");
+  //fprintf(stderr, "after WatchpointThreadTerminate\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:
       hpcrun_stats_num_writtenBytes_inc(writtenBytes);
@@ -804,7 +804,7 @@ static void ClientTermination(){
       hpcrun_stats_num_falseWWIns_inc(falseWWIns);
       hpcrun_stats_num_falseRWIns_inc(falseRWIns);
       hpcrun_stats_num_falseWRIns_inc(falseWRIns);
-      fprintf(stderr, "sample_count: %ld\n", sample_count);
+      //fprintf(stderr, "sample_count: %ld\n", sample_count);
       break;
     case WP_TRUE_SHARING:
     case WP_IPC_TRUE_SHARING:
@@ -905,6 +905,7 @@ static void ClientTermination(){
       hpcrun_stats_num_trueWWIns_inc(trueWWIns);
       hpcrun_stats_num_trueRWIns_inc(trueRWIns);
       hpcrun_stats_num_trueWRIns_inc(trueWRIns);
+      fprintf(stderr, "sample_count: %ld\n", sample_count);
 
     default:
       break;
@@ -4134,6 +4135,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
     
     case WP_COMDETECTIVE: {
             int sType = -1;
+	    sample_count++;
 
 			    if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
 			      sType = ALL_STORE;
@@ -4233,7 +4235,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
 				  int metricId = -1;
-				  double increment = global_sampling_period * thread_coefficient(as_matrix_size);
+				  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
 #if ADAMANT_USED
@@ -4368,7 +4370,7 @@ war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id
                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
 				  int metricId = -1;
-				  double increment = global_sampling_period * thread_coefficient(as_matrix_size);
+				  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
 				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
 				  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
 #if ADAMANT_USED
