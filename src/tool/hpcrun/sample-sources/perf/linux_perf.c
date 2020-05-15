@@ -490,7 +490,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
     
   if(WatchpointClientActive()){
     OnSample(mmap_data,
-             hpcrun_context_pc(context),
+             /*hpcrun_context_pc(context)*/ context,
              sv->sample_node,
              current->event->metric);
   }
