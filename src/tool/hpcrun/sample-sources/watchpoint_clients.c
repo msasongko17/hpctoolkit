@@ -141,12 +141,12 @@
 #include "myposix.h"
 //#define REUSE_HISTO 1
 
-#define MULTITHREAD_REUSE_HISTO 1
+//#define MULTITHREAD_REUSE_HISTO 1
 
 #ifdef MULTITHREAD_REUSE_HISTO
-#include "reuse.h"
 #define REUSE_HISTO 1
 #endif
+#include "reuse.h"
 
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
@@ -2861,6 +2861,7 @@ void ReadSharedDataTransactionally(SharedData_t *localSharedData){
   }while(1);
 }
 
+#ifdef REUSE_HISTO
 void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_not_found_flag){
   // Laport's STM
   do{
@@ -2877,6 +2878,7 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
       break;
   }while(1);
 }
+#endif
 
 int static inline GetFloorWPLength(int accessLen){
   switch (accessLen) {
@@ -3853,6 +3855,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   // detect communication here
 	   // before 
 	   //ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
+ #ifdef REUSE_HISTO
 	   ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
@@ -3935,6 +3938,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 	   wp_arming_count++;
            SubscribeWatchpoint(&sd, OVERWRITE, false );
+#endif
 	//fprintf(stderr, "here6\n");
 	lastTime = curTime;
     }
