@@ -142,6 +142,27 @@ typedef struct threadDataTableStruct{
 
 ThreadDataTable_t threadDataTable = {.counter = 0};
 
+typedef struct FdData {
+	int fd;
+	pid_t os_tid;
+} FdData_t;
+
+typedef struct fdDataTableStruct{
+  volatile uint64_t counter __attribute__((aligned(64)));
+  struct FdData hashTable[503];
+  //struct SharedData * hashTable;
+} FdDataTable_t;
+
+FdDataTable_t fdDataTable = {.counter = 0};
+
+int fdDataInsert(int fd, pid_t os_tid) {
+  int idx = fd % 503;
+  //printf("fd: %d is inserted to index: %d\n", fd, idx);
+  fdDataTable.hashTable[idx].fd = fd;
+  fdDataTable.hashTable[idx].os_tid = os_tid;
+  return idx;
+}
+
 int global_thread_count;
 
 static __thread ThreadData_t tData;
@@ -157,6 +178,21 @@ __thread uint64_t wp_count1 = 0;
 __thread uint64_t wp_count2 = 0;
 __thread uint64_t wp_active = 0;
 __thread uint64_t wp_dropped = 0;
+
+
+void threadDataTablePrettyPrints() {
+	printf("List of threads in thread data table:\n");
+	for(int i = 0; i < global_thread_count; i++) {
+		printf("%d\n", threadDataTable.hashTable[i].os_tid);
+	}
+}
+
+void fdDataTablePrettyPrints() {
+        printf("List of threads in fd data table:\n");
+        for(int i = 0; i < global_thread_count; i++) {
+                printf("fd: %d, os_tid: %d\n", fdDataTable.hashTable[i].fd, fdDataTable.hashTable[i].os_tid);
+        }
+}
 
 bool IsAltStackAddress(void *addr){
     if((addr >= tData.ss.ss_sp) && (addr < tData.ss.ss_sp + tData.ss.ss_size))
@@ -531,6 +567,10 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         if(wpConfig.isLBREnabled) {
             wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
         }
+
+	int idx = fdDataInsert(perf_fd, fown_ex.pid);
+	//fdDataTablePrettyPrints();
+	printf("in fd table, fd: %d, os_tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid);
     }
     
     wp_active++;
@@ -613,6 +653,7 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 void WatchpointThreadInit(WatchPointUpCall_t func){
     global_thread_count++;
     //printf("WatchpointThreadInit is called by thread with os id %d and id %d, thread count %d\n", gettid(), TD_GET(core_profile_trace_data.id), global_thread_count);
+    int me = TD_GET(core_profile_trace_data.id);
     tData.ss.ss_sp = malloc(ALT_STACK_SZ);
     if (tData.ss.ss_sp == NULL){
         EMSG("Failed to malloc ALT_STACK_SZ");
@@ -651,6 +692,10 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
     if(wpConfig.isLBREnabled) {
         CreateDummyHardwareEvent();
     }
+
+    tData.os_tid = gettid();
+
+    threadDataTable.hashTable[me] = tData;
 }
 
 void WatchpointThreadTerminate(){
@@ -666,7 +711,9 @@ void WatchpointThreadTerminate(){
     }
     tData.fs_reg_val = (void*)-1;
     tData.gs_reg_val = (void*)-1;
-   
+
+    //threadDataTablePrettyPrints();
+
     fprintf(stderr, "tData.numWatchpointTriggers: %ld\n", tData.numWatchpointTriggers); 
     fprintf(stderr, "tData.numActiveWatchpointTriggers: %ld\n", tData.numActiveWatchpointTriggers);
     hpcrun_stats_num_watchpoints_triggered_inc(tData.numWatchpointTriggers);
