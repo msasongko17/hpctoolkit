@@ -107,6 +107,8 @@ err;})
 
 WPConfig_t wpConfig;
 
+extern int event_type;
+
 //const WatchPointInfo_t dummyWPInfo = {.sample = {}, .startTime =0, .fileHandle= -1, .isActive= false, .mmapBuffer=0};
 //const struct DUMMY_WATCHPOINT dummyWP[MAX_WP_SLOTS];
 
@@ -145,6 +147,7 @@ ThreadDataTable_t threadDataTable = {.counter = 0};
 
 typedef struct FdData {
 	int fd;
+	int tid;
 	pid_t os_tid;
 } FdData_t;
 
@@ -156,12 +159,18 @@ typedef struct fdDataTableStruct{
 
 FdDataTable_t fdDataTable = {.counter = 0};
 
-int fdDataInsert(int fd, pid_t os_tid) {
+int fdDataInsert(int fd, pid_t os_tid, int tid) {
   int idx = fd % 503;
   //printf("fd: %d is inserted to index: %d\n", fd, idx);
   fdDataTable.hashTable[idx].fd = fd;
   fdDataTable.hashTable[idx].os_tid = os_tid;
+  fdDataTable.hashTable[idx].tid = tid;
   return idx;
+}
+
+FdData_t fdDataGet(int fd) {
+  int idx = fd % 503; 
+  return fdDataTable.hashTable[idx];
 }
 
 int global_thread_count;
@@ -1245,15 +1254,21 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     }
     wp_count1++;
 
+    ThreadData_t threadData;
     //linux_perf_events_pause();
-    
+     
     tData.numWatchpointTriggers++;
     //fprintf(stderr, " numWatchpointTriggers = %lu, \n", tData.numWatchpointTriggers);
     
     //find which watchpoint fired
+    fdDataTable_t fdData = fdDataGet(info->si_fd);
+    if(event_type == WP_REUSE_MT)
+            threadData = threadDataTable.hashTable[fdData.tid];
+    else
+            threadData = tData;
     int location = -1;
     for(int i = 0 ; i < wpConfig.maxWP; i++) {
-        if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
+        if((threadData.watchPointArray[i].isActive) && (info->si_fd == threadData.watchPointArray[i].fileHandle)) {
             location = i;
             break;
         }
@@ -1281,6 +1296,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
     WatchPointTrigger_t wpt;
     WPTriggerActionType retVal;
+    // WP_REUSE_MT until here
     WatchPointInfo_t *wpi = &tData.watchPointArray[location];
     // Perform Pre watchpoint action
     switch (wpi->sample.preWPAction) {

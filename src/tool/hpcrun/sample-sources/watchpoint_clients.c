@@ -363,6 +363,8 @@ __thread long unknwfunc=0;
 __thread long ipSame=0;
 __thread long ipDiff=0;
 
+int event_type = 0;
+
  /* private tool function
 *****************************************************************************/
 static int OpenWitchTraceOutput(){
@@ -1209,6 +1211,8 @@ METHOD_FN(process_event_list, int lush_metrics)
   }
 
   PopulateBlackListAddresses();
+
+  event_type = theWPConfig->id;
 
   switch (theWPConfig->id) {
     case WP_DEADSPY:
