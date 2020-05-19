@@ -738,7 +738,63 @@ void WatchpointThreadTerminate(){
 #endif
 }
 
+// Finds a victim slot to set a new WP
+static VictimType GetSharedVictim(int * location, ReplacementPolicy policy, int me){
+    // If any WP slot is inactive, return it;
+    ThreadData_t threadData = threadDataTable.hashTable[me];
+    for(int i = 0; i < wpConfig.maxWP; i++){
+        if(!threadData.watchPointArray[i].isActive) {
+            *location = i;
+	    //fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+	    for(int j = 0; j < wpConfig.maxWP; j++){
+		    if(threadData.watchPointArray[j].isActive || (i == j)){
+			    threadData.numWatchpointArmingAttempt[j]++;
+		    }
+	    }
+	    //fprintf(stderr, "after empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+	    return EMPTY_SLOT;
+        }
+    }
+	    // before
+	    int indices[wpConfig.maxWP];
+	    for (int i = 0; i < wpConfig.maxWP; i++) {
+        	indices[i] = i;
+    	    }
+	    //fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+	    int wp_index = wpConfig.maxWP;
+    	    while (wp_index) {
+		long int tmpVal;
+            	lrand48_r(&threadData.randBuffer, &tmpVal);
+            	int index = tmpVal % wp_index;
+        	wp_index--;
+        	int swap = indices[index];
+        	indices[index] = indices[wp_index];
+        	indices[wp_index] = swap;
+    	    }
+	    //fprintf(stderr, "in thread %d, after indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+	    // after
+	    // visit each watchpoint according to the sequence
+	    for(int i = 0; i < wpConfig.maxWP; i++) {
+		    int idx = indices[i];
+		    double probabilityToReplace =  1.0/((double)threadData.numWatchpointArmingAttempt[idx]);
+		    double randValue;
+            	    drand48_r(&threadData.randBuffer, &randValue);
+		    //fprintf(stderr, "i: %d, idx: %d, denominator: %ld, probability: %0.4lf\n", i, idx, tData.numWatchpointArmingAttempt[idx], probabilityToReplace);
+		    if(randValue <= probabilityToReplace /* 1 */) {
+			*location = idx;
+			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
+			for(int j = 0; j < wpConfig.maxWP; j++){
+                            threadData.numWatchpointArmingAttempt[j]++;
+                    	}
+                	return NON_EMPTY_SLOT;
+            	    }
+	    }
+	    for(int i = 0; i < wpConfig.maxWP; i++) {
+		    threadData.numWatchpointArmingAttempt[i]++;
+            }
 
+            return NONE_AVAILABLE;
+}
 
 // Finds a victim slot to set a new WP
 static VictimType GetVictim(int * location, ReplacementPolicy policy){
@@ -1415,12 +1471,11 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 }
 
 
-bool SubscribeSharedWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue){
+bool SubscribeSharedWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
     sub_wp_count1++;
     if(ValidateWPData(sampleData) == false) {
         return false;
     }
-    int me = TD_GET(core_profile_trace_data.id);
     //sub_wp_count2++;
     if(IsOveralppedShared(sampleData, me)){
         return false; // drop the sample if it overlaps an existing address
@@ -1444,25 +1499,27 @@ bool SubscribeSharedWatchpoint(SampleData_t * sampleData, OverwritePolicy overwr
     int victimLocation = -1;
     // Find a slot to install WP
     //VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
+    ThreadData_t threadData = threadDataTable.hashTable[me];
     do {
             uint64_t theCounter = threadDataTable.hashTable[me].counter;
             if(theCounter & 1)
                     continue;
             if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
-    		VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+    		//VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+		VictimType r = GetSharedVictim(&victimLocation, wpConfig.replacementPolicy, me);
     		sub_wp_count3++;
     		if(r != NONE_AVAILABLE) {
         		// VV IMP: Capture value before arming the WP.
         		if(captureValue) {
-            			CaptureValue(sampleData, &tData.watchPointArray[victimLocation]);
+            			CaptureValue(sampleData, &threadData.watchPointArray[victimLocation]);
 			}
         		// I know the error case that we have captured the value but ArmWatchPoint fails.
        	 		// I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
         		//printf("and this region\n");
 			//printf("arming watchpoints\n");
 			//fprintf(stderr, "watchpoint is armed\n");
-        		if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
+        		if(ArmWatchPoint(&threadDataTable.hashTable[me].watchPointArray[victimLocation]/*&tData.watchPointArray[victimLocation]*/ , sampleData) == false){
             			//LOG to hpcrun log
             			EMSG("ArmWatchPoint failed for address %p", sampleData->va);
 				threadDataTable.hashTable[me].counter++;
