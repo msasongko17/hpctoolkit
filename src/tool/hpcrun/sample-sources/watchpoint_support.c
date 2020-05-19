@@ -131,6 +131,7 @@ typedef struct ThreadData{
     struct drand48_data randBuffer;
     WatchPointInfo_t watchPointArray[MAX_WP_SLOTS];
     WatchPointUpCall_t fptr;
+    volatile uint64_t counter;
     char dummy[CACHE_LINE_SZ];
 } ThreadData_t;
 
@@ -695,6 +696,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
     tData.os_tid = gettid();
 
+    tData.counter = 0;
     threadDataTable.hashTable[me] = tData;
 }
 
@@ -1332,11 +1334,12 @@ static bool ValidateWPData(SampleData_t * sampleData){
 #endif
 }
 
-static bool IsOveralpped(SampleData_t * sampleData){
+static bool IsOveralppedShared(SampleData_t * sampleData, int me){
     // Is a WP with the same/overlapping address active?
+    ThreadData_t threadData = threadDataTable.hashTable[me];
     for (int i = 0;  i < wpConfig.maxWP; i++) {
-        if(tData.watchPointArray[i].isActive){
-            if(ADDRESSES_OVERLAP(tData.watchPointArray[i].sample.va, tData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
+        if(threadData.watchPointArray[i].isActive){
+            if(ADDRESSES_OVERLAP(threadData.watchPointArray[i].sample.va, threadData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
 	
 	    //fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
 	    overlap_count++;    
@@ -1347,6 +1350,20 @@ static bool IsOveralpped(SampleData_t * sampleData){
     return false;
 }
 
+static bool IsOveralpped(SampleData_t * sampleData){
+    // Is a WP with the same/overlapping address active?
+    for (int i = 0;  i < wpConfig.maxWP; i++) {
+        if(tData.watchPointArray[i].isActive){
+            if(ADDRESSES_OVERLAP(tData.watchPointArray[i].sample.va, tData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
+
+            //fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
+            overlap_count++;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 void CaptureValue(SampleData_t * sampleData, WatchPointInfo_t * wpi){
     void * valLoc = & (wpi->value[0]);
@@ -1397,6 +1414,70 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     return false;
 }
 
+
+bool SubscribeSharedWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue){
+    sub_wp_count1++;
+    if(ValidateWPData(sampleData) == false) {
+        return false;
+    }
+    int me = TD_GET(core_profile_trace_data.id);
+    //sub_wp_count2++;
+    if(IsOveralppedShared(sampleData, me)){
+        return false; // drop the sample if it overlaps an existing address
+    }
+    sub_wp_count2++;
+
+    // No overlap, look for a victim slot
+    //if((threadDataTable.hashTable[me].counter & 1) == 0)
+    //printf("before accessing shared data\n");
+    /*do {
+	    uint64_t theCounter = threadDataTable.hashTable[me].counter;
+	    if(theCounter & 1)
+		    continue;
+	    if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+                              // inside
+                              threadDataTable.hashTable[me].counter++; // makes the counter even
+			      break;
+            }
+    } while(1);*/
+    //printf("after accessing shared data\n");
+    int victimLocation = -1;
+    // Find a slot to install WP
+    //VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
+    do {
+            uint64_t theCounter = threadDataTable.hashTable[me].counter;
+            if(theCounter & 1)
+                    continue;
+            if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+
+    		VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+    		sub_wp_count3++;
+    		if(r != NONE_AVAILABLE) {
+        		// VV IMP: Capture value before arming the WP.
+        		if(captureValue) {
+            			CaptureValue(sampleData, &tData.watchPointArray[victimLocation]);
+			}
+        		// I know the error case that we have captured the value but ArmWatchPoint fails.
+       	 		// I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
+        		//printf("and this region\n");
+			//printf("arming watchpoints\n");
+			//fprintf(stderr, "watchpoint is armed\n");
+        		if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
+            			//LOG to hpcrun log
+            			EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+				threadDataTable.hashTable[me].counter++;
+            			return false;
+        		}
+			threadDataTable.hashTable[me].counter++;
+        		return true;
+    		}
+    		none_available_count++;
+    		threadDataTable.hashTable[me].counter++; // makes the counter even
+		break;
+            }
+    } while(1);
+    return false;
+}
 
 bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime){
     if(ValidateWPData(sampleData) == false) {
