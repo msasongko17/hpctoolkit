@@ -469,7 +469,7 @@ void ReuseWPConfigOverride(void *v){
     //wpConfig.dontFixIP = true;
     //wpConfig.dontDisassembleWPAddress = true;
     //wpConfig.isLBREnabled = false; //jqswang
-    fprintf(stderr, "ReuseWPConfigOverride is called\n");
+    //fprintf(stderr, "ReuseWPConfigOverride is called\n");
     wpConfig.replacementPolicy = RDX;
     //wpConfig.replacementPolicy = OLDEST;
 }
@@ -774,6 +774,7 @@ void WatchpointThreadTerminate(){
 
 // Finds a victim slot to set a new WP
 static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int me){
+    //fprintf(stderr, "in GetVictimShared\n");
     // If any WP slot is inactive, return it;
     //ThreadData_t threadData = threadDataTable.hashTable[me];
     for(int i = 0; i < wpConfig.maxWP; i++){
@@ -1117,6 +1118,7 @@ static inline void *  GetPatchedIP(void *  contextIP) {
 }
 
 static inline void *  GetPatchedIPShared(void *  contextIP, int me) {
+    //fprintf(stderr, "in GetPatchedIPShared\n");
     ThreadData_t threadData = threadDataTable.hashTable[me];
     void * patchedIP;
     void * excludeList[MAX_WP_SLOTS] = {0};
@@ -1272,7 +1274,7 @@ ErrExit:
 static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPointTrigger_t *wpt, void * context, int me){
     //struct perf_event_mmap_page * b = wpi->mmapBuffer;
     struct perf_event_header hdr;
-   //fprintf(stderr, "in CollectWatchPointTriggerInfo\n");
+   //fprintf(stderr, "in CollectWatchPointTriggerInfoShared in thread %d\n", me);
     if (ReadMampBuffer(wpi->mmapBuffer, &hdr, sizeof(struct perf_event_header)) < 0) {
         EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
         monitor_real_abort();
@@ -1326,6 +1328,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
                 assert(wpConfig.isLBREnabled==false);
                 // Fall back to old scheme of disassembling and capturing the info
                 if(wpConfig.dontFixIP == false) {
+		    fprintf(stderr, "wpConfig.dontFixIP is false\n");
                     patchedIP = GetPatchedIPShared(contextIP, me);
                     if(!IsPCSane(contextIP, patchedIP)) {
                         threadDataTable.hashTable[me].numInsaneIP ++;
@@ -1334,6 +1337,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
                     }
                     reliableIP = patchedIP;
                 }else {
+		    fprintf(stderr, "wpConfig.dontFixIP is true\n");
                     // Fake as requested by Xu for reuse clients
                     reliableIP = contextIP-1;
                 }
@@ -1342,6 +1346,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
             wpt->pc = reliableIP;
             
             if(wpConfig.dontDisassembleWPAddress == false){
+		//fprintf(stderr, "wpConfig.dontDisassembleWPAddress is false\n");
                 FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
                 if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
                     //EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
@@ -1440,6 +1445,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     //find which watchpoint fired
     FdData_t fdData = fdDataGet(info->si_fd);
     if(event_type == WP_REUSE_MT) {
+	    //fprintf(stderr, "numWatchpointTriggers is incremented in WP_REUSE_MT\n");
 	    threadDataTable.hashTable[fdData.tid].numWatchpointTriggers++;
             //threadData = threadDataTable.hashTable[fdData.tid];
     }
@@ -1451,7 +1457,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     if(event_type == WP_REUSE_MT) {
     	for(int i = 0 ; i < wpConfig.maxWP; i++) {
         	if((threadDataTable.hashTable[fdData.tid].watchPointArray[i].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle)) {
-            		location = i;
+            		//fprintf(stderr, "location is found in WP_REUSE_MT\n");
+			location = i;
             		break;
         	}
     	}
@@ -1489,6 +1496,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     // WP_REUSE_MT until here
     WatchPointInfo_t *wpi;
     if(event_type == WP_REUSE_MT) {
+	//fprintf(stderr, "numWatchpointTriggers is incremented in WP_REUSE_MT\n");
 	wpi = &threadDataTable.hashTable[fdData.tid].watchPointArray[location];
     } else {
     	wpi = &tData.watchPointArray[location];
@@ -1529,6 +1537,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     if( false == info_retrieved) {
 	//fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
 	if(event_type == WP_REUSE_MT) {
+		fprintf(stderr, "numWatchpointDropped in WP_REUSE_MT\n");
         	threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
 	}
 	else {
@@ -1539,6 +1548,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     } else {
 	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
 	if(event_type == WP_REUSE_MT) {
+		//fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
                 threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
 		retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
         }
@@ -1731,6 +1741,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 
 
 bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
+    //fprintf(stderr, "in SubscribeWatchpointShared\n");
     sub_wp_count1++;
     if(ValidateWPData(sampleData) == false) {
         return false;

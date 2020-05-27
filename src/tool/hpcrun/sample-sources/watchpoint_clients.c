@@ -2548,7 +2548,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 }
 
 static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in MtReuseWPCallback\n");
+  //fprintf(stderr, "in ReuseMtWPCallback\n");
   trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
