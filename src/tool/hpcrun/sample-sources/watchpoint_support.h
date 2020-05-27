@@ -130,6 +130,7 @@ typedef struct WatchPointInfo{
     uint8_t value[MAX_WP_LENGTH]; // value
     void * mmapBuffer;
     uint64_t bulletinBoardTimestamp;
+    int trap_origin_tid;
 } WatchPointInfo_t;
 
 // Data structure that is captured when a WP triggers

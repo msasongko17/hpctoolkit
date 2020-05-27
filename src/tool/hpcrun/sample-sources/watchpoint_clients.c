@@ -199,6 +199,8 @@ int curWatermarkId = 0;
 int watermark_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
 int pebs_metric_id[NUM_WATERMARK_METRICS] = {-1, -1, -1, -1};
 
+extern int global_thread_count;
+
 extern long load_and_store_all_load;
 extern long load_and_store_all_store;
 extern long store_all_store;
@@ -2548,7 +2550,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 }
 
 static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseMtWPCallback\n");
+  fprintf(stderr, "in ReuseMtWPCallback, handler at thread %d due to trap at thread %d\n", TD_GET(core_profile_trace_data.id), wpi->trap_origin_tid);
   trap_count++;
   #if 0  // jqswang:TODO, how to handle it?
     if(!wt->pc) {
@@ -4558,12 +4560,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   sd.sampleTime=curTime;
 	   sd.prevStoreAccess = storeLastTime;
 	   sd.expirationPeriod=(curTime - lastTime);
+	   sd.first_accessing_tid = me;
 	   prev_event_count = pmu_counter;
 
 	   //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 	   wp_arming_count++;
            //SubscribeWatchpoint(&sd, OVERWRITE, false );
-	   SubscribeWatchpointShared(&sd, OVERWRITE, false, me );
+	   SubscribeWatchpointShared(&sd, OVERWRITE, false, (me + 1) % global_thread_count);
 	//fprintf(stderr, "here6\n");
 	lastTime = curTime;
     }

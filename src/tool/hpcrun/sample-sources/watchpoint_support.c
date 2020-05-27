@@ -441,7 +441,9 @@ static void InitConfig(){
         wpConfig.dontDisassembleWPAddress = false;
     }
 
-    
+    for(int i = 0; i < 503; i++) {
+	    threadDataTable.hashTable[i].os_tid = -1;
+    } 
     
 }
 
@@ -598,7 +600,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 
 	int idx = fdDataInsert(perf_fd, fown_ex.pid, TD_GET(core_profile_trace_data.id));
 	//fdDataTablePrettyPrints();
-	printf("in fd table, fd: %d, os_tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid);
+	fprintf(stderr, "in fd table, fd: %d, os_tid: %d, tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid, TD_GET(core_profile_trace_data.id));
     }
     
     wp_active++;
@@ -609,6 +611,103 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
 }
 
+static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleData, int tid, bool modify) {
+    // Perf event settings
+    create_wp_count++;
+    struct perf_event_attr pe = {
+        .type                   = PERF_TYPE_BREAKPOINT,
+        .size                   = sizeof(struct perf_event_attr),
+        //        .bp_type                = HW_BREAKPOINT_W,
+        //        .bp_len                 = HW_BREAKPOINT_LEN_4,
+        .sample_period          = 1,
+        .precise_ip             = wpConfig.isLBREnabled? 2 /*precise_ip 0 skid*/ : 0 /* arbitraty skid */,
+        .sample_type            = (PERF_SAMPLE_IP),
+        .exclude_user           = 0,
+        .exclude_kernel         = 1,
+        .exclude_hv             = 1,
+        .disabled               = 0, /* enabled */
+    };
+
+    switch (sampleData->wpLength) {
+        case 1: pe.bp_len = HW_BREAKPOINT_LEN_1; break;
+        case 2: pe.bp_len = HW_BREAKPOINT_LEN_2; break;
+        case 4: pe.bp_len = HW_BREAKPOINT_LEN_4; break;
+        case 8: pe.bp_len = HW_BREAKPOINT_LEN_8; break;
+        default:
+            EMSG("Unsupported .bp_len %d: %s\n", wpi->sample.wpLength,strerror(errno));
+            monitor_real_abort();
+    }
+    pe.bp_addr = (uintptr_t)sampleData->va;
+
+    switch (sampleData->type) {
+        case WP_READ: pe.bp_type = HW_BREAKPOINT_R; break;
+        case WP_WRITE: pe.bp_type = HW_BREAKPOINT_W; break;
+        default: pe.bp_type = HW_BREAKPOINT_W | HW_BREAKPOINT_R;
+    }
+
+#if defined(FAST_BP_IOC_FLAG)
+   if(modify) {
+        // modification
+        assert(wpi->fileHandle != -1);
+        assert(wpi->mmapBuffer != 0);
+        //DisableWatchpoint(wpi);
+        fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
+        //create_wp_count++;
+        CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
+        //if(wpi->isActive == false) {
+        //EnableWatchpoint(wpi->fileHandle);
+        //}
+    } else 
+#endif
+    if (threadDataTable.hashTable[tid].os_tid != -1) { 
+  // check if os_tid is available here  
+	//create_wp_count++;
+        // fresh creation
+        // Create the perf_event for this thread on all CPUs with no event group
+        fprintf(stderr, "watchpoint is created with perf_event_open\n");
+	int perf_fd = perf_event_open(&pe, threadDataTable.hashTable[tid].os_tid, -1, -1 /*group*/, 0);
+        if (perf_fd == -1) {
+            EMSG("Failed to open perf event file: %s\n",strerror(errno));
+            monitor_real_abort();
+        }
+        // Set the perf_event file to async mode
+        CHECK(fcntl(perf_fd, F_SETFL, fcntl(perf_fd, F_GETFL, 0) | O_ASYNC));
+
+        // Tell the file to send a signal when an event occurs
+        CHECK(fcntl(perf_fd, F_SETSIG, wpConfig.signalDelivered));
+
+        // Deliver the signal to this thread
+        struct f_owner_ex fown_ex;
+        fown_ex.type = F_OWNER_TID;
+        fown_ex.pid  = gettid();
+        int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
+        if (ret == -1){
+            EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
+            return;
+        }
+
+
+        //       CHECK(fcntl(perf_fd, F_SETOWN, gettid()));
+
+        wpi->fileHandle = perf_fd;
+	// insert to perf_fd - tid table here
+        // mmap the file if lbr is enabled
+        if(wpConfig.isLBREnabled) {
+            wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
+        }
+
+	int idx = fdDataInsert(perf_fd, threadDataTable.hashTable[tid].os_tid, tid);
+	//fdDataTablePrettyPrints();
+	fprintf(stderr, "in fd table, fd: %d, os_tid: %d, tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid, tid);
+
+   }
+    wp_active++;
+    wpi->isActive = true;
+    wpi->va = (void *) pe.bp_addr;
+    wpi->sample = *sampleData;
+    wpi->startTime = rdtsc();
+    //wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
+}
 
 /* create a dummy PERF_TYPE_HARDWARE event that will never fire */
 static void CreateDummyHardwareEvent(void) {
@@ -673,6 +772,26 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
         DisArm(wpi);
     }
     CreateWatchPoint(wpi, sampleData, false);
+    return true;
+}
+
+static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleData, int tid) {
+    // if WP modification is suppoted use it
+    //void * cacheLineBaseAddress = (void *) ((uint64_t)((size_t)sampleData->va) & (~(64-1)));
+    arm_wp_count++;
+    if(wpConfig.isWPModifyEnabled){
+        // Does not matter whether it was active or not.
+        // If it was not active, enable it.
+        if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
+            CreateWatchPointShared(wpi, sampleData, tid, true);
+            return true;
+        }
+    }
+    // disable the old WP if active
+    if(wpi->isActive) {
+        DisArm(wpi);
+    }
+    CreateWatchPointShared(wpi, sampleData, tid, false);
     return true;
 }
 
@@ -1426,7 +1545,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     // if the trap is already in hpcrun, return
     // If the interrupt came from inside our code, then drop the sample
     // and return and avoid any MSG.
-    //fprintf(stderr, "in OnWatchpoint\n");
+    fprintf(stderr, "in OnWatchpoint\n");
     linux_perf_events_pause();
     wp_count++;
     void* pc = hpcrun_context_pc(context);
@@ -1436,6 +1555,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     }
     wp_count1++;
 
+    fprintf(stderr, "in OnWatchpoint, signal due to fd: %d\n", info->si_fd);
     //ThreadData_t threadData;
     //linux_perf_events_pause();
      
@@ -1453,11 +1573,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 	    tData.numWatchpointTriggers++;
             //threadData = tData;
     }
+    fprintf(stderr, "in OnWatchpoint, signal due to fd: %d, in thread %d due to wp trap at thread %d\n", info->si_fd, TD_GET(core_profile_trace_data.id), fdData.tid);
     int location = -1;
     if(event_type == WP_REUSE_MT) {
     	for(int i = 0 ; i < wpConfig.maxWP; i++) {
+		fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
         	if((threadDataTable.hashTable[fdData.tid].watchPointArray[i].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle)) {
-            		//fprintf(stderr, "location is found in WP_REUSE_MT\n");
+            		fprintf(stderr, "location is found in WP_REUSE_MT\n");
 			location = i;
             		break;
         	}
@@ -1473,6 +1595,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     //fprintf(stderr, "in OnWatchpoint at this point\n");
     // Ensure it is an active WP
     if(location == -1) {
+	fprintf(stderr, "location is not found\n");
 	// before
 	//for(int i = 0 ; i < wpConfig.maxWP; i++) {
         	//if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
@@ -1548,7 +1671,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     } else {
 	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
 	if(event_type == WP_REUSE_MT) {
-		//fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
+		fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
+		wpi->trap_origin_tid = fdData.tid;
                 threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
 		retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
         }
@@ -1664,7 +1788,7 @@ static bool IsOveralppedShared(SampleData_t * sampleData, int me){
     ThreadData_t threadData = threadDataTable.hashTable[me];
     for (int i = 0;  i < wpConfig.maxWP; i++) {
         if(threadData.watchPointArray[i].isActive){
-            if(ADDRESSES_OVERLAP(threadData.watchPointArray[i].sample.va, threadData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
+            if(ADDRESSES_OVERLAP(threadData.watchPointArray[i].sample.va, threadData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength) && (threadData.watchPointArray[i].sample.first_accessing_tid == sampleData->first_accessing_tid)){
 	
 	    //fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
 	    overlap_count++;    
@@ -1741,17 +1865,20 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 
 
 bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
-    //fprintf(stderr, "in SubscribeWatchpointShared\n");
+    fprintf(stderr, "in SubscribeWatchpointShared, wp of thread %d is armed by thread %d\n", me, TD_GET(core_profile_trace_data.id));
     sub_wp_count1++;
     if(ValidateWPData(sampleData) == false) {
         return false;
     }
     //sub_wp_count2++;
+    int tid = TD_GET(core_profile_trace_data.id);
+    //if(event_type != WP_REUSE_MT) {
     if(IsOveralppedShared(sampleData, me)){
-        return false; // drop the sample if it overlaps an existing address
+    	return false; // drop the sample if it overlaps an existing address
     }
+    //}
     sub_wp_count2++;
-
+    // until here
     // No overlap, look for a victim slot
     //if((threadDataTable.hashTable[me].counter & 1) == 0)
     //printf("before accessing shared data\n");
@@ -1769,6 +1896,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
     int victimLocation = -1;
     // Find a slot to install WP
     //VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
+    fprintf(stderr, "before loop\n");
     ThreadData_t threadData = threadDataTable.hashTable[me];
     do {
             uint64_t theCounter = threadDataTable.hashTable[me].counter;
@@ -1789,12 +1917,13 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
         		//printf("and this region\n");
 			//printf("arming watchpoints\n");
 			//fprintf(stderr, "watchpoint is armed\n");
-        		if(ArmWatchPoint(&threadDataTable.hashTable[me].watchPointArray[victimLocation]/*&tData.watchPointArray[victimLocation]*/ , sampleData) == false){
+        		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation]/*&tData.watchPointArray[victimLocation]*/ , sampleData, me) == false){
             			//LOG to hpcrun log
             			EMSG("ArmWatchPoint failed for address %p", sampleData->va);
 				threadDataTable.hashTable[me].counter++;
             			return false;
         		}
+			fprintf(stderr, "watchpoint is successfully armed\n");
 			threadDataTable.hashTable[me].counter++;
         		return true;
     		}
@@ -1803,6 +1932,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		break;
             }
     } while(1);
+    fprintf(stderr, "after loop\n");
     return false;
 }
 
