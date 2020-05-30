@@ -2584,6 +2584,14 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
      //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
      //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
      //before
+     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
+    //Increment of reuse distance with distance rd is the number of samples
+    // in the context since the last WP trap multiplied by sample period
+    uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+    uint64_t inc = numDiffSamples;
+
+     fprintf(stderr, "frequency or detected reuse distance: %ld\n", inc);
      bool reuse_flag = false;
      uint64_t reuseMtIdx = reuseMtIndexGet(wpi->sample.sampleTime);
      if((reuseMtBulletinBoard.hashTable[reuseMtIdx].time == wpi->sample.sampleTime) && (reuseMtBulletinBoard.hashTable[reuseMtIdx].tid == wpi->sample.first_accessing_tid)) {
@@ -2594,8 +2602,31 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 			     reuse_flag = true;
 		     }
 		     else {
+			     int max_thread_num = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
+                                if(max_thread_num < wpi->trap_origin_tid)
+                                {
+                                        max_thread_num = wpi->trap_origin_tid;
+                                }
+                                if(as_matrix_size < max_thread_num)
+                                {
+                                        as_matrix_size =  max_thread_num;
+                                }
 			     reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-			     fprintf(stderr, "a communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+			     if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
+				     fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc);
+				     if(inc == 0) {
+					     inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+					     //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
+				     }
+				     invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
+			     } else {
+				     fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc);
+			     }
+			     if(inc == 0) {
+				     inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+				     //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
+                             }
+			     as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
 		     }
 		     //prettyPrintReuseMtHash();
 	     } else {
@@ -2638,12 +2669,12 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
      }
     // Report a reuse
     // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
-    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    /*double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
     //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
     //Increment of reuse distance with distance rd is the number of samples 
     // in the context since the last WP trap multiplied by sample period
     uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    uint64_t inc = numDiffSamples;
+    uint64_t inc = numDiffSamples;*/
     //fprintf(stderr, "inc: %ld\n", inc);
     int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
@@ -4383,7 +4414,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   // detect communication here
 	   // before
 	   //ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
-	   ReuseBBEntry_t prev_access;
+	   /*ReuseBBEntry_t prev_access;
 	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
            if(item_not_found_flag == 0) {
 		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
@@ -4406,9 +4437,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 				//fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
 				invalidation_matrix[prev_access.tid][me] += (double) metricThreshold;
-			} /* else {
-				fprintf(stderr, "there is an inter-thread communication, but no invalidation\n");
-			}*/
+			}
                 	//fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
            	}
                	if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
@@ -4427,14 +4456,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 				//fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
                                 invalidation_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-                        } /*else {
-				fprintf(stderr, "there is an inter-core communication, but no invalidation\n");
-			}*/
+                        }
                		//fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
                 }
-	   }
+	   }*/
 	   // after
-	   if(accessType == STORE || accessType == LOAD_AND_STORE) {
+	   /*if(accessType == STORE || accessType == LOAD_AND_STORE) {
 	   	ReuseBBEntry_t curr_access= {
                 	.time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
                 	.tid=me,
@@ -4454,7 +4481,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		storeLastTime = storeCurTime;
 		//fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
 		//prettyPrintReuseHash();
-	   }
+	   }*/
 	   sd.eventCountBetweenSamples=eventDiff;
 	   sd.timeBetweenSamples=timeDiff;
 	   sd.sampleTime=curTime;
@@ -4465,16 +4492,24 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
 	   //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 	   wp_arming_count++;
-           //SubscribeWatchpoint(&sd, OVERWRITE, false );
-	   //if (me == 0 || me == 2) {
+	   int * idx_array = (int *) calloc (global_thread_count, sizeof(int));
+	   for(int i = 0; i < global_thread_count; i++)
+		   idx_array[i] = i;
+	   for(int i = 0; i < global_thread_count/2; i ++) {
+		   int idx = rdtsc() % global_thread_count;
+		   int tmpVal = idx_array[idx];
+                   idx_array[idx] = idx_array[i];
+                   idx_array[i] = tmpVal;
+	   }
 	   if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me)) {
 		   for(int i = 0; i < global_thread_count; i++)
-			   if(i != me)
-		   		SubscribeWatchpointShared(&sd, OVERWRITE, false, i);
+			   if(idx_array[i] != me)
+		   		SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i]);
 		   fprintf(stderr, "WP subscribing succeeds\n");
 	   } else {
 		   fprintf(stderr, "WP subscribing fails\n");
 	   }
+	   free(idx_array);
 	   //}
 	//fprintf(stderr, "here6\n");
 	lastTime = curTime;
