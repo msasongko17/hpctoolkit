@@ -190,7 +190,7 @@ int reuse_bin_size = 0;
 
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
-ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+ReuseType reuse_profile_type = REUSE_CACHELINE; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
 //#endif
 
@@ -261,6 +261,7 @@ typedef struct WPStats{
 
 __thread WPStats_t wpStats;
 __thread uint64_t prev_event_count = 0;
+__thread double total_detected_rd = 0.0; 
 
 /******************************************************************************
  * macros
@@ -897,6 +898,7 @@ static void ClientTermination(){
 	    fprintf(stderr, "wp_count2: %ld\n", wp_count2);
 	    fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
 	    fprintf(stderr, "wp_active: %ld\n", wp_active);
+	    fprintf(stderr, "total_detected_rd: %0.2lf\n", total_detected_rd);
 
 	    //fprintf(stderr, "in WP_MT_REUSE\n");
             uint64_t val[3];
@@ -1473,6 +1475,7 @@ case WP_MT_REUSE:
                         } else { //default
                                 reuse_output_trace = false;
                                 reuse_bin_start = 67;
+				//reuse_bin_start = 1000;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
                         }
@@ -1930,10 +1933,39 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
-  //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  total_detected_rd += diffWithPeriod.r;
   diff.r = diff.r * proportion;
   cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
   return (uint64_t) (diffWithPeriod.r * proportion);
+}
+
+static inline uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetricId, double proportion){
+  assert(ctxtNode);
+  metric_set_t* set = hpcrun_get_metric_set(ctxtNode);
+  cct_metric_data_t diffWithPeriod;
+  cct_metric_data_t diff;
+  int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
+  hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
+  // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
+  fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  total_detected_rd += diffWithPeriod.r;
+  diff.r = diff.r * proportion;
+  return (uint64_t) (diffWithPeriod.r * proportion);
+}
+
+static inline void ResetWeightedMetric(cct_node_t * ctxtNode, int pebsMetricId, double proportion){
+  assert(ctxtNode);
+  metric_set_t* set = hpcrun_get_metric_set(ctxtNode);
+  cct_metric_data_t diffWithPeriod;
+  cct_metric_data_t diff;
+  int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
+  hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
+  // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
+  //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  //total_detected_rd += diffWithPeriod.r;
+  //diff.r = diff.r * proportion;
+  cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
 }
 
 static void UpdateFoundMetrics(cct_node_t * ctxtNode, cct_node_t * oldNode, void * joinNode, int foundMetric, int foundMetricInc){
@@ -2399,14 +2431,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	     assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
 	     rd += val[i][0];
      }
-    // Report a reuse
-    // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
-    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-    //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
-    //Increment of reuse distance with distance rd is the number of samples 
-    // in the context since the last WP trap multiplied by sample period
-    uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    uint64_t inc = numDiffSamples;
+    
+    uint64_t inc = 0;
     //fprintf(stderr, "inc: %ld\n", inc);
     int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
@@ -2438,13 +2464,21 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
        
 	        //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
 		if(wpi->sample.sampleTime >= prev_access.time) {
-			
+		
+			double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    
+    			uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+    			inc = numDiffSamples;	
 			// after
 			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
+			fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
 			ReuseAddDistance(rd, inc);
+			//ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 			//for(int i = 0; i < reuse_bin_size; i++)
 				//fprintf(stderr, "reuse_bin_pivot_list[%d]: %d\n", i, reuse_bin_pivot_list[i]);
 		} else {
+			//fprintf(stderr, "it falls to this region because prev_access.time - wpi->sample.sampleTime: %ld, prev_access.time: %ld, wpi->sample.sampleTime: %ld\n", prev_access.time - wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime);
+			
 			double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 			// validate the invalidation by checking the execution time
                         if((me != prev_access.tid) && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)/*wpi->sample.expirationPeriod*/)) {
@@ -2503,7 +2537,13 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		}
            } else {
 		   //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
+		   double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+
+                   uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+                   inc = numDiffSamples;
+		   fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
 		   ReuseAddDistance(rd, inc);
+		   //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 	   }
 
 	   if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
@@ -4137,7 +4177,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                 isProfileSpatial = true;
 		//fprintf(stderr, "spatial reuse distance\n");
         } else if (reuse_profile_type == REUSE_BOTH){
-		//fprintf(stderr, "50 50\n");
+		fprintf(stderr, "50 50\n");
                 isProfileSpatial = (rdtsc() & 1);
         } else {
 		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -4151,7 +4191,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	//fprintf(stderr, "here2 data_addr: %lx\n", (uint64_t) data_addr);
 	if(reuse_profile_type != REUSE_CACHELINE) {
 	if (isProfileSpatial) {// detect spatial reuse
-		//fprintf(stderr, "spatial reuse distance is searched\n");
+		fprintf(stderr, "spatial reuse distance is searched\n");
                 int wpSizes[] = {8, 4, 2, 1};
                 FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
                 int numFSLocs = 0;
@@ -4175,7 +4215,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 #endif
                 }
             } else {
-		//fprintf(stderr, "temporal reuse distance is searched\n");
+		fprintf(stderr, "temporal reuse distance is searched\n");
                 sd.va = data_addr;
                 sd.reuseType = REUSE_TEMPORAL;
 		//fprintf(stderr, "REUSE_TEMPORAL is activated\n");
@@ -4505,9 +4545,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		   for(int i = 0; i < global_thread_count; i++)
 			   if(idx_array[i] != me)
 		   		SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i]);
-		   fprintf(stderr, "WP subscribing succeeds\n");
+		   //fprintf(stderr, "WP subscribing succeeds\n");
 	   } else {
-		   fprintf(stderr, "WP subscribing fails\n");
+		   //fprintf(stderr, "WP subscribing fails\n");
 	   }
 	   free(idx_array);
 	   //}
