@@ -1901,7 +1901,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
             EMSG("ArmWatchPoint failed for address %p", sampleData->va);
             return false;
         }
-	fprintf(stderr, "subscribing succeeds\n");
+	//fprintf(stderr, "subscribing succeeds\n");
         return true;
     }
     none_available_count++;

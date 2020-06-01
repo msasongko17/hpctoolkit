@@ -190,7 +190,7 @@ int reuse_bin_size = 0;
 
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
-ReuseType reuse_profile_type = REUSE_CACHELINE; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
 //#endif
 
@@ -1474,7 +1474,7 @@ case WP_MT_REUSE:
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 67;
+                                reuse_bin_start = 97;
 				//reuse_bin_start = 1000;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
@@ -1933,7 +1933,7 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
-  fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   total_detected_rd += diffWithPeriod.r;
   diff.r = diff.r * proportion;
   cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
@@ -2471,7 +2471,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     			inc = numDiffSamples;	
 			// after
 			//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
-			fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+			//fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
 			ReuseAddDistance(rd, inc);
 			//ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 			//for(int i = 0; i < reuse_bin_size; i++)
@@ -2541,7 +2541,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
                    uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
                    inc = numDiffSamples;
-		   fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+		   //fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
 		   ReuseAddDistance(rd, inc);
 		   //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 	   }
@@ -4215,7 +4215,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 #endif
                 }
             } else {
-		fprintf(stderr, "temporal reuse distance is searched\n");
+		//fprintf(stderr, "temporal reuse distance is searched\n");
                 sd.va = data_addr;
                 sd.reuseType = REUSE_TEMPORAL;
 		//fprintf(stderr, "REUSE_TEMPORAL is activated\n");
