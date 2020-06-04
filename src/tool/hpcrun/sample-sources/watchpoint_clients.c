@@ -531,7 +531,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
         int index = FindReuseBinIndex(distance);
         reuse_bin_list[index] += inc;
-	//fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+	fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 #endif
 
@@ -1474,7 +1474,7 @@ case WP_MT_REUSE:
                                 }
                         } else { //default
                                 reuse_output_trace = false;
-                                reuse_bin_start = 97;
+                                reuse_bin_start = 1100000;
 				//reuse_bin_start = 1000;
                                 reuse_bin_ratio = 2;
 				fprintf(stderr, "default configuration is applied\n");
