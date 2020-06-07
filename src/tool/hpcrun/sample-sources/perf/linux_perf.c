@@ -173,6 +173,10 @@ struct event_threshold_s {
   enum threshold_e threshold_type;
 };
 
+struct event_fd_list {
+	int fds[2];
+} event_fd_array[503];
+
 //******************************************************************************
 // forward declarations 
 //******************************************************************************
@@ -894,13 +898,18 @@ METHOD_FN(gen_event_set, int lush_metrics)
   // if an event cannot be initialized, we still keep it in our list
   //  but there will be no samples
 
+  fprintf(stderr, "gen_event_set is called by thread %d\n", TD_GET(core_profile_trace_data.id));
   for (int i=0; i<nevents; i++)
   {
     // initialize this event. If it's valid, we set the metric for the event
     if (!perf_thread_init( &(event_desc[i]), &(event_thread[i])) ) {
       TMSG(LINUX_PERF, "FAIL to initialize %s", event_desc[i].metric_desc->name);
     }
+    fprintf(stderr, "gen_event_set in thread %d creates events %d\n", TD_GET(core_profile_trace_data.id), event_thread[i].fd);
   }
+  event_fd_array[TD_GET(core_profile_trace_data.id)].fds[0] = event_thread[0].fd;
+
+  event_fd_array[TD_GET(core_profile_trace_data.id)].fds[1] = event_thread[1].fd;
 
   TMSG(LINUX_PERF, "gen_event_set OK");
 }
@@ -1001,6 +1010,12 @@ void linux_perf_events_resume(){
   perf_start_all(nevents, event_thread);
 }
 
+void linux_perf_events_events_of_thread(int idx){
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+  fprintf(stderr, "in thread %d, fd1: %d\n", idx, event_fd_array[idx].fds[0]);
+  fprintf(stderr, "in thread %d, fd2: %d\n", idx, event_fd_array[idx].fds[1]);
+}
 
 // OUTPUT: val, it is a uint64_t array and has at least 3 elements.
 // For a counting event, val[0] is the actual value read from counter; val[1] is the time enabling; val[2] is time running

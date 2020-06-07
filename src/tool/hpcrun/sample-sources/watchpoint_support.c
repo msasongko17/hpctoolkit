@@ -1884,6 +1884,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     // No overlap, look for a victim slot
     int victimLocation = -1;
     // Find a slot to install WP
+    linux_perf_events_events_of_thread(TD_GET(core_profile_trace_data.id));
     VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
     sub_wp_count3++;
     if(r != NONE_AVAILABLE) {
