@@ -1010,11 +1010,26 @@ void linux_perf_events_resume(){
   perf_start_all(nevents, event_thread);
 }
 
-void linux_perf_events_events_of_thread(int idx){
+void linux_perf_events_other_thread_pause(int idx){
   sample_source_t *self = &obj_name();
   event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
-  fprintf(stderr, "in thread %d, fd1: %d\n", idx, event_fd_array[idx].fds[0]);
-  fprintf(stderr, "in thread %d, fd2: %d\n", idx, event_fd_array[idx].fds[1]);
+  //fprintf(stderr, "in thread %d, fd1: %d\n", idx, event_fd_array[idx].fds[0]);
+  //fprintf(stderr, "in thread %d, fd2: %d\n", idx, event_fd_array[idx].fds[1]);
+  int i;
+  for(i=0; i < 2; i++) {
+    ioctl(event_fd_array[idx].fds[i], PERF_EVENT_IOC_DISABLE, 0);
+  }
+}
+
+void linux_perf_events_other_thread_resume(int idx){
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+  //fprintf(stderr, "in thread %d, fd1: %d\n", idx, event_fd_array[idx].fds[0]);
+  //fprintf(stderr, "in thread %d, fd2: %d\n", idx, event_fd_array[idx].fds[1]);
+  int i;
+  for(i=0; i < 2; i++) {
+    ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
+  }
 }
 
 // OUTPUT: val, it is a uint64_t array and has at least 3 elements.

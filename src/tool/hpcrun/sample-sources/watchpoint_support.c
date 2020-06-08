@@ -1696,6 +1696,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 	FdData_t fdData = fdDataGet(info->si_fd);
 
 	int me = fdData.tid;
+
+	// pause counters of the other thread here
+	//linux_perf_events_other_thread_pause(me);
+
 	int loop_counter = 0;
     	do {
             //uint64_t theCounter = threadDataTable.hashTable[me].counter;
@@ -1721,6 +1725,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         	EMSG("\n WP trigger did not match any known active WP\n");
         	//monitor_real_abort();
 		threadDataTable.hashTable[me].counter++;
+		//linux_perf_events_other_thread_resume(me);
         	hpcrun_safe_exit();
         	linux_perf_events_resume();
         	//fprintf("\n WP trigger did not match any known active WP\n");
@@ -1815,6 +1820,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                     break;
     } while(1);
 
+	//linux_perf_events_other_thread_resume(me);
     }
     //    hpcrun_all_sources_start();
     //linux_perf_events_resume();
