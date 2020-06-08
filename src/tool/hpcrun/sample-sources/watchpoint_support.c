@@ -675,7 +675,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
         assert(wpi->fileHandle != -1);
         assert(wpi->mmapBuffer != 0);
         //DisableWatchpoint(wpi);
-        fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG in thread %d, modify: %d\n", TD_GET(core_profile_trace_data.id), modify);
+        //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG in thread %d, modify: %d\n", TD_GET(core_profile_trace_data.id), modify);
         //create_wp_count++;
         CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
         //if(wpi->isActive == false) {
@@ -724,7 +724,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
             wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
         }
 
-	fprintf(stderr, "perf_event_open has been used successfully\n");
+	//fprintf(stderr, "perf_event_open has been used successfully\n");
 	int idx = fdDataInsert(perf_fd, threadDataTable.hashTable[tid].os_tid, tid);
 	//fdDataTablePrettyPrints();
 	//fprintf(stderr, "in fd table, fd: %d, os_tid: %d, tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid, tid);
@@ -779,7 +779,7 @@ static void CloseDummyHardwareEvent(int perf_fd){
 static void DisArm(WatchPointInfo_t * wpi){
     
     //    assert(wpi->isActive);
-    fprintf(stderr, "watchpoint is disarmed\n");
+    //fprintf(stderr, "watchpoint is disarmed\n");
     assert(wpi->fileHandle != -1);
     
     if(wpi->mmapBuffer)
@@ -1716,7 +1716,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     	for(int i = 0 ; i < wpConfig.maxWP; i++) {
                 //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
                 if((threadDataTable.hashTable[fdData.tid].watchPointArray[i].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle)) {
-                        fprintf(stderr, "location is found in WP_REUSE_MT\n");
+                        //fprintf(stderr, "location is found in WP_REUSE_MT\n");
                         location = i;
                         break;
                 }
@@ -1758,13 +1758,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     	}
 
     	if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, fdData.tid)) {
-		fprintf(stderr, "numWatchpointDropped in WP_REUSE_MT\n");
+		//fprintf(stderr, "numWatchpointDropped in WP_REUSE_MT\n");
         	threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
         	retVal = DISABLE_WP; // disable if unable to collect any info.
         	wp_dropped++;
     	} else {
         	//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
-		fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
+		//fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
 		wpi->trap_origin_tid = fdData.tid;
 		threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
 		retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength,  &wpt);
@@ -2117,7 +2117,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     // No overlap, look for a victim slot
     int victimLocation = -1;
     // Find a slot to install WP
-    linux_perf_events_events_of_thread(TD_GET(core_profile_trace_data.id));
+    //linux_perf_events_events_of_thread(TD_GET(core_profile_trace_data.id));
     VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
     sub_wp_count3++;
     if(r != NONE_AVAILABLE) {
@@ -2191,7 +2191,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                     continue;
 	    }*/
 
-        fprintf(stderr, "in SubscribeWatchpointShared\n");
+        //fprintf(stderr, "in SubscribeWatchpointShared\n");
 	if ((threadDataTable.hashTable[me].os_tid != -1) && ((threadDataTable.hashTable[me].counter & 1) == 0)) {
 		uint64_t theCounter = threadDataTable.hashTable[me].counter;
 
@@ -2209,7 +2209,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
        	 		// I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
         		//printf("and this region\n");
 			//printf("arming watchpoints\n");
-			fprintf(stderr, "watchpoint is about to be armed in ArmWatchPointShared\n");
+			//fprintf(stderr, "watchpoint is about to be armed in ArmWatchPointShared\n");
 			//if(TD_GET(core_profile_trace_data.id) != 3) {
         		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
             			//LOG to hpcrun log
