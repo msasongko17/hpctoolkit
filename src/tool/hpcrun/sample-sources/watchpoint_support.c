@@ -266,9 +266,10 @@ bool IsFSorGS(void * addr) {
 //    return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
 //}
 
+/*
 static pid_t gettid() {
     return syscall(__NR_gettid);
-}
+}*/
 
 
 static inline void EnableWatchpoint(int fd) {
@@ -603,7 +604,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
         // Deliver the signal to this thread
         struct f_owner_ex fown_ex;
         fown_ex.type = F_OWNER_TID;
-        fown_ex.pid  = gettid();
+        fown_ex.pid  = syscall(__NR_gettid); //gettid();
         int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
         if (ret == -1){
             EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
@@ -706,7 +707,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
         // Deliver the signal to this thread
         struct f_owner_ex fown_ex;
         fown_ex.type = F_OWNER_TID;
-        fown_ex.pid  = gettid();
+        fown_ex.pid  = syscall(__NR_gettid); //gettid();
         int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
         if (ret == -1){
             EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
@@ -884,7 +885,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
         CreateDummyHardwareEvent();
     }
 
-    tData.os_tid = gettid();
+    tData.os_tid = syscall(__NR_gettid); //gettid();
 
     tData.counter = 0;
     threadDataTable.hashTable[me] = tData;
