@@ -1,3 +1,9 @@
+Requirements
+============
+To run perf_event_open system call without having to use sudo access,
+set the value of perf_event_paranoid to -1 by typing the following command:
+sudo sysctl -w kernel.perf_event_paranoid=-1
+
 Usage
 =====
 1. To run ComDetective with default configuration (sampling period: 500K, bulletin board size: 127, number of watchpoints: 4, and name of output folder "<timestamp>_timestamped_results"):
