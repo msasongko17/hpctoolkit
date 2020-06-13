@@ -129,27 +129,27 @@ extern double waw_cache_line_transfer_millions;
 extern double waw_cache_line_transfer_gbytes;
 
 typedef struct SharedEntry{
-  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
-  uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
-  int64_t expiration_period;
-  int tid;
-  int core_id;
-  long prev_transfer_counter;
-  WatchPointType wpType;
-  AccessType accessType;
-  SampleType sampleType;
-  void *address;
-  void *cacheLineBaseAddress; 
-  int accessLen;
-  cct_node_t * node;
-  volatile uint64_t matrix_counter __attribute__((aligned(CACHE_LINE_SZ))); 
-  char dummy[CACHE_LINE_SZ];
+	volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+	uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
+	int64_t expiration_period;
+	int tid;
+	int core_id;
+	long prev_transfer_counter;
+	WatchPointType wpType;
+	AccessType accessType;
+	SampleType sampleType;
+	void *address;
+	void *cacheLineBaseAddress; 
+	int accessLen;
+	cct_node_t * node;
+	volatile uint64_t matrix_counter __attribute__((aligned(CACHE_LINE_SZ))); 
+	char dummy[CACHE_LINE_SZ];
 } SharedEntry_t;
 
 typedef struct hashTableStruct{
-  volatile uint64_t counter __attribute__((aligned(64)));
-  struct SharedEntry hashTable[503];
-  //struct SharedData * hashTable;
+	volatile uint64_t counter __attribute__((aligned(64)));
+	struct SharedEntry hashTable[503];
+	//struct SharedData * hashTable;
 } HashTable_t;
 
 extern HashTable_t bulletinBoard;
