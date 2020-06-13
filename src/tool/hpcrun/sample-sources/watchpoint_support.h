@@ -89,71 +89,71 @@ typedef enum ReuseType { REUSE_TEMPORAL, REUSE_SPATIAL, REUSE_BOTH, REUSE_CACHEL
 
 // Data structure that is given by clients to set a WP
 typedef struct SampleData{
-    void * va; // access virtual address
-    void * target_va; // access virtual address
-    int wpLength; // wp length
-    int accessLength; // access length
-    int numFSLocs;
-    int sampledMetricId;
-    int first_accessing_tid;
-    int first_accessing_core_id;
-    uint64_t bulletinBoardTimestamp;
-    uint64_t prevStoreAccess;
-    uint64_t expirationPeriod;
-    AccessType accessType; // load or store
-    AccessType samplerAccessType;
-    SampleType sampleType;
-    union {
-        void * node;
-        cct_addr_t * bt;
-    };
-    WatchPointType type;
-    void * dataObject;
-    WPTriggerActionType preWPAction;
-    bool isSamplePointAccurate;
-    bool isBackTrace;
-    ReuseType reuseType;
-    uint64_t eventCountBetweenSamples;
-    uint64_t timeBetweenSamples;
-    uint64_t reuseDistance[2][3];
-    uint64_t sampleTime;
+	void * va; // access virtual address
+	void * target_va; // access virtual address
+	int wpLength; // wp length
+	int accessLength; // access length
+	int numFSLocs;
+	int sampledMetricId;
+	int first_accessing_tid;
+	int first_accessing_core_id;
+	uint64_t bulletinBoardTimestamp;
+	uint64_t prevStoreAccess;
+	uint64_t expirationPeriod;
+	AccessType accessType; // load or store
+	AccessType samplerAccessType;
+	SampleType sampleType;
+	union {
+		void * node;
+		cct_addr_t * bt;
+	};
+	WatchPointType type;
+	void * dataObject;
+	WPTriggerActionType preWPAction;
+	bool isSamplePointAccurate;
+	bool isBackTrace;
+	ReuseType reuseType;
+	uint64_t eventCountBetweenSamples;
+	uint64_t timeBetweenSamples;
+	uint64_t reuseDistance[2][3];
+	uint64_t sampleTime;
 } SampleData_t;
 
 typedef struct WatchPointInfo{
-    SampleData_t sample;
+	SampleData_t sample;
 
-    void * va; // access virtual address
-    void * cacheline_va;
-    int64_t startTime;
-    int fileHandle;
-    bool isActive;
-    uint8_t value[MAX_WP_LENGTH]; // value
-    void * mmapBuffer;
-    uint64_t bulletinBoardTimestamp;
+	void * va; // access virtual address
+	void * cacheline_va;
+	int64_t startTime;
+	int fileHandle;
+	bool isActive;
+	uint8_t value[MAX_WP_LENGTH]; // value
+	void * mmapBuffer;
+	uint64_t bulletinBoardTimestamp;
 } WatchPointInfo_t;
 
 // Data structure that is captured when a WP triggers
 typedef struct WatchPointTrigger{
-    void * va;
-    void * ctxt;
-    void * pc;
-    FloatType floatType;
-    AccessType accessType;
-    int accessLength; // access length
+	void * va;
+	void * ctxt;
+	void * pc;
+	FloatType floatType;
+	AccessType accessType;
+	int accessLength; // access length
 } WatchPointTrigger_t;
 
 // Data structure that is maintained per WP armed
 
 typedef struct WPConfig {
-    bool dontFixIP;
-    bool dontDisassembleWPAddress;
-    bool isLBREnabled;
-    bool isWPModifyEnabled;
-    bool getFloatType;
-    int signalDelivered;
-    size_t pgsz;
-    ReplacementPolicy replacementPolicy;
-    int maxWP;
+	bool dontFixIP;
+	bool dontDisassembleWPAddress;
+	bool isLBREnabled;
+	bool isWPModifyEnabled;
+	bool getFloatType;
+	int signalDelivered;
+	size_t pgsz;
+	ReplacementPolicy replacementPolicy;
+	int maxWP;
 } WPConfig_t;
 
 extern WPConfig_t wpConfig;
@@ -187,9 +187,9 @@ extern bool WatchpointClientActive();
 extern void DisableWatchpointWrapper(WatchPointInfo_t *wpi);
 
 static inline  uint64_t rdtsc(){
-    unsigned int lo,hi;
-    __asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
-    return ((uint64_t)hi << 32) | lo;
+	unsigned int lo,hi;
+	__asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
+	return ((uint64_t)hi << 32) | lo;
 }
 
 #endif //__WP_SUPPORT__
