@@ -438,11 +438,11 @@ int hashCode(void * key) {
 
 #ifdef MULTITHREAD_REUSE_HISTO
 
-ReuseBBEntry_t getEntryFromReuseBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
+ReuseBBEntry_t getEntryFromReuseBulletinBoard(void * cacheLineBaseAddress, int * item_found) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   //fprintf(stderr, "cacheLineBaseAddress: %lx and reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress: %lx\n", cacheLineBaseAddress, reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress);
-  if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
-    *item_not_found = 1;
+  if(cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    *item_found = 1;
   return reuseBulletinBoard.hashTable[hashIndex];
 }
 
@@ -2452,15 +2452,15 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     } else{
 
 // before
-	int item_not_found_flag = 0;
+	int item_found = 0;
            int me = TD_GET(core_profile_trace_data.id);
            int my_core = sched_getcpu();
 	   //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
 	   //prettyPrintReuseHash();
 	   ReuseBBEntry_t prev_access;
-           ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_not_found_flag);
+           ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_found);
 	   //fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
-           if(item_not_found_flag == 0) {
+           if(item_found == 1) {
        
 	        //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
 		if(wpi->sample.sampleTime >= prev_access.time) {
@@ -3260,20 +3260,34 @@ void ReadSharedDataTransactionally(SharedData_t *localSharedData){
   }while(1);
 }
 
-void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_not_found_flag){
+void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_found){
   // Laport's STM
+  int loop_counter = 0;
   do{
     int64_t startCounter = reuseBulletinBoard.counter;
-    if(startCounter & 1)
+    if(startCounter & 1) {
+      loop_counter++;
+      if(loop_counter > 5) {
+	      *item_found =  0;
+	      break;
+      }
       continue; // Some writer is updating
+    }
 
     __sync_synchronize();
     //*localSharedData = gSharedData;
-    *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_not_found_flag);
+    *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_found);
     __sync_synchronize();
     int64_t endCounter = reuseBulletinBoard.counter;
-    if(startCounter == endCounter)
+    if(startCounter == endCounter) {
       break;
+    } else {
+	loop_counter++;
+        if(loop_counter > 5) {
+	   *item_found = 0;
+           break;
+	}
+    }
   }while(1);
 }
 
@@ -4248,13 +4262,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 	   int my_core = sched_getcpu(); 
 	   uint64_t eventDiff = pmu_counter-prev_event_count;
 	   uint64_t timeDiff = curTime-lastTime;
-	   int item_not_found_flag = 0;
+	   int item_found = 0;
 	   // detect communication here
 	   // before 
 	   //ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
 	   ReuseBBEntry_t prev_access;
-	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
-           if(item_not_found_flag == 0) {
+	   ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_found);
+           if(item_found == 1) {
 		//fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
            	if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
 			//fprintf(stderr, "fulfilled condition\n");
