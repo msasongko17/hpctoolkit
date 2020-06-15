@@ -74,7 +74,7 @@ Total counts of communications are printed in the log file named <executable nam
 Attribution of Communications to Data Objects
 =============================================
 Please note that if you enable attribution of communications to data objects by following 
-the instructions in ComDetective.Install, and you try to detect every single dynamic memory allocation
+the instructions in ComDetective.Install, and try to detect every single dynamic memory allocation
 by passing "-t 0" parameter to ComDetective, the profiled program can run slowly.  
 
 The reason for this is that if the profiled program calls dynamic memory allocation functions 
