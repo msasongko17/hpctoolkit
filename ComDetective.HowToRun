@@ -75,13 +75,13 @@ Attribution of Communications to Data Objects
 =============================================
 Please note that if you enable attribution of communications to data objects by following 
 the instructions in ComDetective.Install, and you try to detect every single dynamic memory allocation
-by passing "-t 0" parameter to ComDetective, the profiled program can run very slowly.  
+by passing "-t 0" parameter to ComDetective, the profiled program can run slowly.  
 
 The reason for this is that if the profiled program calls dynamic memory allocation functions 
 a lot of times (like millions of mallocs), ComDetective can be slowed down 
-since it intercepts these function calls and inserts info on the allocated memory ranges
-to its database of dynamic objects. So, to get around this problem, ComDetective's user can accelerate
-ComDetective by sacrificing its accuracy in capturing dynamically allocated memory objects. 
+as it intercepts these function calls and inserts info on the allocated memory ranges
+to its database of dynamic objects. To get around this problem, ComDetective's user can accelerate
+ComDetective by restricting it to detect only large objects. 
 For example, instead of capturing every single dynamic memory allocation 
 (with command line parameter "-t 0"), ComDetective can be restricted to capture only dynamic memory allocations 
-with size 10000 or higher (with command line parameter "-t 10000").
+with size 10000 bytes or higher (with command line parameter "-t 10000").
