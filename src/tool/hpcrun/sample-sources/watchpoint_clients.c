@@ -2473,7 +2473,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     if(item_found == 1) {
 
       //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
-      if(wpi->sample.sampleTime >= prev_access.time) {
+      if(/*wpi->sample.sampleTime >= prev_access.time*/(me != prev_access.tid) && ((trapTime - prev_access.time) >= (trapTime - wpi->sample.prevStoreAccess))) {
 
 	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 
