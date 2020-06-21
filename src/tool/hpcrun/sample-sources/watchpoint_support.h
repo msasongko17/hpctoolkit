@@ -98,6 +98,7 @@ typedef struct SampleData{
     int first_accessing_tid;
     int first_accessing_core_id;
     uint64_t bulletinBoardTimestamp;
+    uint64_t olderStoreAccess;
     uint64_t prevStoreAccess;
     uint64_t expirationPeriod;
     AccessType accessType; // load or store

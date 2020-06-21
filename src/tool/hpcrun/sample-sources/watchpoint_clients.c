@@ -444,10 +444,21 @@ int hashCode(void * key) {
 
 ReuseBBEntry_t getEntryFromReuseBulletinBoard(void * cacheLineBaseAddress, int * item_found) {
   int hashIndex = hashCode(cacheLineBaseAddress);
+  int newestIndex = hashIndex;
   //fprintf(stderr, "cacheLineBaseAddress: %lx and reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress: %lx\n", cacheLineBaseAddress, reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress);
-  if(cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
-    *item_found = 1;
-  return reuseBulletinBoard.hashTable[hashIndex];
+  int i = 0;
+  int me = TD_GET(core_profile_trace_data.id);
+  uint64_t newest_time = 0;
+  while((i < HASHTABLESIZE) && (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress != -1)) {
+  	if((cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress) && (me != reuseBulletinBoard.hashTable[hashIndex].tid) && (reuseBulletinBoard.hashTable[hashIndex].time > newest_time)) {
+    		*item_found = 1;
+		newest_time = reuseBulletinBoard.hashTable[hashIndex].time;
+		newestIndex = hashIndex;
+	}
+	i++;
+	hashIndex = (hashIndex + 1) % HASHTABLESIZE;
+  }
+  return reuseBulletinBoard.hashTable[newestIndex];
 }
 
 /*
@@ -458,7 +469,7 @@ if(cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBase
 //fprintf(stderr, "cache line %lx is deactivated\n", cacheLineBaseAddress);
 reuseBulletinBoard.hashTable[hashIndex].active = false;
 }
-}*/
+}
 
 void reuseHashInsert(ReuseBBEntry_t item) {
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
@@ -475,6 +486,32 @@ void reuseHashInsert(ReuseBBEntry_t item) {
     }
   }
 }
+*/
+
+void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
+  void * cacheLineBaseAddress = item.cacheLineBaseAddress;
+  int hashIndex = hashCode(cacheLineBaseAddress);
+  //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
+  //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+  if((reuseBulletinBoard.counter & 1) == 0)
+  {
+    uint64_t theCounter = reuseBulletinBoard.counter;
+    if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
+      int i = 0;
+      while(i < HASHTABLESIZE) {
+	if((reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((item.time - lastStoreCounter) < (item.time - reuseBulletinBoard.hashTable[hashIndex].time)) || ((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))) {
+      		reuseBulletinBoard.hashTable[hashIndex] = item;
+		break;
+	}
+	hashIndex = (hashIndex + 1) % HASHTABLESIZE;
+	i++;
+      }
+      __sync_synchronize();
+      reuseBulletinBoard.counter++;
+    }
+  }
+}
+
 
 void prettyPrintReuseHash() {
   for(int i = 0; i < HASHTABLESIZE; i++) {
@@ -1484,7 +1521,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 116;
+	    reuse_bin_start = 1100000;
 	    //reuse_bin_start = 1000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
@@ -1593,6 +1630,10 @@ METHOD_FN(process_event_list, int lush_metrics)
 	reuse_buffer_metric_ids[1] = hpcrun_new_metric();
 	hpcrun_set_metric_info_and_period(reuse_buffer_metric_ids[1],"REUSE_BUFFER_2", MetricFlags_ValFmt_Int, 1, metric_property_none);
 
+	// initialize hash table here
+	for(int i = 0; i < HASHTABLESIZE; i++) {
+		reuseBulletinBoard.hashTable[i].cacheLineBaseAddress = -1;
+	}
       }
       break;
     case WP_REUSE_MT:
@@ -2473,7 +2514,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     if(item_found == 1) {
 
       //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
-      if(/*wpi->sample.sampleTime >= prev_access.time*/(me == prev_access.tid) || ((trapTime - prev_access.time) >= (trapTime - wpi->sample.prevStoreAccess))) {
+      if(/*wpi->sample.sampleTime >= prev_access.time*/(trapTime - prev_access.time) >= (trapTime - wpi->sample.olderStoreAccess)) {
 
 	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 
@@ -2481,7 +2522,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	inc = numDiffSamples;	
 	// after
 	//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
-	fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d\n", rd, inc, me, prev_access.tid);
+	fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d, (trapTime - prev_access.time): %ld, (trapTime - wpi->sample.prevStoreAccess): %ld\n", rd, inc, me, prev_access.tid, (trapTime - prev_access.time), (trapTime - wpi->sample.prevStoreAccess));
 	ReuseAddDistance(rd, inc);
 	reuse_detected_entry_in_bb++;
 
@@ -2493,7 +2534,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 	double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	// validate the invalidation by checking the execution time
-	if((me != prev_access.tid) && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)/*wpi->sample.expirationPeriod*/)) {
+	if((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)/*wpi->sample.expirationPeriod*/) {
 	  inter_thread_invalidation_count += inc;
 	  int max_thread_num = prev_access.tid;
 	  if(max_thread_num < me)
@@ -2520,7 +2561,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  //fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
 	  //fprintf(stderr, "as_matrix is incremented by %0.2lf at trap\n", increment);
 	}
-	if(my_core != prev_access.core_id && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess) /*wpi->sample.expirationPeriod*/)) {
+	if((my_core != prev_access.core_id) && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess) /*wpi->sample.expirationPeriod*/)) {
 	  inter_core_invalidation_count += inc;
 	  int max_core_num = prev_access.core_id;
 	  if(max_core_num < my_core)
@@ -2574,7 +2615,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       };
       //fprintf(stderr, "curr_access.eventCountBetweenSamples: %ld, curr_access.timeBetweenSamples: %ld, tid: %d\n", curr_access.eventCountBetweenSamples, curr_access.timeBetweenSamples, me);
       //prev_event_count = pmu_counter;
-      reuseHashInsert(curr_access);
+      reuseHashInsert(curr_access, storeLastTime);
       //fprintf(stderr, "pretty printing Bulletin Board at trap\n");
       //prettyPrintReuseHash();
     }
@@ -4353,6 +4394,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  }
 			}
 			// after
+			/*sd.eventCountBetweenSamples=eventDiff;
+                        sd.timeBetweenSamples=timeDiff;
+                        sd.sampleTime=curTime;
+                        sd.prevStoreAccess = storeLastTime;
+                        sd.expirationPeriod=(curTime - lastTime);*/
+			sd.olderStoreAccess = storeLastTime;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			  ReuseBBEntry_t curr_access= {
 			    .time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
@@ -4369,7 +4416,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  //fprintf(stderr, "sampled cache line: %lx in thread %d\n", curr_access.cacheLineBaseAddress, curr_access.tid);
 			  //fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 
 			  //prettyPrintReuseHash();
-			  reuseHashInsert(curr_access);
+			  reuseHashInsert(curr_access, storeLastTime);
 			  storeLastTime = storeCurTime;
 			  //fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
 			  //prettyPrintReuseHash();
