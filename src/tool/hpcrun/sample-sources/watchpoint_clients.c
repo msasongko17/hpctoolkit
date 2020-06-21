@@ -2522,7 +2522,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	inc = numDiffSamples;	
 	// after
 	//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
-	fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d, (trapTime - prev_access.time): %ld, (trapTime - wpi->sample.prevStoreAccess): %ld\n", rd, inc, me, prev_access.tid, (trapTime - prev_access.time), (trapTime - wpi->sample.prevStoreAccess));
+	//fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d, (trapTime - prev_access.time): %ld, (trapTime - wpi->sample.prevStoreAccess): %ld\n", rd, inc, me, prev_access.tid, (trapTime - prev_access.time), (trapTime - wpi->sample.prevStoreAccess));
 	ReuseAddDistance(rd, inc);
 	reuse_detected_entry_in_bb++;
 
