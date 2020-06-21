@@ -1484,7 +1484,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 120;
+	    reuse_bin_start = 116;
 	    //reuse_bin_start = 1000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
@@ -2473,7 +2473,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     if(item_found == 1) {
 
       //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
-      if(/*wpi->sample.sampleTime >= prev_access.time*/(me != prev_access.tid) && ((trapTime - prev_access.time) >= (trapTime - wpi->sample.prevStoreAccess))) {
+      if(/*wpi->sample.sampleTime >= prev_access.time*/(me == prev_access.tid) || ((trapTime - prev_access.time) >= (trapTime - wpi->sample.prevStoreAccess))) {
 
 	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 
@@ -2481,7 +2481,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	inc = numDiffSamples;	
 	// after
 	//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
-	//fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+	fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d\n", rd, inc, me, prev_access.tid);
 	ReuseAddDistance(rd, inc);
 	reuse_detected_entry_in_bb++;
 
