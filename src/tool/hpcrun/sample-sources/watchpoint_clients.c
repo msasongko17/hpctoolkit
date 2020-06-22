@@ -1373,7 +1373,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    reuse_output_trace = false;
 	    //reuse_bin_start = 4000;
-	    reuse_bin_start = 82;
+	    reuse_bin_start = 274;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
 	  }
@@ -1521,7 +1521,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 1100000;
+	    reuse_bin_start = 67;
 	    //reuse_bin_start = 1000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
@@ -1676,7 +1676,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 120;
+	    reuse_bin_start = 1100000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
 	  }
