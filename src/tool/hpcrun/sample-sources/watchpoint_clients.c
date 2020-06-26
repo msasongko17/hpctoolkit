@@ -220,6 +220,7 @@ extern __thread uint64_t wp_count1;
 extern __thread uint64_t wp_count2;
 extern __thread uint64_t wp_dropped;
 extern __thread uint64_t wp_active;
+extern __thread uint64_t subscribe_dropped;
 
 extern ReuseMtHashTable_t reuseMtBulletinBoard;
 
@@ -572,7 +573,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 #endif
 
@@ -998,6 +999,7 @@ static void ClientTermination(){
 	fprintf(stderr, "wp_count2: %ld\n", wp_count2);
 	fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
 	fprintf(stderr, "wp_active: %ld\n", wp_active);
+	fprintf(stderr, "subscribe_dropped: %ld\n", subscribe_dropped);
 
 	//fprintf(stderr, "in WP_MT_REUSE\n");
 	uint64_t val[3];
@@ -1521,7 +1523,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 67;
+	    reuse_bin_start = 124;
 	    //reuse_bin_start = 1000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
@@ -1676,7 +1678,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 1100000;
+	    reuse_bin_start = 124;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
 	  }

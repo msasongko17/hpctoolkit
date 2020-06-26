@@ -223,7 +223,7 @@ __thread uint64_t wp_count1 = 0;
 __thread uint64_t wp_count2 = 0;
 __thread uint64_t wp_active = 0;
 __thread uint64_t wp_dropped = 0;
-
+__thread uint64_t subscribe_dropped = 0;
 
 void threadDataTablePrettyPrints() {
 	printf("List of threads in thread data table:\n");
@@ -2193,10 +2193,21 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		  }*/
 
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
-		if ((threadDataTable.hashTable[me].os_tid != -1) && ((threadDataTable.hashTable[me].counter & 1) == 0)) {
-			uint64_t theCounter = threadDataTable.hashTable[me].counter;
 
-			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+		int loop_counter = 0;
+                do {
+                        //uint64_t theCounter = threadDataTable.hashTable[me].counter;
+                        if(threadDataTable.hashTable[me].counter & 1) {
+                                loop_counter++;
+                                if(loop_counter > 10) {
+					subscribe_dropped++;
+					fprintf(stderr, "arming is discarded\n");
+                                        break;
+				}
+                                continue;
+                        }
+                        uint64_t theCounter = threadDataTable.hashTable[me].counter;
+                        if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
 				//VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
 				VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
@@ -2229,12 +2240,15 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 				none_available_count++;
 				threadDataTable.hashTable[me].counter++; // makes the counter even
 				//break;
-			}
 		}
-		/*loop_counter++;
-		  if(loop_counter > 5)
+		loop_counter++;
+		  if(loop_counter > 10) {
+		  subscribe_dropped++;
+		  fprintf(stderr, "arming is discarded\n");
 		  break;
-		  } while(1);*/
+		}
+		  } while(1);
+		
 		//fprintf(stderr, "after loop %d\n", loop_counter);
 	}
 	//fprintf(stderr, "after loop %d\n", loop_counter);
