@@ -2205,7 +2205,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
 
 		int loop_counter = 0;
-		int threshold = 500;
+		int threshold = 5;
 		/*if(TD_GET(core_profile_trace_data.id) == me)
 			threshold = 500;
 		else
