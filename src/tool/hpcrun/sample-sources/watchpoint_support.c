@@ -2205,8 +2205,8 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
 
 		int loop_counter = 0;
-		/*int threshold;
-		if(TD_GET(core_profile_trace_data.id) == me)
+		int threshold = 500;
+		/*if(TD_GET(core_profile_trace_data.id) == me)
 			threshold = 500;
 		else
 			threshold = 5;*/
@@ -2222,6 +2222,13 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 				}*/
 				if(TD_GET(core_profile_trace_data.id) != me)
 					break;
+				loop_counter++;
+                                if(loop_counter > threshold) {
+                                        if(TD_GET(core_profile_trace_data.id) == me)
+                                                subscribe_dropped++;
+                                        //fprintf(stderr, "arming is discarded\n");
+                                        break;
+                                }
                                 continue;
                         }
                         //uint64_t theCounter = threadDataTable.hashTable[me].counter;
