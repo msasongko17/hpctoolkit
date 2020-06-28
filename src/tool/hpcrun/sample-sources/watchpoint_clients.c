@@ -573,7 +573,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 #endif
 
@@ -934,11 +934,11 @@ static void ClientTermination(){
 	  fprintf(stderr, "sub_wp_count2: %ld\n", sub_wp_count2);
 	  fprintf(stderr, "overlap_count: %ld\n", overlap_count);
 	  fprintf(stderr, "none_available_count: %ld\n", none_available_count);
-	  fprintf(stderr, "sub_wp_count3: %ld\n", sub_wp_count3);
+	  fprintf(stderr, "sub_wp_count3: %ld\n", sub_wp_count3);*/
 	  fprintf(stderr, "wp_count: %ld\n", wp_count);
 	  fprintf(stderr, "wp_count1: %ld\n", wp_count1);
 	  fprintf(stderr, "wp_count2: %ld\n", wp_count2);
-	  fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
+	  /*fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
 	  fprintf(stderr, "wp_active: %ld\n", wp_active);
 	  fprintf(stderr, "total_detected_rd: %0.2lf\n", total_detected_rd);*/
 	fprintf(stderr, "load_all_load: %ld\n", load_all_load);
@@ -1523,7 +1523,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 124;
+	    reuse_bin_start = 1100000;
 	    //reuse_bin_start = 1000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
@@ -1678,7 +1678,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    }
 	  } else { //default
 	    reuse_output_trace = false;
-	    reuse_bin_start = 124;
+	    reuse_bin_start = 1100000;
 	    reuse_bin_ratio = 2;
 	    fprintf(stderr, "default configuration is applied\n");
 	  }
