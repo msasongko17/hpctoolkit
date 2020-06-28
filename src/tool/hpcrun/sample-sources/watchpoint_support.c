@@ -1708,8 +1708,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 else
                         threshold = 5000;*/
 		do {
-			//uint64_t theCounter = threadDataTable.hashTable[me].counter;
-			if(threadDataTable.hashTable[me].counter & 1) {
+			uint64_t theCounter = threadDataTable.hashTable[me].counter;
+			if(theCounter & 1) {
 				if(TD_GET(core_profile_trace_data.id) != me)
 					break;
 				/*loop_counter++;
@@ -1719,7 +1719,6 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				}*/
 				continue;
 			}
-			uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 				//fprintf(stderr, "watchpoint handling is entered\n");
 
@@ -2212,8 +2211,8 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		else
 			threshold = 5;*/
                 do {
-                        //uint64_t theCounter = threadDataTable.hashTable[me].counter;
-                        if(threadDataTable.hashTable[me].counter & 1) {
+                        uint64_t theCounter = threadDataTable.hashTable[me].counter;
+                        if(theCounter & 1) {
                                 /*loop_counter++;
                                 if(loop_counter > threshold) {
 					if(TD_GET(core_profile_trace_data.id) == me)
@@ -2225,7 +2224,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 					break;
                                 continue;
                         }
-                        uint64_t theCounter = threadDataTable.hashTable[me].counter;
+                        //uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
 				//VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
