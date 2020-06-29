@@ -1702,7 +1702,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		//linux_perf_events_other_thread_pause(me);
 
 		int loop_counter = 0;
-		int threshold = 5;
+		int threshold = 50;
                 /*if(TD_GET(core_profile_trace_data.id) == me)
                         threshold = 5000;
                 else
@@ -1712,11 +1712,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			if(theCounter & 1) {
 				if(TD_GET(core_profile_trace_data.id) != me)
 					break;
-				/*loop_counter++;
+				loop_counter++;
 				if(loop_counter > threshold) {
 					//fprintf(stderr, "watchpoint handling is discarded\n");
 					break;
-				}*/
+				}
 				continue;
 			}
 			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
@@ -2205,7 +2205,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
 
 		int loop_counter = 0;
-		int threshold = 5;
+		int threshold = 50;
 		/*if(TD_GET(core_profile_trace_data.id) == me)
 			threshold = 500;
 		else
