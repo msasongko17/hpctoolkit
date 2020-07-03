@@ -225,6 +225,13 @@ __thread uint64_t wp_active = 0;
 __thread uint64_t wp_dropped = 0;
 __thread uint64_t subscribe_dropped = 0;
 
+extern bool reuse_output_trace = false;
+extern double reuse_bin_start = 0;
+extern double reuse_bin_ratio = 0;
+extern __thread uint64_t * thread_reuse_bin_list;
+extern __thread double * thread_reuse_bin_pivot_list = NULL; // store the bin intervals
+extern __thread int thread_reuse_bin_size = 0;
+
 void threadDataTablePrettyPrints() {
 	printf("List of threads in thread data table:\n");
 	for(int i = 0; i < global_thread_count; i++) {
@@ -842,6 +849,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
 	global_thread_count++;
+	fprintf(stderr, "in WatchpointThreadInit, WP_MT_REUSE\n");
 	//printf("WatchpointThreadInit is called by thread with os id %d and id %d, thread count %d\n", gettid(), TD_GET(core_profile_trace_data.id), global_thread_count);
 	int me = TD_GET(core_profile_trace_data.id);
 	tData.ss.ss_sp = malloc(ALT_STACK_SZ);
@@ -889,6 +897,34 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	tData.counter = 0;
 	threadDataTable.hashTable[me] = tData;
+
+	#ifdef REUSE_HISTO
+	{
+		char * bin_scheme_str = getenv("HPCRUN_WP_REUSE_BIN_SCHEME");
+		if (bin_scheme_str){
+		} else { //default
+            		if(reuse_bin_start == 0) {
+				reuse_output_trace = false;
+                		reuse_bin_start = 124;
+                		//reuse_bin_start = 1000;
+                		reuse_bin_ratio = 2;
+                		fprintf(stderr, "default configuration is applied\n");
+            		}
+          	}
+
+		if (reuse_output_trace == false){
+			thread_reuse_bin_size = 20;
+            		thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*thread_reuse_bin_size);
+            		memset(thread_reuse_bin_list, 0, sizeof(uint64_t)*thread_reuse_bin_size);
+            		thread_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*thread_reuse_bin_size);
+            		thread_reuse_bin_pivot_list[0] = reuse_bin_start;
+
+            		for(int i=1; i < thread_reuse_bin_size; i++){
+                		thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+                        	//fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
+            		}
+		}
+	}
 }
 
 void WatchpointThreadTerminate(){
