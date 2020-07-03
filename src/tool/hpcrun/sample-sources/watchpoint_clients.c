@@ -989,14 +989,14 @@ static void ClientTermination(){
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
 
-	  reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
+	  /*reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
           memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
-          reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size); 
+          reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);*/ 
 	
-	  for(int i=0; i < reuse_bin_size; i++){
+	  for(int i=0; i < thread_reuse_bin_size; i++){
 	    /*for(int j=0; j < global_thread_count; j++)
 		    reuse_bin_list[i] += thread_reuse_bin_list[j];*/
-	    WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
+	    WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
 	  }
 	}
 

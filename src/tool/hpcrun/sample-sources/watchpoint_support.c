@@ -225,12 +225,14 @@ __thread uint64_t wp_active = 0;
 __thread uint64_t wp_dropped = 0;
 __thread uint64_t subscribe_dropped = 0;
 
-extern bool reuse_output_trace = false;
-extern double reuse_bin_start = 0;
-extern double reuse_bin_ratio = 0;
+#ifdef REUSE_HISTO
+extern bool reuse_output_trace;
+extern double reuse_bin_start;
+extern double reuse_bin_ratio;
 extern __thread uint64_t * thread_reuse_bin_list;
-extern __thread double * thread_reuse_bin_pivot_list = NULL; // store the bin intervals
-extern __thread int thread_reuse_bin_size = 0;
+extern __thread double * thread_reuse_bin_pivot_list; // store the bin intervals
+extern __thread int thread_reuse_bin_size;
+#endif
 
 void threadDataTablePrettyPrints() {
 	printf("List of threads in thread data table:\n");
@@ -925,6 +927,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
             		}
 		}
 	}
+	#endif
 }
 
 void WatchpointThreadTerminate(){
