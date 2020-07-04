@@ -226,12 +226,13 @@ __thread uint64_t wp_dropped = 0;
 __thread uint64_t subscribe_dropped = 0;
 
 #ifdef REUSE_HISTO
-extern bool reuse_output_trace;
+/*extern bool reuse_output_trace;
 extern double reuse_bin_start;
 extern double reuse_bin_ratio;
 extern __thread uint64_t * thread_reuse_bin_list;
 extern __thread double * thread_reuse_bin_pivot_list; // store the bin intervals
-extern __thread int thread_reuse_bin_size;
+extern __thread int thread_reuse_bin_size;*/
+extern void initialize_reuse_ds();
 #endif
 
 void threadDataTablePrettyPrints() {
@@ -902,6 +903,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	#ifdef REUSE_HISTO
 	{
+		/*fprintf(stderr, "ok until this point\n");
 		char * bin_scheme_str = getenv("HPCRUN_WP_REUSE_BIN_SCHEME");
 		if (bin_scheme_str){
 		} else { //default
@@ -923,9 +925,11 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
             		for(int i=1; i < thread_reuse_bin_size; i++){
                 		thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
-                        	//fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
+                        	fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, thread_reuse_bin_pivot_list[i]);
             		}
 		}
+		fprintf(stderr, "no problem until this point\n");*/
+		initialize_reuse_ds();
 	}
 	#endif
 }

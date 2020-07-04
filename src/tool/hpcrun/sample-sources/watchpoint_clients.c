@@ -499,9 +499,9 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
   //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
-  if((reuseBulletinBoard.counter & 1) == 0)
+  uint64_t theCounter = reuseBulletinBoard.counter;
+  if((theCounter & 1) == 0)
   {
-    uint64_t theCounter = reuseBulletinBoard.counter;
     if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
       int i = 0;
       while(i < HASHTABLESIZE) {
@@ -528,6 +528,23 @@ void prettyPrintReuseHash() {
 #endif
 
 #ifdef REUSE_HISTO
+
+void initialize_reuse_ds() {
+	fprintf(stderr, "initialize_reuse_ds is called\n");
+        if (reuse_output_trace == false){
+                        thread_reuse_bin_size = 20;
+                        thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*thread_reuse_bin_size);
+                        memset(thread_reuse_bin_list, 0, sizeof(uint64_t)*thread_reuse_bin_size);
+                        thread_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*thread_reuse_bin_size);
+                        thread_reuse_bin_pivot_list[0] = reuse_bin_start;
+
+                        for(int i=1; i < thread_reuse_bin_size; i++){
+                                thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+                                //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, thread_reuse_bin_pivot_list[i]);
+                        }
+        }
+}
+
 void ExpandReuseBinList(){
   // each time we double the size of reuse_bin_list
   uint64_t *old_reuse_bin_list = reuse_bin_list;
@@ -567,18 +584,40 @@ void ExpandThreadReuseBinList(){
   for(int i=old_reuse_bin_size; i < thread_reuse_bin_size; i++){
     thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
   }
-
   //hpcrun_free(old_reuse_bin_list);
   //hpcrun_free(old_reuse_bin_pivot_list);
 }
 
-int FindThreadReuseBinIndex(uint64_t distance){
+int FindReuseBinIndex(uint64_t distance){
   //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[0]: %0.2lf\n", distance, reuse_bin_pivot_list[0]);
-  if (distance < thread_reuse_bin_pivot_list[0]){
+  if (distance < reuse_bin_pivot_list[0]){
     //fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf\n", reuse_bin_pivot_list[0]);
     return 0;
   }
-  if (distance >= thread_reuse_bin_pivot_list[reuse_bin_size - 1]){
+  if (distance >= reuse_bin_pivot_list[reuse_bin_size - 1]){
+    ExpandReuseBinList();
+    return FindReuseBinIndex(distance);
+  }
+
+  int left = 0, right = reuse_bin_size - 1;
+  while(left + 1 < right){
+    int mid = (left + right) / 2;
+    //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
+    if ( distance < reuse_bin_pivot_list[mid]){
+      right = mid;
+    } else {
+      left = mid;
+    }
+  }
+  assert(left + 1 == right);
+  return left + 1;
+}
+
+int FindThreadReuseBinIndex(uint64_t distance){
+  if (distance < thread_reuse_bin_pivot_list[0]){
+    return 0;
+  }
+  if (distance >= thread_reuse_bin_pivot_list[thread_reuse_bin_size - 1]){
     ExpandThreadReuseBinList();
     return FindThreadReuseBinIndex(distance);
   }
@@ -586,7 +625,6 @@ int FindThreadReuseBinIndex(uint64_t distance){
   int left = 0, right = thread_reuse_bin_size - 1;
   while(left + 1 < right){
     int mid = (left + right) / 2;
-    //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
     if ( distance < thread_reuse_bin_pivot_list[mid]){
       right = mid;
     } else {
@@ -1586,7 +1624,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    	reuse_ds_initialized = true;
 	    }*/
 
-	    thread_reuse_bin_size = 20;
+	    /*thread_reuse_bin_size = 20;
 	    thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*thread_reuse_bin_size);
 	    memset(thread_reuse_bin_list, 0, sizeof(uint64_t)*thread_reuse_bin_size);
 	    thread_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*thread_reuse_bin_size);
@@ -1596,6 +1634,8 @@ METHOD_FN(process_event_list, int lush_metrics)
             	thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
                         //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
             }
+	    fprintf(stderr, "no problem until this point, in process_event_list, WP_MT_REUSE\n");*/
+	    initialize_reuse_ds();
 	  }
 
 	}
@@ -1759,7 +1799,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
             memset(thread_reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);*/
 
-	    thread_reuse_bin_size = 20;
+	    /*thread_reuse_bin_size = 20;
             thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*thread_reuse_bin_size);
             memset(thread_reuse_bin_list, 0, sizeof(uint64_t)*thread_reuse_bin_size);
             thread_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*thread_reuse_bin_size);
@@ -1768,7 +1808,8 @@ METHOD_FN(process_event_list, int lush_metrics)
             for(int i=1; i < thread_reuse_bin_size; i++){
                 thread_reuse_bin_pivot_list[i] = thread_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
                         //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
-            }
+            }*/
+	    initialize_reuse_ds();
 
 	  }
 
