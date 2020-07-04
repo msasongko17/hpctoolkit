@@ -123,7 +123,6 @@ static atomic_long trolled_frames = ATOMIC_VAR_INIT(0);
 extern void dump_comdetective_matrices();
 
 extern char output_directory[PATH_MAX];
-
 //***************************************************************************
 // interface operations
 //***************************************************************************
@@ -673,6 +672,7 @@ hpcrun_stats_num_samples_yielded(void)
 void
 hpcrun_stats_print_summary(void)
 {
+  fprintf(stderr, "in hpcrun_stats_print_summary\n");
   int object_flag = 0;
 #if ADAMANT_USED
   if(getenv(HPCRUN_OBJECT_LEVEL)) {

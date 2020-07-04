@@ -185,7 +185,10 @@ double reuse_bin_ratio = 0;
 uint64_t * reuse_bin_list = NULL;
 double * reuse_bin_pivot_list = NULL; // store the bin intervals
 int reuse_bin_size = 0;
+int completed_rd_profile_count = 0;
 
+bool reuse_ds_initialized = false;
+int reuse_ds_counter = 0;
 __thread uint64_t * thread_reuse_bin_list = NULL;
 __thread double * thread_reuse_bin_pivot_list = NULL; // store the bin intervals
 __thread int thread_reuse_bin_size = 0;
@@ -545,6 +548,27 @@ void initialize_reuse_ds() {
         }
 }
 
+void
+dump_rd_histogram()
+{
+	fprintf(stderr, "dump_rd_histogram is called\n");
+        FILE * fp;
+        char file_name[PATH_MAX];
+        int ret = snprintf(file_name, PATH_MAX, "%s-%ld-all-reuse.hpcrun", hpcrun_files_executable_name(), getpid() );
+        if ( ret < 0 || ret >= PATH_MAX){
+                return -1;
+        }
+
+        fp = fopen (file_name, "w+");
+        fprintf(fp, "BIN_START: %lf\n", reuse_bin_start);
+        fprintf(fp, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+
+        for(int i=0; i < reuse_bin_size; i++){
+            fprintf(fp, "BIN: %d %lu\n", i, reuse_bin_list[i]);
+        }
+        fclose(fp);
+}
+
 void ExpandReuseBinList(){
   // each time we double the size of reuse_bin_list
   uint64_t *old_reuse_bin_list = reuse_bin_list;
@@ -637,8 +661,8 @@ int FindThreadReuseBinIndex(uint64_t distance){
 
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindThreadReuseBinIndex(distance);
-  if(reuse_bin_size < thread_reuse_bin_size)
-	  reuse_bin_size = thread_reuse_bin_size;
+  /*if(reuse_bin_size < thread_reuse_bin_size)
+	  reuse_bin_size = thread_reuse_bin_size;*/
   //reuse_bin_list[index] += inc;
   thread_reuse_bin_list[index] += inc;
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
@@ -1027,13 +1051,40 @@ static void ClientTermination(){
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
 
-	  /*reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
-          memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
-          reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);*/ 
-	
+	  if(reuse_ds_initialized == false) {
+		if(reuse_bin_size < thread_reuse_bin_size)
+                	reuse_bin_size = thread_reuse_bin_size;
+	  	reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
+          	memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
+
+		reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
+            	reuse_bin_pivot_list[0] = reuse_bin_start;
+            	for(int i=1; i < reuse_bin_size; i++){
+              		reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+            	}
+
+		reuse_ds_initialized = true;
+	  } else {
+		  if(reuse_bin_size < thread_reuse_bin_size)
+                        reuse_bin_size = thread_reuse_bin_size;
+		  ExpandReuseBinList();
+	  }
+
+	  do {
+          	uint64_t theCounter = reuse_ds_counter;
+          	if(theCounter & 1) { 
+         		continue;
+          	}
+          	if(__sync_bool_compare_and_swap(&reuse_ds_counter, theCounter, theCounter+1)){
+	  		for(int i=0; i < thread_reuse_bin_size; i++)
+          			reuse_bin_list[i] += thread_reuse_bin_list[i];
+			completed_rd_profile_count++;
+			reuse_ds_counter++;
+			break;
+		}
+	  } while(1);
+
 	  for(int i=0; i < thread_reuse_bin_size; i++){
-	    /*for(int j=0; j < global_thread_count; j++)
-		    reuse_bin_list[i] += thread_reuse_bin_list[j];*/
 	    WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
 	  }
 	}
@@ -1050,6 +1101,10 @@ static void ClientTermination(){
 	WriteWitchTraceOutput("\n");
 	//close the trace output
 	CloseWitchTraceOutput();
+	if(completed_rd_profile_count == global_thread_count) {
+		dump_rd_histogram();
+	}
+
 #endif
 	hpcrun_stats_num_accessedIns_inc(accessedIns);
 	hpcrun_stats_num_reuseTemporal_inc(mtReuseTemporal);
