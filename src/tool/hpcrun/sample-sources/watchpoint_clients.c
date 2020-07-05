@@ -1142,10 +1142,44 @@ static void ClientTermination(){
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
-	  for(int i=0; i < reuse_bin_size; i++){
+	  if(reuse_ds_initialized == false) {
+                if(reuse_bin_size < thread_reuse_bin_size)
+                        reuse_bin_size = thread_reuse_bin_size;
+                reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
+                memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
+
+                reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
+                reuse_bin_pivot_list[0] = reuse_bin_start;
+                for(int i=1; i < reuse_bin_size; i++){
+                        reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+                }
+
+                reuse_ds_initialized = true;
+          } else {
+                  if(reuse_bin_size < thread_reuse_bin_size) {
+                        reuse_bin_size = thread_reuse_bin_size;
+                        ExpandReuseBinList();
+                }
+          }
+
+	  do {
+                uint64_t theCounter = reuse_ds_counter;
+                if(theCounter & 1) {
+                        continue;
+                }
+                if(__sync_bool_compare_and_swap(&reuse_ds_counter, theCounter, theCounter+1)){
+                        for(int i=0; i < thread_reuse_bin_size; i++)
+                                reuse_bin_list[i] += thread_reuse_bin_list[i];
+                        completed_rd_profile_count++;
+                        reuse_ds_counter++;
+                        break;
+                }
+          } while(1);
+
+	  for(int i=0; i < thread_reuse_bin_size; i++){
 	    /*for(int j=0; j < global_thread_count; j++)
                     reuse_bin_list[i] += thread_reuse_bin_list[j];*/
-	    WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
+	    WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
 	  }
 	}
 
@@ -1161,6 +1195,11 @@ static void ClientTermination(){
 	WriteWitchTraceOutput("\n");
 	//close the trace output
 	CloseWitchTraceOutput();
+
+	if(completed_rd_profile_count == global_thread_count) {
+                dump_rd_histogram();
+        }
+
 #endif
 	hpcrun_stats_num_accessedIns_inc(accessedIns);
 	hpcrun_stats_num_reuseTemporal_inc(mtReuseTemporal);
