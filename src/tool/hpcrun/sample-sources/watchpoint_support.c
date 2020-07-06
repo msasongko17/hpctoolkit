@@ -416,6 +416,7 @@ __attribute__((constructor))
 			wpConfig.maxWP = custom_wp_size;
 		else
 			wpConfig.maxWP = i;
+		wpConfig.maxWP = 1;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -982,28 +983,23 @@ void WatchpointThreadTerminate(){
 
 // Finds a victim slot to set a new WP
 static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int me){
-	//fprintf(stderr, "in GetVictimShared\n");
-	// If any WP slot is inactive, return it;
-	//ThreadData_t threadData = threadDataTable.hashTable[me];
 	for(int i = 0; i < wpConfig.maxWP; i++){
 		if(!threadDataTable.hashTable[me].watchPointArray[i].isActive) {
 			*location = i;
-			//fprintf(stderr, "empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
 			for(int j = 0; j < wpConfig.maxWP; j++){
 				if(threadDataTable.hashTable[me].watchPointArray[j].isActive || (i == j)){
 					threadDataTable.hashTable[me].numWatchpointArmingAttempt[j]++;
 				}
 			}
-			//fprintf(stderr, "after empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+
 			return EMPTY_SLOT;
 		}
 	}
-	// before
+
 	int indices[wpConfig.maxWP];
 	for (int i = 0; i < wpConfig.maxWP; i++) {
 		indices[i] = i;
 	}
-	//fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
 	int wp_index = wpConfig.maxWP;
 	while (wp_index) {
 		long int tmpVal;
@@ -1014,15 +1010,11 @@ static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int 
 		indices[index] = indices[wp_index];
 		indices[wp_index] = swap;
 	}
-	//fprintf(stderr, "in thread %d, after indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
-	// after
-	// visit each watchpoint according to the sequence
 	for(int i = 0; i < wpConfig.maxWP; i++) {
 		int idx = indices[i];
 		double probabilityToReplace =  1.0/((double)threadDataTable.hashTable[me].numWatchpointArmingAttempt[idx]);
 		double randValue;
 		drand48_r(&threadDataTable.hashTable[me].randBuffer, &randValue);
-		//fprintf(stderr, "i: %d, idx: %d, denominator: %ld, probability: %0.4lf\n", i, idx, tData.numWatchpointArmingAttempt[idx], probabilityToReplace);
 		if(randValue <= probabilityToReplace /* 1 */) {
 			*location = idx;
 			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
@@ -2196,7 +2188,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 	return false;
 }
 
-
+/*
 bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
 	//fprintf(stderr, "in SubscribeWatchpointShared, wp of thread %d is armed by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 	sub_wp_count1++;
@@ -2217,52 +2209,20 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		// No overlap, look for a victim slot
 		//if((threadDataTable.hashTable[me].counter & 1) == 0)
 		//printf("before accessing shared data\n");
-		/*do {
-		  uint64_t theCounter = threadDataTable.hashTable[me].counter;
-		  if(theCounter & 1)
-		  continue;
-		  if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
-		// inside
-		threadDataTable.hashTable[me].counter++; // makes the counter even
-		break;
-		}
-		} while(1);*/
 		//printf("after accessing shared data\n");
 		int victimLocation = -1;
 		// Find a slot to install WP
 		//VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
 		//fprintf(stderr, "before loop\n");
 		ThreadData_t threadData = threadDataTable.hashTable[me];
-		/*int loop_counter = 0;
-		  do {
-		  if (threadDataTable.hashTable[me].os_tid == -1)
-		  break;
-		  uint64_t theCounter = threadDataTable.hashTable[me].counter;
-		  if(theCounter & 1) {
-		  loop_counter++;
-		  if(loop_counter > 5)
-		  break;
-		  continue;
-		  }*/
 
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
 
 		int loop_counter = 0;
-		int threshold = 50;
-		/*if(TD_GET(core_profile_trace_data.id) == me)
-			threshold = 500;
-		else
-			threshold = 5;*/
+		int threshold = 50;/
                 do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if(theCounter & 1) {
-                                /*loop_counter++;
-                                if(loop_counter > threshold) {
-					if(TD_GET(core_profile_trace_data.id) == me)
-						subscribe_dropped++;
-					//fprintf(stderr, "arming is discarded\n");
-                                        break;
-				}*/
 				if(TD_GET(core_profile_trace_data.id) != me)
 					break;
 				loop_counter++;
@@ -2302,25 +2262,74 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 					threadDataTable.hashTable[me].counter++;
 					return true;
 					//}
-					/*threadDataTable.hashTable[me].counter++;
-					  return false;*/
 				}
 				none_available_count++;
 				threadDataTable.hashTable[me].counter++; // makes the counter even
 				break;
 		}
-		/*loop_counter++;
-		  if(loop_counter > threshold) {
-			if(TD_GET(core_profile_trace_data.id) == me)
-		  		subscribe_dropped++;
-		  //fprintf(stderr, "arming is discarded\n");
-		  break;
-		}*/
 		  } while(1);
 		
 		//fprintf(stderr, "after loop %d\n", loop_counter);
 	}
 	//fprintf(stderr, "after loop %d\n", loop_counter);
+	return false;
+}*/
+
+bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
+	//fprintf(stderr, "in SubscribeWatchpointShared, wp of thread %d is armed by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+	sub_wp_count1++;
+	if(ValidateWPData(sampleData) == false) {
+		return false;
+	}
+	//sub_wp_count2++;
+	//int tid = TD_GET(core_profile_trace_data.id);
+	int loop_counter = 0;
+        int threshold = 50;
+	if(threadDataTable.hashTable[me].os_tid != -1) {
+                do {
+                        uint64_t theCounter = threadDataTable.hashTable[me].counter;
+                        if(theCounter & 1) {
+				if(TD_GET(core_profile_trace_data.id) != me)
+                                        break;
+                                loop_counter++;
+                                if(loop_counter > threshold) {
+                                        if(TD_GET(core_profile_trace_data.id) == me)
+                                                subscribe_dropped++;
+                                        //fprintf(stderr, "arming is discarded\n");
+                                        break;
+                                }
+                                continue;
+                        }
+                        if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+
+				if(IsOveralppedShared(sampleData, me)){
+                        		return false;
+                		}
+                		sub_wp_count2++;
+                		int victimLocation = -1;
+
+				VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
+				sub_wp_count3++;
+				if(r != NONE_AVAILABLE) {
+					if(captureValue) {
+						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
+					}
+					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
+						//LOG to hpcrun log
+						EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+						threadDataTable.hashTable[me].counter++;
+						return false;
+					}
+					reuseMtDataInsert(sampleData->first_accessing_tid, sampleData->sampleTime, true);
+					threadDataTable.hashTable[me].counter++;
+					return true;
+				}
+				none_available_count++;
+				threadDataTable.hashTable[me].counter++; // makes the counter even
+				break;
+		}
+		  } while(1);
+	}
 	return false;
 }
 
