@@ -418,7 +418,7 @@ __attribute__((constructor))
 			wpConfig.maxWP = custom_wp_size;
 		else
 			wpConfig.maxWP = i;
-		same_thread_wp_count = 2;
+		same_thread_wp_count = 1;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -855,7 +855,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
 	global_thread_count++;
-	fprintf(stderr, "in WatchpointThreadInit, WP_MT_REUSE\n");
+	//fprintf(stderr, "in WatchpointThreadInit, WP_MT_REUSE\n");
 	//printf("WatchpointThreadInit is called by thread with os id %d and id %d, thread count %d\n", gettid(), TD_GET(core_profile_trace_data.id), global_thread_count);
 	int me = TD_GET(core_profile_trace_data.id);
 	tData.ss.ss_sp = malloc(ALT_STACK_SZ);
@@ -1546,7 +1546,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
 		EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
 		fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
 		//monitor_real_abort();
-		goto ErrExit;
+		goto ErrExit2;
 	}
 	//fprintf(stderr, "in CollectWatchPointTriggerInfo 1\n");
 	switch(hdr.type) {
@@ -1562,7 +1562,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
 					EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
 					fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
 					//monitor_real_abort();
-					goto ErrExit;
+					goto ErrExit2;
 				}
 
 				if(! (hdr.misc & PERF_RECORD_MISC_EXACT_IP)){
@@ -1678,6 +1678,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
 ErrExit:
 	// We must cleanup the mmap buffer if there is any data left
 	ConsumeAllRingBufferData(wpi->mmapBuffer);
+ErrExit2:
 	return false;
 }
 
@@ -1807,7 +1808,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		int loop_counter = 0;
 		int threshold = 50;
 		if(TD_GET(core_profile_trace_data.id) != me) {
-			fprintf(stderr, "signal from another thread\n");
+			//fprintf(stderr, "signal from another thread\n");
 		int loop_counter = 0;
                 int threshold = 50;
 		do {
@@ -1893,7 +1894,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			}
 		} while(1);
 		} else {
-			fprintf(stderr, "signal from the same thread\n");
+			//fprintf(stderr, "signal from the same thread\n");
 				/*if((threadDataTable.hashTable[fdData.tid].watchPointArray[0].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[0].fileHandle)) {
 					//fprintf(stderr, "location is found in WP_REUSE_MT\n");
 					location = 0;
@@ -2633,7 +2634,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	//int tid = TD_GET(core_profile_trace_data.id);
 
 	if(self) {
-	fprintf(stderr, "arming in the same thread\n");	
+	//fprintf(stderr, "arming in the same thread\n");	
 	if(IsOveralppedShared(sampleData, me, self)){
 		fprintf(stderr, "subscribing is dropped because of overlapping\n");
 		return false; // drop the sample if it overlaps an existing address
@@ -2667,7 +2668,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	}
 	} else {
 	// before
-	fprintf(stderr, "arming another thread\n"); 
+	//fprintf(stderr, "arming another thread\n"); 
 	int loop_counter = 0;
         int threshold = 50;
 	if(threadDataTable.hashTable[me].os_tid != -1) {
@@ -2696,7 +2697,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 					if(captureValue) {
 						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
 					}
-					fprintf(stderr, "ArmWatchPointShared on another thread\n");
+					//fprintf(stderr, "ArmWatchPointShared on another thread\n");
 					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
 						//LOG to hpcrun log
 						EMSG("ArmWatchPoint failed for address %p", sampleData->va);

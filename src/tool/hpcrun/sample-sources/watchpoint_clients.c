@@ -1697,7 +1697,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 124;
+	    	reuse_bin_start = 1100000;
 	    	//reuse_bin_start = 1000;
 	    	reuse_bin_ratio = 2;
 	    	fprintf(stderr, "default configuration is applied\n");
@@ -1870,7 +1870,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 124;
+	    	reuse_bin_start = 1100000;
 	    	reuse_bin_ratio = 2;
 	    }
 	    fprintf(stderr, "default configuration is applied\n");
@@ -2906,7 +2906,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active = true) {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
+	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
 	reuse_flag = true;
       }
       else {
@@ -2921,14 +2921,14 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	}
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
-	  fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
+	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
 	  if(inc == 0) {
 	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
 	  }
 	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
 	} else {
-	  fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
+	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
 	}
 	if(inc == 0) {
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
