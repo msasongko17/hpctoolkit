@@ -416,7 +416,6 @@ __attribute__((constructor))
 			wpConfig.maxWP = custom_wp_size;
 		else
 			wpConfig.maxWP = i;
-		wpConfig.maxWP = 1;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -982,11 +981,29 @@ void WatchpointThreadTerminate(){
 }
 
 // Finds a victim slot to set a new WP
-static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int me){
-	for(int i = 0; i < wpConfig.maxWP; i++){
+static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int me, bool self){
+	if(self) {
+		if(!threadDataTable.hashTable[me].watchPointArray[0].isActive) {
+                        *location = 0;
+		       threadDataTable.hashTable[me].numWatchpointArmingAttempt[0]++;	
+                        return EMPTY_SLOT;
+                }
+
+		double probabilityToReplace =  1.0/((double)threadDataTable.hashTable[me].numWatchpointArmingAttempt[0]);
+                double randValue;
+                drand48_r(&threadDataTable.hashTable[me].randBuffer, &randValue);
+                if(randValue <= probabilityToReplace /* 1 */) {
+                        *location = 0;
+                        //fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
+			threadDataTable.hashTable[me].numWatchpointArmingAttempt[0]++;
+                        return NON_EMPTY_SLOT;
+                }
+		threadDataTable.hashTable[me].numWatchpointArmingAttempt[0]++;
+	} else {
+	for(int i = 1; i < wpConfig.maxWP; i++){
 		if(!threadDataTable.hashTable[me].watchPointArray[i].isActive) {
 			*location = i;
-			for(int j = 0; j < wpConfig.maxWP; j++){
+			for(int j = 1; j < wpConfig.maxWP; j++){
 				if(threadDataTable.hashTable[me].watchPointArray[j].isActive || (i == j)){
 					threadDataTable.hashTable[me].numWatchpointArmingAttempt[j]++;
 				}
@@ -996,11 +1013,11 @@ static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int 
 		}
 	}
 
-	int indices[wpConfig.maxWP];
-	for (int i = 0; i < wpConfig.maxWP; i++) {
-		indices[i] = i;
+	int indices[wpConfig.maxWP - 1];
+	for (int i = 1; i < wpConfig.maxWP; i++) {
+		indices[i - 1] = i;
 	}
-	int wp_index = wpConfig.maxWP;
+	int wp_index = wpConfig.maxWP - 1;
 	while (wp_index) {
 		long int tmpVal;
 		lrand48_r(&threadDataTable.hashTable[me].randBuffer, &tmpVal);
@@ -1010,24 +1027,24 @@ static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int 
 		indices[index] = indices[wp_index];
 		indices[wp_index] = swap;
 	}
-	for(int i = 0; i < wpConfig.maxWP; i++) {
-		int idx = indices[i];
+	for(int i = 1; i < wpConfig.maxWP; i++) {
+		int idx = indices[i - 1];
 		double probabilityToReplace =  1.0/((double)threadDataTable.hashTable[me].numWatchpointArmingAttempt[idx]);
 		double randValue;
 		drand48_r(&threadDataTable.hashTable[me].randBuffer, &randValue);
 		if(randValue <= probabilityToReplace /* 1 */) {
 			*location = idx;
 			//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
-			for(int j = 0; j < wpConfig.maxWP; j++){
+			for(int j = 1; j < wpConfig.maxWP; j++){
 				threadDataTable.hashTable[me].numWatchpointArmingAttempt[j]++;
 			}
 			return NON_EMPTY_SLOT;
 		}
 	}
-	for(int i = 0; i < wpConfig.maxWP; i++) {
+	for(int i = 1; i < wpConfig.maxWP; i++) {
 		threadDataTable.hashTable[me].numWatchpointArmingAttempt[i]++;
 	}
-
+	}
 	return NONE_AVAILABLE;
 }
 
@@ -1622,6 +1639,7 @@ void DisableWatchpointWrapper(WatchPointInfo_t *wpi){
 	}
 }
 
+
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 	linux_perf_events_pause();
@@ -1738,10 +1756,272 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 		int loop_counter = 0;
 		int threshold = 50;
-                /*if(TD_GET(core_profile_trace_data.id) == me)
-                        threshold = 5000;
-                else
-                        threshold = 5000;*/
+		if(TD_GET(core_profile_trace_data.id) != me) {
+			fprintf(stderr, "signal from another thread\n");
+		int loop_counter = 0;
+                int threshold = 50;
+		do {
+			uint64_t theCounter = threadDataTable.hashTable[me].counter;
+			if(theCounter & 1) {
+				loop_counter++;
+				if(loop_counter > threshold) {
+					//fprintf(stderr, "watchpoint handling is discarded\n");
+					break;
+				}
+				continue;
+			}
+			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+				//fprintf(stderr, "watchpoint handling is entered\n");
+
+				for(int i = 1 ; i < wpConfig.maxWP; i++) {
+					//fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
+					if((threadDataTable.hashTable[fdData.tid].watchPointArray[i].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle)) {
+						//fprintf(stderr, "location is found in WP_REUSE_MT\n");
+						location = i;
+						break;
+					}
+				}
+				if(location == -1) {
+					EMSG("\n WP trigger did not match any known active WP\n");
+					//monitor_real_abort();
+					threadDataTable.hashTable[me].counter++;
+					//linux_perf_events_other_thread_resume(me);
+					hpcrun_safe_exit();
+					linux_perf_events_resume();
+					//fprintf("\n WP trigger did not match any known active WP\n");
+					return 0;
+				}
+				wp_count2++;
+
+				WatchPointTrigger_t wpt;
+				WPTriggerActionType retVal;
+
+				WatchPointInfo_t *wpi = &threadDataTable.hashTable[fdData.tid].watchPointArray[location];
+
+				switch (wpi->sample.preWPAction) {
+					case DISABLE_WP:
+						//fprintf(stderr, "in DISABLE_WP\n");
+						DisableWatchpointWrapper(wpi);
+						break;
+					default:
+						threadDataTable.hashTable[me].counter++;
+						assert(0 && "NYI");
+						monitor_real_abort();
+						break;
+				}
+
+				if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, fdData.tid)) {
+					//fprintf(stderr, "numWatchpointDropped in WP_REUSE_MT\n");
+					threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
+					retVal = DISABLE_WP; // disable if unable to collect any info.
+					wp_dropped++;
+				} else {
+					//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
+					//fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
+					wpi->trap_origin_tid = fdData.tid;
+					threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
+					retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength,  &wpt);
+				}
+
+				switch (retVal) {
+					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
+								       assert(wpi->isActive == false);
+								       threadDataTable.hashTable[fdData.tid].samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+								       if (wpConfig.replacementPolicy == RDX) {
+									       threadDataTable.hashTable[fdData.tid].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+									       //fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
+								       } 
+								       //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
+							       }
+							       break;
+					default: // Retain the state
+							break;
+				}
+
+				threadDataTable.hashTable[me].counter++;
+				break;	
+			}
+		} while(1);
+		} else {
+			fprintf(stderr, "signal from the same thread\n");
+				if((threadDataTable.hashTable[fdData.tid].watchPointArray[0].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[0].fileHandle)) {
+					//fprintf(stderr, "location is found in WP_REUSE_MT\n");
+					location = 0;
+				}
+				if(location == -1) {
+					EMSG("\n WP trigger did not match any known active WP\n");
+					hpcrun_safe_exit();
+					linux_perf_events_resume();
+					//fprintf("\n WP trigger did not match any known active WP\n");
+					return 0;
+				}
+				wp_count2++;
+
+				WatchPointTrigger_t wpt;
+				WPTriggerActionType retVal;
+
+				WatchPointInfo_t *wpi = &threadDataTable.hashTable[fdData.tid].watchPointArray[location];
+
+				switch (wpi->sample.preWPAction) {
+					case DISABLE_WP:
+						//fprintf(stderr, "in DISABLE_WP\n");
+						DisableWatchpointWrapper(wpi);
+						break;
+					default:
+						assert(0 && "NYI");
+						monitor_real_abort();
+						break;
+				}
+
+				if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, fdData.tid)) {
+					threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
+					retVal = DISABLE_WP;
+					wp_dropped++;
+				} else {
+					wpi->trap_origin_tid = fdData.tid;
+					threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
+					retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength,  &wpt);
+				}
+
+				switch (retVal) {
+					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
+								       assert(wpi->isActive == false);
+								       threadDataTable.hashTable[fdData.tid].samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+								       if (wpConfig.replacementPolicy == RDX) {
+									       threadDataTable.hashTable[fdData.tid].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+									       //fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
+								       } 
+								       //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
+							       }
+							       break;
+					default: // Retain the state
+							break;
+				}
+		}
+	}
+
+	hpcrun_safe_exit();
+	linux_perf_events_resume();
+	return 0;
+}
+
+/*
+static int OnWatchPoint(int signum, siginfo_t *info, void *context){
+
+	linux_perf_events_pause();
+	wp_count++;
+	void* pc = hpcrun_context_pc(context);
+	if (!hpcrun_safe_enter_async(pc)) {
+		linux_perf_events_resume();
+		return 0;
+	}
+	wp_count1++;
+
+	if(event_type != WP_REUSE_MT) {
+
+
+		tData.numWatchpointTriggers++;
+
+		int location = -1;
+
+		for(int i = 0 ; i < wpConfig.maxWP; i++) {
+			if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
+				location = i;
+				break;
+			}
+		}
+
+		if(location == -1) {
+			EMSG("\n WP trigger did not match any known active WP\n");
+			//monitor_real_abort();
+			hpcrun_safe_exit();
+			linux_perf_events_resume();
+			//fprintf("\n WP trigger did not match any known active WP\n");
+			return 0;
+		}
+		wp_count2++;
+
+		WatchPointTrigger_t wpt;
+		WPTriggerActionType retVal;
+		// WP_REUSE_MT until here
+		WatchPointInfo_t *wpi = &tData.watchPointArray[location];
+
+		// Perform Pre watchpoint action
+		switch (wpi->sample.preWPAction) {
+			case DISABLE_WP:
+				//fprintf(stderr, "in DISABLE_WP\n");
+				DisableWatchpointWrapper(wpi);
+				break;
+			case DISABLE_ALL_WP:
+				for(int i = 0; i < wpConfig.maxWP; i++) {
+					if(tData.watchPointArray[i].isActive){
+						DisableWatchpointWrapper(&tData.watchPointArray[i]);
+					}
+				}
+				break;
+			default:
+				assert(0 && "NYI");
+				monitor_real_abort();
+				break;
+		}
+
+		if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
+			tData.numWatchpointDropped++;
+			retVal = DISABLE_WP; // disable if unable to collect any info.
+			wp_dropped++;
+		} else {
+			tData.numActiveWatchpointTriggers++;
+			retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+		}
+
+		switch (retVal) {
+			case DISABLE_WP: {
+						 if(wpi->isActive){
+							 DisableWatchpointWrapper(wpi);
+						 }
+
+						 tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+					 }
+					 break;
+			case DISABLE_ALL_WP: {
+						     for(int i = 0; i < wpConfig.maxWP; i++) {
+							     if(tData.watchPointArray[i].isActive){
+								     DisableWatchpointWrapper(&tData.watchPointArray[i]);
+							     }
+						     }
+						     tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+					     }
+					     break;
+			case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
+						       assert(wpi->isActive == false);
+						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+						       if (wpConfig.replacementPolicy == RDX) {
+							       tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+						       }
+					       }
+					       break;
+			case RETAIN_WP: { // resurrect this wp
+						if(!wpi->isActive){
+							EnableWatchpoint(wpi->fileHandle);
+							wpi->isActive = true;
+						}
+					}
+					break;
+			default: // Retain the state
+					break;
+		}
+	} else {
+
+		int location = -1;
+		FdData_t fdData = fdDataGet(info->si_fd);
+
+		int me = fdData.tid;
+
+		// pause counters of the other thread here
+		//linux_perf_events_other_thread_pause(me);
+
+		int loop_counter = 0;
+		int threshold = 50;
 		do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			if(theCounter & 1) {
@@ -1841,7 +2121,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 								       if (wpConfig.replacementPolicy == RDX) {
 									       threadDataTable.hashTable[fdData.tid].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
 									       //fprintf(stderr, "watchpoint %d is reset due to trap\n", location);
-								       } 
+								       }
 								       //fprintf(stderr, "tData.samplePostFull is reset in ALREADY_DISABLED in thread %d\n", TD_GET(core_profile_trace_data.id));
 							       }
 							       break;
@@ -1857,13 +2137,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				}
 
 				threadDataTable.hashTable[me].counter++;
-				break;	
-			}
-			/*loop_counter++;
-			if(loop_counter > threshold) {
-				//fprintf(stderr, "watchpoint handling is discarded\n");
 				break;
-			}*/
+			}
 		} while(1);
 
 		//linux_perf_events_other_thread_resume(me);
@@ -1873,7 +2148,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 	hpcrun_safe_exit();
 	linux_perf_events_resume();
 	return 0;
-}
+}*/
+
 
 /*
    static int OnWatchPoint(int signum, siginfo_t *info, void *context){
@@ -2105,10 +2381,20 @@ static bool ValidateWPData(SampleData_t * sampleData){
 #endif
 }
 
-static bool IsOveralppedShared(SampleData_t * sampleData, int me){
+static bool IsOveralppedShared(SampleData_t * sampleData, int me, bool self){
 	// Is a WP with the same/overlapping address active?
 	//ThreadData_t threadData = threadDataTable.hashTable[me];
-	for (int i = 0;  i < wpConfig.maxWP; i++) {
+	if(self) {
+		if(threadDataTable.hashTable[me].watchPointArray[0].isActive){
+                        if(ADDRESSES_OVERLAP(threadDataTable.hashTable[me].watchPointArray[0].sample.va, threadDataTable.hashTable[me].watchPointArray[0].sample.wpLength, sampleData->va, sampleData->wpLength) && (threadDataTable.hashTable[me].watchPointArray[0].sample.first_accessing_tid == sampleData->first_accessing_tid)){
+
+                                //fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
+                                overlap_count++;
+                                return true;
+                        }
+                }
+	} else {
+	for (int i = 1;  i < wpConfig.maxWP; i++) {
 		if(threadDataTable.hashTable[me].watchPointArray[i].isActive){
 			if(ADDRESSES_OVERLAP(threadDataTable.hashTable[me].watchPointArray[i].sample.va, threadDataTable.hashTable[me].watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength) && (threadDataTable.hashTable[me].watchPointArray[i].sample.first_accessing_tid == sampleData->first_accessing_tid)){
 
@@ -2117,6 +2403,7 @@ static bool IsOveralppedShared(SampleData_t * sampleData, int me){
 				return true;
 			}
 		}
+	}
 	}
 	return false;
 }
@@ -2219,7 +2506,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		//fprintf(stderr, "in SubscribeWatchpointShared\n");
 
 		int loop_counter = 0;
-		int threshold = 50;/
+		int threshold = 50;
                 do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if(theCounter & 1) {
@@ -2275,7 +2562,8 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	return false;
 }*/
 
-bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me){
+
+bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me, bool self){
 	//fprintf(stderr, "in SubscribeWatchpointShared, wp of thread %d is armed by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 	sub_wp_count1++;
 	if(ValidateWPData(sampleData) == false) {
@@ -2283,18 +2571,50 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	}
 	//sub_wp_count2++;
 	//int tid = TD_GET(core_profile_trace_data.id);
+
+	if(self) {
+	fprintf(stderr, "arming in the same thread\n");	
+	if(IsOveralppedShared(sampleData, me, self)){
+		fprintf(stderr, "subscribing is dropped because of overlapping\n");
+		return false; // drop the sample if it overlaps an existing address
+	}
+	sub_wp_count2++;
+
+	// No overlap, look for a victim slot
+	int victimLocation = -1;
+	// Find a slot to install WP
+	//linux_perf_events_events_of_thread(TD_GET(core_profile_trace_data.id));
+	VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me, self);
+	sub_wp_count3++;
+	if(r != NONE_AVAILABLE) {
+		// VV IMP: Capture value before arming the WP.
+		if(captureValue) {
+			CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
+                }
+		// I know the error case that we have captured the value but ArmWatchPoint fails.
+		// I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
+		//printf("and this region\n");
+		//printf("arming watchpoints\n");
+		//fprintf(stderr, "watchpoint is armed\n");
+		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
+                	//LOG to hpcrun log
+                	EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+                        return false;
+		}
+                reuseMtDataInsert(sampleData->first_accessing_tid, sampleData->sampleTime, true);
+                return true;	
+	}
+	} else {
+	// before
+	fprintf(stderr, "arming another thread\n"); 
 	int loop_counter = 0;
         int threshold = 50;
 	if(threadDataTable.hashTable[me].os_tid != -1) {
                 do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if(theCounter & 1) {
-				if(TD_GET(core_profile_trace_data.id) != me)
-                                        break;
                                 loop_counter++;
                                 if(loop_counter > threshold) {
-                                        if(TD_GET(core_profile_trace_data.id) == me)
-                                                subscribe_dropped++;
                                         //fprintf(stderr, "arming is discarded\n");
                                         break;
                                 }
@@ -2302,25 +2622,26 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                         }
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
-				if(IsOveralppedShared(sampleData, me)){
+				if(IsOveralppedShared(sampleData, me, self)){
+					threadDataTable.hashTable[me].counter++;
                         		return false;
                 		}
                 		sub_wp_count2++;
                 		int victimLocation = -1;
 
-				VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me);
+				VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me, self);
 				sub_wp_count3++;
 				if(r != NONE_AVAILABLE) {
 					if(captureValue) {
 						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
 					}
+					fprintf(stderr, "ArmWatchPointShared on another thread\n");
 					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
 						//LOG to hpcrun log
 						EMSG("ArmWatchPoint failed for address %p", sampleData->va);
 						threadDataTable.hashTable[me].counter++;
 						return false;
 					}
-					reuseMtDataInsert(sampleData->first_accessing_tid, sampleData->sampleTime, true);
 					threadDataTable.hashTable[me].counter++;
 					return true;
 				}
@@ -2330,6 +2651,8 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		}
 		  } while(1);
 	}
+	}
+	// after
 	return false;
 }
 

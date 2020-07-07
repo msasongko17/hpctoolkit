@@ -2906,7 +2906,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active = true) {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
 	reuse_flag = true;
       }
       else {
@@ -2921,14 +2921,14 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	}
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
-	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc);
+	  fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
 	  if(inc == 0) {
 	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
 	  }
 	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
 	} else {
-	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc);
+	  fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
 	}
 	if(inc == 0) {
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -4852,10 +4852,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  idx_array[idx] = idx_array[i];
 			  idx_array[i] = tmpVal;
 			}
-			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me)) {
+			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true)) {
 			  for(int i = 0; i < global_thread_count; i++)
 			    if(idx_array[i] != me)
-			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i]);
+			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i], false);
 			  //fprintf(stderr, "WP subscribing succeeds\n");
 			} else {
 			  //fprintf(stderr, "WP subscribing fails\n");
