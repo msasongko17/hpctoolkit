@@ -1806,17 +1806,17 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		//linux_perf_events_other_thread_pause(me);
 
 		int loop_counter = 0;
-		int threshold = 50;
+		int threshold = 5;
 		if(TD_GET(core_profile_trace_data.id) != me) {
-			//fprintf(stderr, "signal from another thread\n");
+			fprintf(stderr, "signal from another thread\n");
 		int loop_counter = 0;
-                int threshold = 50;
+                int threshold = 5;
 		do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			if(theCounter & 1) {
 				loop_counter++;
 				if(loop_counter > threshold) {
-					//fprintf(stderr, "watchpoint handling is discarded\n");
+					fprintf(stderr, "watchpoint handling is discarded\n");
 					break;
 				}
 				continue;
@@ -1839,7 +1839,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					//linux_perf_events_other_thread_resume(me);
 					hpcrun_safe_exit();
 					linux_perf_events_resume();
-					//fprintf("\n WP trigger did not match any known active WP\n");
+					//fprintf("WP trigger did not match any known active WP\n");
 					return 0;
 				}
 				wp_count2++;
@@ -1894,7 +1894,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			}
 		} while(1);
 		} else {
-			//fprintf(stderr, "signal from the same thread\n");
+			fprintf(stderr, "signal from the same thread\n");
 				/*if((threadDataTable.hashTable[fdData.tid].watchPointArray[0].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[0].fileHandle)) {
 					//fprintf(stderr, "location is found in WP_REUSE_MT\n");
 					location = 0;
@@ -1911,7 +1911,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					EMSG("\n WP trigger did not match any known active WP\n");
 					hpcrun_safe_exit();
 					linux_perf_events_resume();
-					//fprintf("\n WP trigger did not match any known active WP\n");
+					fprintf(stderr, "WP trigger did not match any known active WP\n");
 					return 0;
 				}
 				wp_count2++;
@@ -1936,6 +1936,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
 					retVal = DISABLE_WP;
 					wp_dropped++;
+					fprintf(stderr, "WP trigger is dropped\n");
 				} else {
 					wpi->trap_origin_tid = fdData.tid;
 					threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
@@ -2670,14 +2671,14 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	// before
 	//fprintf(stderr, "arming another thread\n"); 
 	int loop_counter = 0;
-        int threshold = 50;
+        int threshold = 5;
 	if(threadDataTable.hashTable[me].os_tid != -1) {
                 do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if(theCounter & 1) {
                                 loop_counter++;
                                 if(loop_counter > threshold) {
-                                        //fprintf(stderr, "arming is discarded\n");
+                                        fprintf(stderr, "arming is discarded\n");
                                         break;
                                 }
                                 continue;

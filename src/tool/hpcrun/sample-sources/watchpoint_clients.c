@@ -2878,7 +2878,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 }
 
 static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseMtWPCallback, handler at thread %d due to trap at thread %d\n", TD_GET(core_profile_trace_data.id), wpi->trap_origin_tid);
+	//if(TD_GET(core_profile_trace_data.id) != wpi->trap_origin_tid)
+  	//fprintf(stderr, "in ReuseMtWPCallback, handler at thread %d due to trap at thread %d\n", TD_GET(core_profile_trace_data.id), wpi->trap_origin_tid);
   trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
@@ -2903,10 +2904,10 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   bool reuse_flag = false;
   uint64_t reuseMtIdx = reuseMtIndexGet(wpi->sample.sampleTime);
   if((reuseMtBulletinBoard.hashTable[reuseMtIdx].time == wpi->sample.sampleTime) && (reuseMtBulletinBoard.hashTable[reuseMtIdx].tid == wpi->sample.first_accessing_tid)) {
-    if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active = true) {
+    if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active == true) {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
+	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d wpi->sample.sampleTime: %ld\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx, wpi->sample.sampleTime);
 	reuse_flag = true;
       }
       else {
@@ -2921,14 +2922,14 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	}
 	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
-	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
+	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d wpi->sample.sampleTime %ld\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx, wpi->sample.sampleTime);
 	  if(inc == 0) {
 	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
 	  }
 	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
 	} else {
-	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
+	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d wpi->sample.sampleTime %ld\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx, wpi->sample.sampleTime);
 	}
 	if(inc == 0) {
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -2940,11 +2941,11 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     } else {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
       else {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
     }
   }
