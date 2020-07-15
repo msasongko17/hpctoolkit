@@ -1697,7 +1697,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 1100000;
+	    	reuse_bin_start = 275000;
 	    	//reuse_bin_start = 1000;
 	    	reuse_bin_ratio = 2;
 	    	fprintf(stderr, "default configuration is applied\n");
@@ -2716,34 +2716,26 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     WriteWitchTraceOutput("\n");
   } else{
 
+    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+
+    uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+
     // before
     int item_found = 0;
     int me = TD_GET(core_profile_trace_data.id);
     int my_core = sched_getcpu();
+    bool invalidation_flag = false;
     //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
     //prettyPrintReuseHash();
     ReuseBBEntry_t prev_access;
     ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_found);
+
     //fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
     if(item_found == 1) {
 
       //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
-      if(/*wpi->sample.sampleTime >= prev_access.time*/(trapTime - prev_access.time) >= (trapTime - wpi->sample.olderStoreAccess)) {
+      if(/*wpi->sample.sampleTime >= prev_access.time*/(trapTime - prev_access.time) < (trapTime - wpi->sample.olderStoreAccess)) {
 
-	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-
-	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-	inc = numDiffSamples;	
-	// after
-	//fprintf(stderr, "reuse distance %d is detected because prev_access.time - wpi->sample.sampleTime = %ld\n", rd, prev_access.time - wpi->sample.sampleTime);
-	//fprintf(stderr, "reuse distance %ld has been detected %ld times, me: %d, prev_access.tid: %d, (trapTime - prev_access.time): %ld, (trapTime - wpi->sample.prevStoreAccess): %ld\n", rd, inc, me, prev_access.tid, (trapTime - prev_access.time), (trapTime - wpi->sample.prevStoreAccess));
-	ReuseAddDistance(rd, inc);
-	reuse_detected_entry_in_bb++;
-
-	//ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-	//for(int i = 0; i < reuse_bin_size; i++)
-	//fprintf(stderr, "reuse_bin_pivot_list[%d]: %d\n", i, reuse_bin_pivot_list[i]);
-      } else {
 	//fprintf(stderr, "it falls to this region because prev_access.time - wpi->sample.sampleTime: %ld, prev_access.time: %ld, wpi->sample.sampleTime: %ld\n", prev_access.time - wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime);
 
 	double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
@@ -2770,6 +2762,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) /*&& ((prev_access.time - wpi->sample.sampleTime) < (trapTime - wpi->sample.sampleTime))*/) {
 	      //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d, time gap: %ld, wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime): %ld\n", me, wpi->sample.accessType, prev_access.tid, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime), wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime));
 	      invalidation_matrix[me][prev_access.tid] += increment;
+	      invalidation_flag = true;
 	    }
 	  }
 	  //fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
@@ -2802,19 +2795,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  //fprintf(stderr, "as_core_matrix is incremented by %0.2lf at trap\n", increment);
 	}
       }
-    } else {
-      //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
-      double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-
-      uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-      inc = numDiffSamples;
-      //fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
-      ReuseAddDistance(rd, inc);
-      reuse_detected_entry_not_in_bb++;
-      //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    }
-
-    if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+    }    /*if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
       ReuseBBEntry_t curr_access= {
 	.time=trapTime,  //jqswang: Setting it to WP_READ causes segment fault
 	.tid=TD_GET(core_profile_trace_data.id),
@@ -2832,8 +2813,17 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       reuseHashInsert(curr_access, storeLastTime);
       //fprintf(stderr, "pretty printing Bulletin Board at trap\n");
       //prettyPrintReuseHash();
-    }
+    }*/
     // after
+    if (invalidation_flag == false){
+      //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
+
+      inc = numDiffSamples;
+      //fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+      ReuseAddDistance(rd, inc);
+      reuse_detected_entry_not_in_bb++;
+      //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+    }
   }
 #else
 
