@@ -502,6 +502,8 @@ void reuseHashInsert(ReuseBBEntry_t item) {
 void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
   int hashIndex = hashCode(cacheLineBaseAddress);
+  uint64_t time = item.time;
+  int tid = item.tid;
   //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
   //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
   int64_t expirationPeriod = 2 * (storeLastTime - storeOlderTime);
@@ -511,14 +513,17 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
     if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
       int i = 0;
       while(i < HASHTABLESIZE) {
-	if((reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((expirationPeriod > 0) && (expirationPeriod < (item.time - reuseBulletinBoard.hashTable[hashIndex].time))) || ((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))) {
-		if(reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1)
+	void * targetCacheLineBaseAddress = reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress;
+	uint64_t target_time = reuseBulletinBoard.hashTable[hashIndex].time;
+	int target_tid = reuseBulletinBoard.hashTable[hashIndex].tid;
+	if((targetCacheLineBaseAddress == -1) || ((expirationPeriod > 0) && (expirationPeriod < (time - target_time))) || ((tid == target_tid) && (cacheLineBaseAddress == targetCacheLineBaseAddress))) {
+		/*if(reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1)
 			fprintf(stderr, "reason 1\n");
 		else if((item.time - lastStoreCounter) < (item.time - reuseBulletinBoard.hashTable[hashIndex].time))
 			fprintf(stderr, "reason 2\n");
 		else if((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))
-			fprintf(stderr, "reason 3\n");
-		//fprintf(stderr, "insertion happens\n");
+			fprintf(stderr, "reason 3\n");*/
+		fprintf(stderr, "insertion happens\n");
 		reuseBulletinBoard.hashTable[hashIndex] = item;
 		break;
 	}
@@ -528,8 +533,10 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
       __sync_synchronize();
       reuseBulletinBoard.counter++;
     } else {
-	    fprintf(stderr, "failed to insert to BB\n");
+	    fprintf(stderr, "failed to insert to BB because of __sync_bool_compare_and_swap\n");
     }
+  } else {
+	  fprintf(stderr, "failed to insert to BB because BB is being used\n");
   }
 }
 
@@ -1709,7 +1716,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 275000;
+	    	reuse_bin_start = 1100000;
 	    	//reuse_bin_start = 1000;
 	    	reuse_bin_ratio = 2;
 	    	fprintf(stderr, "default configuration is applied\n");
@@ -3523,6 +3530,26 @@ void ReadSharedDataTransactionally(SharedData_t *localSharedData){
   }while(1);
 }
 
+void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_found) {
+  //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
+  //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+  int64_t expirationPeriod = 2 * (storeLastTime - storeOlderTime);
+  uint64_t theCounter = reuseBulletinBoard.counter;
+  if((theCounter & 1) == 0)
+  {
+    if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
+     *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_found); 
+      __sync_synchronize();
+      reuseBulletinBoard.counter++;
+    } else {
+	    fprintf(stderr, "failed to read from BB because of __sync_bool_compare_and_swap\n");
+    }
+  } else {
+	fprintf(stderr, "failed to read from BB because BB is being used by another thread\n");
+  }
+}
+
+/*
 void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t data_addr, int * item_found){
   // Laport's STM
   int loop_counter = 0;
@@ -3539,7 +3566,6 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
     }
 
     __sync_synchronize();
-    //*localSharedData = gSharedData;
     *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_found);
     __sync_synchronize();
     int64_t endCounter = reuseBulletinBoard.counter;
@@ -3554,7 +3580,7 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
       }
     }
   }while(1);
-}
+}*/
 
 int static inline GetFloorWPLength(int accessLen){
   switch (accessLen) {
