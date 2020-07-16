@@ -347,7 +347,9 @@ ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
 __thread uint64_t prev_timestamp = 0;
 
 __thread int64_t lastTime = 0;
+__thread int64_t storeOlderTime = 0;
 __thread int64_t storeLastTime = 0;
+__thread int64_t storeExpirationPeriod = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
 __thread uint64_t usedBytes = 0;
@@ -502,14 +504,22 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   //fprintf(stderr, "cache line %lx is inserted to index %d\n", (long) cacheLineBaseAddress, hashIndex);
   //if (reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) {
+  int64_t expirationPeriod = 2 * (storeLastTime - storeOlderTime);
   uint64_t theCounter = reuseBulletinBoard.counter;
   if((theCounter & 1) == 0)
   {
     if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
       int i = 0;
       while(i < HASHTABLESIZE) {
-	if((reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((item.time - lastStoreCounter) < (item.time - reuseBulletinBoard.hashTable[hashIndex].time)) || ((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))) {
-      		reuseBulletinBoard.hashTable[hashIndex] = item;
+	if((reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1) || ((expirationPeriod > 0) && (expirationPeriod < (item.time - reuseBulletinBoard.hashTable[hashIndex].time))) || ((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))) {
+		if(reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress == -1)
+			fprintf(stderr, "reason 1\n");
+		else if((item.time - lastStoreCounter) < (item.time - reuseBulletinBoard.hashTable[hashIndex].time))
+			fprintf(stderr, "reason 2\n");
+		else if((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))
+			fprintf(stderr, "reason 3\n");
+		//fprintf(stderr, "insertion happens\n");
+		reuseBulletinBoard.hashTable[hashIndex] = item;
 		break;
 	}
 	hashIndex = (hashIndex + 1) % HASHTABLESIZE;
@@ -517,6 +527,8 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
       }
       __sync_synchronize();
       reuseBulletinBoard.counter++;
+    } else {
+	    fprintf(stderr, "failed to insert to BB\n");
     }
   }
 }
@@ -2734,14 +2746,16 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     if(item_found == 1) {
 
       //fprintf(stderr, "trapped cache line: %lx in thread %d and previously sampled cache line: %lx in thread %d\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)), me, prev_access.cacheLineBaseAddress, prev_access.tid);	   
-      if(/*wpi->sample.sampleTime >= prev_access.time*/(trapTime - prev_access.time) < (trapTime - wpi->sample.olderStoreAccess)) {
+
+	int64_t expirationPeriod = storeLastTime - storeOlderTime; 
+      	if(((expirationPeriod > 0) && ((trapTime - prev_access.time) < 2 * expirationPeriod)) || ((expirationPeriod == 0) && ((trapTime - prev_access.time) > 0))) {
 
 	//fprintf(stderr, "it falls to this region because prev_access.time - wpi->sample.sampleTime: %ld, prev_access.time: %ld, wpi->sample.sampleTime: %ld\n", prev_access.time - wpi->sample.sampleTime, prev_access.time, wpi->sample.sampleTime);
 
-	double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+	//double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+	double increment = (double) hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	// validate the invalidation by checking the execution time
-	if((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)/*wpi->sample.expirationPeriod*/) {
-	  inter_thread_invalidation_count += inc;
+	//if((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)) {
 	  int max_thread_num = prev_access.tid;
 	  if(max_thread_num < me)
 	  {
@@ -2754,21 +2768,15 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  //fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
 	  as_matrix[prev_access.tid][me] += increment;
 	  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
-	    //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
+	    fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
 	    invalidation_matrix[prev_access.tid][me] += increment;
-	  }
-	  if((prev_access.time - wpi->sample.sampleTime) < /*wpi->sample.expirationPeriod*/(trapTime - wpi->sample.sampleTime)) {
-	    as_matrix[me][prev_access.tid] += increment;
-	    if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) /*&& ((prev_access.time - wpi->sample.sampleTime) < (trapTime - wpi->sample.sampleTime))*/) {
-	      //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d, time gap: %ld, wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime): %ld\n", me, wpi->sample.accessType, prev_access.tid, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime), wpi->sample.expirationPeriod - (prev_access.time - wpi->sample.sampleTime));
-	      invalidation_matrix[me][prev_access.tid] += increment;
-	      invalidation_flag = true;
-	    }
-	  }
+	    inter_thread_invalidation_count += inc;
+	    invalidation_flag = true;
+	  } 
 	  //fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
 	  //fprintf(stderr, "as_matrix is incremented by %0.2lf at trap\n", increment);
-	}
-	if((my_core != prev_access.core_id) && ((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess) /*wpi->sample.expirationPeriod*/)) {
+	//}
+	if(my_core != prev_access.core_id) {
 	  inter_core_invalidation_count += inc;
 	  int max_core_num = prev_access.core_id;
 	  if(max_core_num < my_core)
@@ -2784,18 +2792,14 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
 	    invalidation_core_matrix[prev_access.core_id][my_core] += increment;
 	  }
-	  if((prev_access.time - wpi->sample.sampleTime) < /*wpi->sample.expirationPeriod*/(trapTime - wpi->sample.sampleTime)) {
-	    as_core_matrix[my_core][prev_access.core_id] += increment;	
-	    if((wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) /*&& ((prev_access.time - wpi->sample.sampleTime) < (trapTime - wpi->sample.sampleTime))*/) {
-	      //fprintf(stderr, "a core invalidation is detected in core %d with access type: %d due to access in core %d with access type %d, time gap: %ld\n", my_core, wpi->sample.accessType, prev_access.core_id, prev_access.accessType, (prev_access.time - wpi->sample.sampleTime));
-	      invalidation_core_matrix[my_core][prev_access.core_id] += increment;
-	    }
-	  }
 	  //fprintf(stderr, "inter-core communication is detected between core %d and core %d because prev_access.time - wpi->sample.sampleTime = %ld\n", prev_access.core_id, my_core, prev_access.time - wpi->sample.sampleTime);
 	  //fprintf(stderr, "as_core_matrix is incremented by %0.2lf at trap\n", increment);
 	}
       }
-    }    /*if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+    } else {
+	    fprintf(stderr, "item not found\n");
+    }
+	    /*if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
       ReuseBBEntry_t curr_access= {
 	.time=trapTime,  //jqswang: Setting it to WP_READ causes segment fault
 	.tid=TD_GET(core_profile_trace_data.id),
@@ -2819,7 +2823,10 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 
       inc = numDiffSamples;
-      //fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+      if(((storeLastTime - storeOlderTime) > 0) && ((trapTime - prev_access.time) >= 2 * (storeLastTime - storeOlderTime))) {
+	fprintf(stderr, "reuse distance is detected because entry in bb is too old\n");
+      }
+      fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
       ReuseAddDistance(rd, inc);
       reuse_detected_entry_not_in_bb++;
       //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
@@ -3525,8 +3532,9 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
     int64_t startCounter = reuseBulletinBoard.counter;
     if(startCounter & 1) {
       loop_counter++;
-      if(loop_counter > 5) {
+      if(loop_counter > 50) {
 	*item_found =  0;
+	fprintf(stderr, "exits because of counter 1\n");
 	break;
       }
       continue; // Some writer is updating
@@ -3541,7 +3549,8 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
       break;
     } else {
       loop_counter++;
-      if(loop_counter > 5) {
+      if(loop_counter > 50) {
+	fprintf(stderr, "exits because of counter 2\n");
 	*item_found = 0;
 	break;
       }
@@ -4548,10 +4557,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			// before 
 			//ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
 			ReuseBBEntry_t prev_access;
-			ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_found);
+			int64_t commExpirationPeriod = curTime - storeLastTime;
+			/*ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_found);
+			//int64_t commExpirationPeriod = (storeExpirationPeriod > 0) ? storeExpirationPeriod : (curTime - storeLastTime);
+			int64_t commExpirationPeriod = curTime - storeLastTime;
 			if(item_found == 1) {
-			  //fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
-			  if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
+			  fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
+			  if((me != prev_access.tid) && ((curTime - prev_access.time) <= commExpirationPeriod)) {
 			    //fprintf(stderr, "fulfilled condition\n");
 			    //fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time) = %\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
 			    //fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
@@ -4570,12 +4582,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			      //fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
 			      invalidation_matrix[prev_access.tid][me] += (double) metricThreshold;
-			    } /* else {
-				 fprintf(stderr, "there is an inter-thread communication, but no invalidation\n");
-				 }*/
+			    } 
 			    //fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
 			  }
-			  if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
+			  if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= commExpirationPeriod)) {
 			    inter_core_invalidation_count += metricThreshold;
 			    int max_core_num = prev_access.core_id;
 			    if(max_core_num < my_core)
@@ -4591,12 +4601,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			      //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
 			      invalidation_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-			    } /*else {
-				fprintf(stderr, "there is an inter-core communication, but no invalidation\n");
-				}*/
-			    //fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
+			    } 
 			  }
-			}
+			}*/
 			// after
 			/*sd.eventCountBetweenSamples=eventDiff;
                         sd.timeBetweenSamples=timeDiff;
@@ -4621,6 +4628,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  //fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 
 			  //prettyPrintReuseHash();
 			  reuseHashInsert(curr_access, storeLastTime);
+			  storeExpirationPeriod = storeCurTime - storeLastTime;
+			  storeOlderTime = storeLastTime;
 			  storeLastTime = storeCurTime;
 			  //fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
 			  //prettyPrintReuseHash();
@@ -4629,7 +4638,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			sd.timeBetweenSamples=timeDiff;
 			sd.sampleTime=curTime;
 			sd.prevStoreAccess = storeLastTime;
-			sd.expirationPeriod=(curTime - lastTime);
+			sd.expirationPeriod=commExpirationPeriod;
 			prev_event_count = pmu_counter;
 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
