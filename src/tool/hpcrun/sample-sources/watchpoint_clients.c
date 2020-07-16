@@ -2776,7 +2776,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  //fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
 	  //fprintf(stderr, "as_matrix is incremented by %0.2lf at trap\n", increment);
 	//}
-	if(my_core != prev_access.core_id) {
+	/*if(my_core != prev_access.core_id) {
 	  inter_core_invalidation_count += inc;
 	  int max_core_num = prev_access.core_id;
 	  if(max_core_num < my_core)
@@ -2792,9 +2792,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
 	    invalidation_core_matrix[prev_access.core_id][my_core] += increment;
 	  }
-	  //fprintf(stderr, "inter-core communication is detected between core %d and core %d because prev_access.time - wpi->sample.sampleTime = %ld\n", prev_access.core_id, my_core, prev_access.time - wpi->sample.sampleTime);
-	  //fprintf(stderr, "as_core_matrix is incremented by %0.2lf at trap\n", increment);
-	}
+	}*/
       }
     } else {
 	    fprintf(stderr, "item not found\n");
@@ -5570,9 +5568,9 @@ void dump_comdetective_matrices() {
   }
   if(theWPConfig->id == WP_MT_REUSE || theWPConfig->id == WP_REUSE_MT) {
     dump_as_matrix();
-    dump_as_core_matrix();
+    //dump_as_core_matrix();
     dump_invalidation_matrix();
-    dump_invalidation_core_matrix();
+    //dump_invalidation_core_matrix();
 
   }
 }
