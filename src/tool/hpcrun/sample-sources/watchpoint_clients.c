@@ -349,6 +349,8 @@ __thread uint64_t prev_timestamp = 0;
 __thread int64_t lastTime = 0;
 __thread int64_t storeOlderTime = 0;
 __thread int64_t storeLastTime = 0;
+__thread int64_t failedBBInsert = 0;
+__thread int64_t failedBBRead = 0;
 __thread int64_t storeExpirationPeriod = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
@@ -525,6 +527,7 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
 			fprintf(stderr, "reason 3\n");*/
 		fprintf(stderr, "insertion happens\n");
 		reuseBulletinBoard.hashTable[hashIndex] = item;
+		failedBBInsert = 0;
 		break;
 	}
 	hashIndex = (hashIndex + 1) % HASHTABLESIZE;
@@ -534,9 +537,11 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
       reuseBulletinBoard.counter++;
     } else {
 	    fprintf(stderr, "failed to insert to BB because of __sync_bool_compare_and_swap\n");
+	    failedBBInsert++;
     }
   } else {
 	  fprintf(stderr, "failed to insert to BB because BB is being used\n");
+	  failedBBInsert++;
   }
 }
 
@@ -685,6 +690,18 @@ void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   //reuse_bin_list[index] += inc;
   thread_reuse_bin_list[index] += inc;
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+}
+
+void ReuseSubDistance(uint64_t distance, uint64_t dec ){
+  int index = FindThreadReuseBinIndex(distance);
+  /*if(reuse_bin_size < thread_reuse_bin_size)
+          reuse_bin_size = thread_reuse_bin_size;*/
+  //reuse_bin_list[index] += inc;
+  if ((thread_reuse_bin_list[index] - dec) >= 0)
+  	thread_reuse_bin_list[index] -= dec;
+  else
+	  thread_reuse_bin_list[index] = 0;
+  fprintf(stderr, "distance %ld has been subtracted %ld times with index %d\n", distance, dec, index);
 }
 #endif
 
@@ -2749,6 +2766,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     ReuseBBEntry_t prev_access;
     ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_found);
 
+    double prev_invalidation_count = 0;
     //fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
     if(item_found == 1) {
 
@@ -2776,7 +2794,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  as_matrix[prev_access.tid][me] += increment;
 	  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 	    fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
-	    invalidation_matrix[prev_access.tid][me] += increment;
+	    prev_invalidation_count = prev_access.failedBBInsert * increment + failedBBRead * increment;
+	    invalidation_matrix[prev_access.tid][me] += increment + prev_invalidation_count;
+	    ReuseSubDistance(rd, (uint64_t) prev_invalidation_count);
 	    inter_thread_invalidation_count += inc;
 	    invalidation_flag = true;
 	  } 
@@ -3539,13 +3559,16 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
   {
     if(__sync_bool_compare_and_swap(&reuseBulletinBoard.counter, theCounter, theCounter+1)){
      *prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), item_found); 
+     failedBBRead = 0;
       __sync_synchronize();
       reuseBulletinBoard.counter++;
     } else {
 	    fprintf(stderr, "failed to read from BB because of __sync_bool_compare_and_swap\n");
+	    failedBBRead++;
     }
   } else {
 	fprintf(stderr, "failed to read from BB because BB is being used by another thread\n");
+	failedBBRead++;
   }
 }
 
@@ -4647,6 +4670,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			    .node=node,
 			    .eventCountBetweenSamples=eventDiff,	
 			    .timeBetweenSamples=timeDiff,
+			    .failedBBInsert=failedBBInsert,
 			  };
 			  //fprintf(stderr, "sampled cache line: %lx in thread %d\n", curr_access.cacheLineBaseAddress, curr_access.tid);
 			  //fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 

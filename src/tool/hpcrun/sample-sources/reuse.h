@@ -10,6 +10,7 @@ typedef struct reuseBBEntry{
   uint64_t pmu_counter;
   uint64_t eventCountBetweenSamples;
   uint64_t timeBetweenSamples;
+  int64_t failedBBInsert;
   char dummy[CACHE_LINE_SZ];
 } ReuseBBEntry_t;
 
