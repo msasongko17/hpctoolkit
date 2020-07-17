@@ -230,10 +230,21 @@ extern __thread uint64_t wp_dropped;
 extern __thread uint64_t wp_active;
 extern __thread uint64_t subscribe_dropped;
 
-extern ReuseMtHashTable_t reuseMtBulletinBoard;
+ReuseMtHashTable_t reuseMtBulletinBoard;
 
 //ReuseMtBBEntry_t reuseMtDataGet(uint64_t timestamp);
 //
+ReuseMtHashTable_t reuseMtBulletinBoard = {.counter = 0};
+
+uint64_t reuseMtDataInsert(int tid, uint64_t timestamp, bool active_flag) {
+        uint64_t idx = timestamp % 503;
+        //printf("fd: %d is inserted to index: %d\n", fd, idx);
+        reuseMtBulletinBoard.hashTable[idx].tid = tid;
+        reuseMtBulletinBoard.hashTable[idx].time = timestamp;
+        reuseMtBulletinBoard.hashTable[idx].active = active_flag;
+        return idx;
+}
+
 ReuseMtBBEntry_t reuseMtDataGet(uint64_t timestamp) {
   uint64_t idx = timestamp % 503;
   return reuseMtBulletinBoard.hashTable[idx];
@@ -2927,7 +2938,6 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   if((reuseMtBulletinBoard.hashTable[reuseMtIdx].time == wpi->sample.sampleTime) && (reuseMtBulletinBoard.hashTable[reuseMtIdx].tid == wpi->sample.first_accessing_tid)) {
     if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active = true) {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
-	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
 	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
 	reuse_flag = true;
       }
@@ -2941,7 +2951,6 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	{
 	  as_matrix_size =  max_thread_num;
 	}
-	reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
 	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
 	  if(inc == 0) {
@@ -2959,6 +2968,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
       }
       //prettyPrintReuseMtHash();
+      reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
     } else {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
@@ -4900,6 +4910,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  idx_array[i] = tmpVal;
 			}
 			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true)) {
+				reuseMtDataInsert(me, curTime, true);
 			  for(int i = 0; i < global_thread_count; i++)
 			    if(idx_array[i] != me)
 			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i], false);

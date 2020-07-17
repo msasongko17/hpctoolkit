@@ -68,7 +68,7 @@
 #define MULTITHREAD_REUSE_HISTO 1
 
 #ifdef MULTITHREAD_REUSE_HISTO
-#include "reuse.h"
+//#include "reuse.h"
 #define REUSE_HISTO 1
 #endif
 
@@ -119,7 +119,7 @@ extern int event_type;
 //const WatchPointInfo_t dummyWPInfo = {.sample = {}, .startTime =0, .fileHandle= -1, .isActive= false, .mmapBuffer=0};
 //const struct DUMMY_WATCHPOINT dummyWP[MAX_WP_SLOTS];
 
-ReuseMtHashTable_t reuseMtBulletinBoard = {.counter = 0};
+//ReuseMtHashTable_t reuseMtBulletinBoard = {.counter = 0};
 
 typedef enum WP_CLIENT_ID{
 	WP_DEADSPY,
@@ -198,6 +198,7 @@ int global_thread_count;
 
 static int same_thread_wp_count;
 
+/*
 uint64_t reuseMtDataInsert(int tid, uint64_t timestamp, bool active_flag) {
 	uint64_t idx = timestamp % 503;
 	//printf("fd: %d is inserted to index: %d\n", fd, idx);
@@ -205,7 +206,7 @@ uint64_t reuseMtDataInsert(int tid, uint64_t timestamp, bool active_flag) {
 	reuseMtBulletinBoard.hashTable[idx].time = timestamp;
 	reuseMtBulletinBoard.hashTable[idx].active = active_flag;
 	return idx;
-}
+}*/
 
 FdData_t fdDataGet(int fd) {
 	int idx = fd % 503;
@@ -2663,7 +2664,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                 	EMSG("ArmWatchPoint failed for address %p", sampleData->va);
                         return false;
 		}
-                reuseMtDataInsert(sampleData->first_accessing_tid, sampleData->sampleTime, true);
+                //reuseMtDataInsert(sampleData->first_accessing_tid, sampleData->sampleTime, true);
                 return true;	
 	}
 	} else {
