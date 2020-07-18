@@ -2984,7 +2984,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
 	reuse_flag = true;
       }
-      else {
+      else if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE) || (wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) {
 	int max_thread_num = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
 	if(max_thread_num < wpi->trap_origin_tid)
 	{
@@ -3007,8 +3007,6 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	  last_rd = rd;
 	  last_from = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
 	  last_to = wpi->trap_origin_tid;
-	} else {
-	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
 	}
 	if(inc == 0) {
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
