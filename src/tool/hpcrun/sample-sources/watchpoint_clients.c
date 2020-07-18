@@ -1189,6 +1189,7 @@ static void ClientTermination(){
 
 	if(last_trap_is_invalidation) {
 		invalidation_matrix[last_from][last_to] += (double) (last_inc * inter_wp_dropped_counter);
+		as_matrix[last_from][last_to] += (double) (last_inc * inter_wp_dropped_counter);
           	ReuseSubDistance(last_rd, (uint64_t) (last_inc * inter_wp_dropped_counter));
 	} else {
 		ReuseAddDistance(last_rd, (uint64_t) (last_inc * inter_wp_dropped_counter));
