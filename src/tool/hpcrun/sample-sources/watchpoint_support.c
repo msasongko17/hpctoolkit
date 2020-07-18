@@ -226,6 +226,8 @@ __thread uint64_t wp_count1 = 0;
 __thread uint64_t wp_count2 = 0;
 __thread uint64_t wp_active = 0;
 __thread uint64_t wp_dropped = 0;
+__thread uint64_t intra_wp_dropped_counter = 0;
+__thread uint64_t inter_wp_dropped_counter = 0;
 __thread uint64_t subscribe_dropped = 0;
 
 #ifdef REUSE_HISTO
@@ -1755,9 +1757,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			tData.numWatchpointDropped++;
 			retVal = DISABLE_WP; // disable if unable to collect any info.
 			wp_dropped++;
+			//wp_dropped_counter++;
 		} else {
 			tData.numActiveWatchpointTriggers++;
 			retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+			//wp_dropped_counter = 0;
 		}
 
 		switch (retVal) {
@@ -1817,13 +1821,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			if(theCounter & 1) {
 				loop_counter++;
 				if(loop_counter > threshold) {
-					//fprintf(stderr, "watchpoint handling is discarded\n");
+					fprintf(stderr, "watchpoint handling is discarded\n");
 					break;
 				}
+				fprintf(stderr, "rejection in OnWatchPoint happens\n");
 				continue;
 			}
 			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
-				//fprintf(stderr, "watchpoint handling is entered\n");
+				fprintf(stderr, "watchpoint handling is entered\n");
 
 				for(int i = same_thread_wp_count; i < wpConfig.maxWP; i++) {
 					//fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
@@ -1867,12 +1872,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
 					retVal = DISABLE_WP; // disable if unable to collect any info.
 					wp_dropped++;
+					inter_wp_dropped_counter++;
 				} else {
 					//fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
 					//fprintf(stderr, "numActiveWatchpointTriggers is incremented in WP_REUSE_MT\n");
 					wpi->trap_origin_tid = fdData.tid;
 					threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
 					retVal = threadDataTable.hashTable[fdData.tid].fptr(wpi, 0, wpt.accessLength,  &wpt);
+					inter_wp_dropped_counter = 0;
 				}
 
 				switch (retVal) {
@@ -1893,6 +1900,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				threadDataTable.hashTable[me].counter++;
 				break;	
 			}
+			fprintf(stderr, "rejection in OnWatchPoint happens\n");
 		} while(1);
 		} else {
 			//fprintf(stderr, "signal from the same thread\n");
@@ -1937,6 +1945,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					threadDataTable.hashTable[fdData.tid].numWatchpointDropped++;
 					retVal = DISABLE_WP;
 					wp_dropped++;
+					intra_wp_dropped_counter++;
 				} else {
 					wpi->trap_origin_tid = fdData.tid;
 					threadDataTable.hashTable[fdData.tid].numActiveWatchpointTriggers++;
@@ -2678,9 +2687,10 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                         if(theCounter & 1) {
                                 loop_counter++;
                                 if(loop_counter > threshold) {
-                                        //fprintf(stderr, "arming is discarded\n");
+                                        fprintf(stderr, "arming is discarded\n");
                                         break;
                                 }
+				fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
                                 continue;
                         }
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
@@ -2698,7 +2708,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 					if(captureValue) {
 						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
 					}
-					//fprintf(stderr, "ArmWatchPointShared on another thread\n");
+					fprintf(stderr, "ArmWatchPointShared on another thread\n");
 					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
 						//LOG to hpcrun log
 						EMSG("ArmWatchPoint failed for address %p", sampleData->va);
@@ -2712,6 +2722,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 				threadDataTable.hashTable[me].counter++; // makes the counter even
 				break;
 		}
+			fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
 		  } while(1);
 	}
 	}

@@ -192,7 +192,11 @@ int reuse_ds_counter = 0;
 __thread uint64_t * thread_reuse_bin_list = NULL;
 __thread double * thread_reuse_bin_pivot_list = NULL; // store the bin intervals
 __thread int thread_reuse_bin_size = 0;
-
+__thread uint64_t last_trap_is_invalidation = false;
+__thread uint64_t last_rd = 0;
+__thread uint64_t last_inc = 0;
+__thread int last_from = 0;
+__thread int last_to = 0;
 #else
 #endif
 
@@ -229,6 +233,8 @@ extern __thread uint64_t wp_count2;
 extern __thread uint64_t wp_dropped;
 extern __thread uint64_t wp_active;
 extern __thread uint64_t subscribe_dropped;
+extern __thread uint64_t inter_wp_dropped_counter;
+extern __thread uint64_t intra_wp_dropped_counter;
 
 ReuseMtHashTable_t reuseMtBulletinBoard;
 
@@ -708,7 +714,7 @@ void ReuseSubDistance(uint64_t distance, uint64_t dec ){
   /*if(reuse_bin_size < thread_reuse_bin_size)
           reuse_bin_size = thread_reuse_bin_size;*/
   //reuse_bin_list[index] += inc;
-  if ((thread_reuse_bin_list[index] - dec) >= 0)
+  if (thread_reuse_bin_list[index] >= dec)
   	thread_reuse_bin_list[index] -= dec;
   else
 	  thread_reuse_bin_list[index] = 0;
@@ -1176,8 +1182,17 @@ static void ClientTermination(){
 	fprintf(stderr, "wp_count1: %ld\n", wp_count1);
 	fprintf(stderr, "wp_count2: %ld\n", wp_count2);
 	fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
+	fprintf(stderr, "intra_wp_dropped_counter: %ld\n", intra_wp_dropped_counter);
+	fprintf(stderr, "inter_wp_dropped_counter: %ld\n", inter_wp_dropped_counter);
 	fprintf(stderr, "wp_active: %ld\n", wp_active);
 	fprintf(stderr, "subscribe_dropped: %ld\n", subscribe_dropped);
+
+	if(last_trap_is_invalidation) {
+		invalidation_matrix[last_from][last_to] += (double) (last_inc * inter_wp_dropped_counter);
+          	ReuseSubDistance(last_rd, (uint64_t) (last_inc * inter_wp_dropped_counter));
+	} else {
+		ReuseAddDistance(last_rd, (uint64_t) (last_inc * inter_wp_dropped_counter));
+	}
 
 	//fprintf(stderr, "in WP_MT_REUSE\n");
 	uint64_t val[3];
@@ -1744,7 +1759,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 1100000;
+	    	reuse_bin_start = 67;
 	    	//reuse_bin_start = 1000;
 	    	reuse_bin_ratio = 2;
 	    	fprintf(stderr, "default configuration is applied\n");
@@ -1917,7 +1932,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 1100000;
+	    	reuse_bin_start = 275000;
 	    	reuse_bin_ratio = 2;
 	    }
 	    fprintf(stderr, "default configuration is applied\n");
@@ -2920,6 +2935,30 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     return ALREADY_DISABLED;
   }
 #endif //jqswang
+  uint64_t val[2][3];
+    for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+      assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
+      //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
+      for(int j=0; j < 3; j++){
+        if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
+          val[i][j] -= wpi->sample.reuseDistance[i][j];
+        }
+        else { //Something wrong happens here and the record is not reliable. Drop it!
+          fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
+          return ALREADY_DISABLED;
+          //return RETAIN_WP;
+        }
+        /*if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
+          fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
+          return ALREADY_DISABLED;
+          }*/
+      }
+    }
+    uint64_t rd = 0;
+    for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
+      assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
+      rd += val[i][0];
+    }
   //fprintf(stderr, "there is a trap\n");
   //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
   //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
@@ -2936,7 +2975,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   bool reuse_flag = false;
   uint64_t reuseMtIdx = reuseMtIndexGet(wpi->sample.sampleTime);
   if((reuseMtBulletinBoard.hashTable[reuseMtIdx].time == wpi->sample.sampleTime) && (reuseMtBulletinBoard.hashTable[reuseMtIdx].tid == wpi->sample.first_accessing_tid)) {
-    if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active = true) {
+    if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active == true) {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
 	reuse_flag = true;
@@ -2957,7 +2996,13 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
 	  }
-	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
+	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (inc + inc * inter_wp_dropped_counter);
+	  ReuseSubDistance(rd, (uint64_t) (inc + inc * inter_wp_dropped_counter));
+	  last_trap_is_invalidation = true;
+	  last_inc = inc;
+	  last_rd = rd;
+	  last_from = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
+	  last_to = wpi->trap_origin_tid;
 	} else {
 	  //fprintf(stderr, "a communication is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid,  (double) inc, reuseMtIdx);
 	}
@@ -2965,25 +3010,27 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	  //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
 	}
-	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) inc;
+	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (inc + inc * inter_wp_dropped_counter);
       }
       //prettyPrintReuseMtHash();
       reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
     } else {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
       else {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
     }
+  } else {
+	  fprintf(stderr, "discarded because of hash collision\n");
   }
   //after
   uint64_t trapTime = rdtsc();
   if (reuse_flag) {
-    uint64_t val[2][3];
+    /*uint64_t val[2][3];
     for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
       assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
       //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
@@ -2996,17 +3043,14 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	  return ALREADY_DISABLED;
 	  //return RETAIN_WP;
 	}
-	/*if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
-	  fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-	  return ALREADY_DISABLED;
-	  }*/
+
       }
     }
     uint64_t rd = 0;
     for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
       assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
       rd += val[i][0];
-    }
+    }*/
     // Report a reuse
     // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
     /*double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
@@ -3021,7 +3065,11 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     uint64_t time_distance = rdtsc() - wpi->startTime;
 
     //compute reuse distance here
+
     ReuseAddDistance(rd, inc);
+    last_trap_is_invalidation = false;
+    last_inc = inc;
+    last_rd = rd;
   }
 
   return ALREADY_DISABLED;
