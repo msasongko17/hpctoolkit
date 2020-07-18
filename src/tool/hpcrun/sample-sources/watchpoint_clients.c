@@ -197,6 +197,9 @@ __thread uint64_t last_rd = 0;
 __thread uint64_t last_inc = 0;
 __thread int last_from = 0;
 __thread int last_to = 0;
+
+double as_count;
+double invalidation_count;
 #else
 #endif
 
