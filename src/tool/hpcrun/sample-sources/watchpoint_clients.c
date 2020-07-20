@@ -2939,7 +2939,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     return ALREADY_DISABLED;
   }
 #endif //jqswang
-  uint64_t val[2][3];
+  /*uint64_t val[2][3];
     for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
       assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
       //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
@@ -2952,10 +2952,6 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
           return ALREADY_DISABLED;
           //return RETAIN_WP;
         }
-        /*if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
-          fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-          return ALREADY_DISABLED;
-          }*/
       }
     }
     uint64_t rd = 0;
@@ -2973,7 +2969,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   //Increment of reuse distance with distance rd is the number of samples
   // in the context since the last WP trap multiplied by sample period
   uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-  uint64_t inc = numDiffSamples;
+  uint64_t inc = numDiffSamples;*/
 
   //fprintf(stderr, "frequency or detected reuse distance: %ld\n", inc);
   bool reuse_flag = false;
@@ -2985,6 +2981,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	reuse_flag = true;
       }
       else if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE) || (wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) {
+	double increment = 0;
 	int max_thread_num = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
 	if(max_thread_num < wpi->trap_origin_tid)
 	{
@@ -2996,43 +2993,44 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	}
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
 	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
-	  if(inc == 0) {
+	  /*if(inc == 0) {
 	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
-	  }
-	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (inc + inc * inter_wp_dropped_counter);
-	  ReuseSubDistance(rd, (uint64_t) (inc + inc * inter_wp_dropped_counter));
+	  }*/
+	  increment = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (increment + increment * inter_wp_dropped_counter);
+	  /*ReuseSubDistance(rd, (uint64_t) (increment + increment * inter_wp_dropped_counter));
 	  last_trap_is_invalidation = true;
 	  last_inc = inc;
 	  last_rd = rd;
 	  last_from = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
-	  last_to = wpi->trap_origin_tid;
+	  last_to = wpi->trap_origin_tid;*/
 	}
-	if(inc == 0) {
+	/*if(inc == 0) {
 	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	  //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
-	}
-	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (inc + inc * inter_wp_dropped_counter);
+	}*/
+	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (increment + increment * inter_wp_dropped_counter);
       }
       //prettyPrintReuseMtHash();
       reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
     } else {
       if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	//fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
       else {
 	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
+	//fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
       }
     }
   } else {
-	  fprintf(stderr, "discarded because of hash collision\n");
+	  //fprintf(stderr, "discarded because of hash collision\n");
   }
   //after
   uint64_t trapTime = rdtsc();
   if (reuse_flag) {
-    /*uint64_t val[2][3];
+    uint64_t val[2][3];
     for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
       assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
       //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
@@ -3052,15 +3050,15 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
       assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
       rd += val[i][0];
-    }*/
+    }
     // Report a reuse
     // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
-    /*double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
     //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
     //Increment of reuse distance with distance rd is the number of samples 
     // in the context since the last WP trap multiplied by sample period
     uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    uint64_t inc = numDiffSamples;*/
+    uint64_t inc = numDiffSamples;
     //fprintf(stderr, "inc: %ld\n", inc);
     int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 

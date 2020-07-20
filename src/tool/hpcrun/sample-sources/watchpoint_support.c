@@ -305,7 +305,7 @@ static void * MAPWPMBuffer(int fd){
 	void * buf = mmap(0, 2 * wpConfig.pgsz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (buf == MAP_FAILED) {
 		EMSG("Failed to mmap : %s\n", strerror(errno));
-		fprintf(stderr, "error: Failed to mmap : %s\n", strerror(errno));
+		//fprintf(stderr, "error: Failed to mmap : %s\n", strerror(errno));
 		monitor_real_abort();
 	}
 	return buf;
@@ -608,7 +608,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 		int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
 		if (perf_fd == -1) {
 			EMSG("Failed to open perf event file: %s\n",strerror(errno));
-			fprintf(stderr, "error: Failed to open perf event file: %s\n",strerror(errno));
+			//fprintf(stderr, "error: Failed to open perf event file: %s\n",strerror(errno));
 			monitor_real_abort();
 		}
 		// Set the perf_event file to async mode
@@ -624,7 +624,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 		int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
 		if (ret == -1){
 			EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
-			fprintf(stderr, "error: Failed to set the owner of the perf event file: %s\n", strerror(errno));
+			//fprintf(stderr, "error: Failed to set the owner of the perf event file: %s\n", strerror(errno));
 			return;
 		}
 
@@ -709,7 +709,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 			int perf_fd = perf_event_open(&pe, threadDataTable.hashTable[tid].os_tid, -1, -1, 0);
 			if (perf_fd == -1) {
 				EMSG("Failed to open perf event file: %s\n",strerror(errno));
-				fprintf(stderr, "error: Failed to open perf event file !!! os_tid: %d: %s in thread %d, modify: %d\n", threadDataTable.hashTable[tid].os_tid,strerror(errno), TD_GET(core_profile_trace_data.id), modify);
+				//fprintf(stderr, "error: Failed to open perf event file !!! os_tid: %d: %s in thread %d, modify: %d\n", threadDataTable.hashTable[tid].os_tid,strerror(errno), TD_GET(core_profile_trace_data.id), modify);
 				//monitor_real_abort();
 				return;
 			}
@@ -727,7 +727,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 			int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
 			if (ret == -1){
 				EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
-				fprintf(stderr, "error: Failed to set the owner of the perf event file: %s\n", strerror(errno));
+				//fprintf(stderr, "error: Failed to set the owner of the perf event file: %s\n", strerror(errno));
 				return;
 			}
 
@@ -1299,7 +1299,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	//fprintf(stderr, "in ReadMampBuffer 5\n");
 	avail_sz = hdr->data_head - hdr->data_tail;
 	if (sz > avail_sz) {
-		printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
+		//printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
 		rmb();
 		return -1;
 	}
@@ -1547,7 +1547,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
 	//fprintf(stderr, "in CollectWatchPointTriggerInfoShared in thread %d\n", me);
 	if (ReadMampBuffer(wpi->mmapBuffer, &hdr, sizeof(struct perf_event_header)) < 0) {
 		EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
-		fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
+		//fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
 		//monitor_real_abort();
 		goto ErrExit2;
 	}
@@ -1563,7 +1563,7 @@ static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPoi
 			if (hdr.type & PERF_SAMPLE_IP){
 				if (ReadMampBuffer(wpi->mmapBuffer, &preciseIP, sizeof(uint64_t)) < 0) {
 					EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
-					fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
+					//fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
 					//monitor_real_abort();
 					goto ErrExit2;
 				}
@@ -1816,19 +1816,19 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			//fprintf(stderr, "signal from another thread\n");
 		int loop_counter = 0;
                 int threshold = 50;
-		do {
+		//do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter;
-			if(theCounter & 1) {
-				loop_counter++;
+			if((theCounter & 1) == 0) {
+				/*loop_counter++;
 				if(loop_counter > threshold) {
 					fprintf(stderr, "watchpoint handling is discarded\n");
 					break;
 				}
 				fprintf(stderr, "rejection in OnWatchPoint happens\n");
 				continue;
-			}
+			}*/
 			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
-				fprintf(stderr, "watchpoint handling is entered\n");
+				//fprintf(stderr, "watchpoint handling is entered\n");
 
 				for(int i = same_thread_wp_count; i < wpConfig.maxWP; i++) {
 					//fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
@@ -1898,10 +1898,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				}
 
 				threadDataTable.hashTable[me].counter++;
-				break;	
+				//break;	
 			}
-			fprintf(stderr, "rejection in OnWatchPoint happens\n");
-		} while(1);
+			//fprintf(stderr, "rejection in OnWatchPoint happens\n");
+		} //while(1);
 		} else {
 			//fprintf(stderr, "signal from the same thread\n");
 				/*if((threadDataTable.hashTable[fdData.tid].watchPointArray[0].isActive) && (info->si_fd == threadDataTable.hashTable[fdData.tid].watchPointArray[0].fileHandle)) {
@@ -2682,17 +2682,17 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	int loop_counter = 0;
         int threshold = 50;
 	if(threadDataTable.hashTable[me].os_tid != -1) {
-                do {
+                //do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
-                        if(theCounter & 1) {
-                                loop_counter++;
+                        if((theCounter & 1) == 0) {
+                                /*loop_counter++;
                                 if(loop_counter > threshold) {
                                         fprintf(stderr, "arming is discarded\n");
                                         break;
                                 }
 				fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
                                 continue;
-                        }
+                        }*/
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
 				if(IsOveralppedShared(sampleData, me, self)){
@@ -2708,7 +2708,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 					if(captureValue) {
 						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
 					}
-					fprintf(stderr, "ArmWatchPointShared on another thread\n");
+					//fprintf(stderr, "ArmWatchPointShared on another thread\n");
 					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
 						//LOG to hpcrun log
 						EMSG("ArmWatchPoint failed for address %p", sampleData->va);
@@ -2720,10 +2720,10 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 				}
 				none_available_count++;
 				threadDataTable.hashTable[me].counter++; // makes the counter even
-				break;
+				//break;
 		}
-			fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
-		  } while(1);
+			//fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
+		  } //while(1);
 	}
 	}
 	// after
