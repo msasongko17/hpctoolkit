@@ -545,7 +545,7 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
 			fprintf(stderr, "reason 2\n");
 		else if((item.tid == reuseBulletinBoard.hashTable[hashIndex].tid) && (item.cacheLineBaseAddress == reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress))
 			fprintf(stderr, "reason 3\n");*/
-		fprintf(stderr, "insertion happens\n");
+		//fprintf(stderr, "insertion happens\n");
 		reuseBulletinBoard.hashTable[hashIndex] = item;
 		failedBBInsert = 0;
 		break;
@@ -556,11 +556,11 @@ void reuseHashInsert(ReuseBBEntry_t item, uint64_t lastStoreCounter) {
       __sync_synchronize();
       reuseBulletinBoard.counter++;
     } else {
-	    fprintf(stderr, "failed to insert to BB because of __sync_bool_compare_and_swap\n");
+	   // fprintf(stderr, "failed to insert to BB because of __sync_bool_compare_and_swap\n");
 	    failedBBInsert++;
     }
   } else {
-	  fprintf(stderr, "failed to insert to BB because BB is being used\n");
+	  //fprintf(stderr, "failed to insert to BB because BB is being used\n");
 	  failedBBInsert++;
   }
 }
@@ -577,7 +577,7 @@ void prettyPrintReuseHash() {
 #ifdef REUSE_HISTO
 
 void initialize_reuse_ds() {
-	fprintf(stderr, "initialize_reuse_ds is called\n");
+	//fprintf(stderr, "initialize_reuse_ds is called\n");
         if (reuse_output_trace == false){
                         thread_reuse_bin_size = 20;
                         thread_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*thread_reuse_bin_size);
@@ -721,7 +721,7 @@ void ReuseSubDistance(uint64_t distance, uint64_t dec ){
   	thread_reuse_bin_list[index] -= dec;
   else
 	  thread_reuse_bin_list[index] = 0;
-  fprintf(stderr, "distance %ld has been subtracted %ld times with index %d\n", distance, dec, index);
+  //fprintf(stderr, "distance %ld has been subtracted %ld times with index %d\n", distance, dec, index);
 }
 #endif
 
@@ -993,11 +993,11 @@ METHOD_FN(start)
 
 static void ClientTermination(){
   // Cleanup the watchpoint data
-  fprintf(stderr, "ClientTermination is executed here\n");
+  //fprintf(stderr, "ClientTermination is executed here\n");
   hpcrun_stats_num_samples_imprecise_inc(wpStats.numImpreciseSamples);
   hpcrun_stats_num_watchpoints_set_inc(wpStats.numWatchpointsSet);
   WatchpointThreadTerminate();
-  fprintf(stderr, "after WatchpointThreadTerminate\n");
+  //fprintf(stderr, "after WatchpointThreadTerminate\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:
       hpcrun_stats_num_writtenBytes_inc(writtenBytes);
@@ -1073,9 +1073,9 @@ static void ClientTermination(){
       {
 #ifdef REUSE_HISTO
 	//sample_count++;
-	fprintf(stderr, "sample_count: %ld\n", sample_count);
+	//fprintf(stderr, "sample_count: %ld\n", sample_count);
 	//fprintf(stderr, "wp_arming_count: %ld\n", wp_arming_count);
-	fprintf(stderr, "trap_count: %ld\n", trap_count);
+	//fprintf(stderr, "trap_count: %ld\n", trap_count);
 	/*fprintf(stderr, "create_wp_count: %ld\n", create_wp_count);
 	  fprintf(stderr, "arm_wp_count: %ld\n", arm_wp_count);
 	  fprintf(stderr, "sub_wp_count1: %ld\n", sub_wp_count1);
@@ -1083,18 +1083,18 @@ static void ClientTermination(){
 	  fprintf(stderr, "overlap_count: %ld\n", overlap_count);
 	  fprintf(stderr, "none_available_count: %ld\n", none_available_count);
 	  fprintf(stderr, "sub_wp_count3: %ld\n", sub_wp_count3);*/
-	  fprintf(stderr, "wp_count: %ld\n", wp_count);
-	  fprintf(stderr, "wp_count1: %ld\n", wp_count1);
-	  fprintf(stderr, "wp_count2: %ld\n", wp_count2);
+	  //fprintf(stderr, "wp_count: %ld\n", wp_count);
+	  //fprintf(stderr, "wp_count1: %ld\n", wp_count1);
+	  //fprintf(stderr, "wp_count2: %ld\n", wp_count2);
 	  /*fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
 	  fprintf(stderr, "wp_active: %ld\n", wp_active);
 	  fprintf(stderr, "total_detected_rd: %0.2lf\n", total_detected_rd);*/
-	fprintf(stderr, "load_all_load: %ld\n", load_all_load);
+	/*fprintf(stderr, "load_all_load: %ld\n", load_all_load);
 	fprintf(stderr, "store_all_store: %ld\n", store_all_store);
 	fprintf(stderr, "reuse_detected_entry_in_bb: %ld\n", reuse_detected_entry_in_bb);
 	fprintf(stderr, "reuse_detected_entry_not_in_bb: %ld\n", reuse_detected_entry_not_in_bb);
 	fprintf(stderr, "load_and_store_all_load: %ld\n", load_and_store_all_load);
-	fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);
+	fprintf(stderr, "load_and_store_all_store: %ld\n", load_and_store_all_store);*/
 
 	//fprintf(stderr, "in WP_MT_REUSE\n");
 	uint64_t val[3];
@@ -1146,8 +1146,8 @@ static void ClientTermination(){
 	  }
 	}
 
-	fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
-	fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+	/*fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+	fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);*/
 	WriteWitchTraceOutput("FINAL_COUNTING:");
 	for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
 	  assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
@@ -1763,7 +1763,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  } else { //default
 	    if(reuse_bin_start == 0) {
 		reuse_output_trace = false;
-	    	reuse_bin_start = 67;
+	    	reuse_bin_start = 275000;
 	    	//reuse_bin_start = 1000;
 	    	reuse_bin_ratio = 2;
 	    	fprintf(stderr, "default configuration is applied\n");
@@ -2748,7 +2748,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	val[i][j] -= wpi->sample.reuseDistance[i][j];
       } 
       else { //Something wrong happens here and the record is not reliable. Drop it!
-	fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
+	//fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
 	return ALREADY_DISABLED;
       }
       /*if (val[i][j] < 0) { //Something wrong happens here and the record is not reliable. Drop it!
@@ -2823,7 +2823,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  //fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
 	  as_matrix[prev_access.tid][me] += increment;
 	  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
-	    fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
+	    //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
 	    prev_invalidation_count = prev_access.failedBBInsert * increment + failedBBRead * increment;
 	    invalidation_matrix[prev_access.tid][me] += increment + prev_invalidation_count;
 	    ReuseSubDistance(rd, (uint64_t) prev_invalidation_count);
@@ -2852,7 +2852,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	}*/
       }
     } else {
-	    fprintf(stderr, "item not found\n");
+	    //fprintf(stderr, "item not found\n");
     }
 	    /*if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
       ReuseBBEntry_t curr_access= {
@@ -2878,10 +2878,10 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 
       inc = numDiffSamples;
-      if(((storeLastTime - storeOlderTime) > 0) && ((trapTime - prev_access.time) >= 2 * (storeLastTime - storeOlderTime))) {
+      /*if(((storeLastTime - storeOlderTime) > 0) && ((trapTime - prev_access.time) >= 2 * (storeLastTime - storeOlderTime))) {
 	fprintf(stderr, "reuse distance is detected because entry in bb is too old\n");
       }
-      fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);
+      fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);*/
       ReuseAddDistance(rd, inc);
       reuse_detected_entry_not_in_bb++;
       //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
@@ -3621,11 +3621,11 @@ void ReadBulletinBoardTransactionally(ReuseBBEntry_t * prev_access, uint64_t dat
       __sync_synchronize();
       reuseBulletinBoard.counter++;
     } else {
-	    fprintf(stderr, "failed to read from BB because of __sync_bool_compare_and_swap\n");
+	    //fprintf(stderr, "failed to read from BB because of __sync_bool_compare_and_swap\n");
 	    failedBBRead++;
     }
   } else {
-	fprintf(stderr, "failed to read from BB because BB is being used by another thread\n");
+	//fprintf(stderr, "failed to read from BB because BB is being used by another thread\n");
 	failedBBRead++;
   }
 }

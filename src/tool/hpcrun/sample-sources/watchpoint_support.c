@@ -2485,7 +2485,7 @@ static bool IsOveralpped(SampleData_t * sampleData){
 		if(tData.watchPointArray[i].isActive){
 			if(ADDRESSES_OVERLAP(tData.watchPointArray[i].sample.va, tData.watchPointArray[i].sample.wpLength, sampleData->va, sampleData->wpLength)){
 
-				fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
+				//fprintf(stderr, "address %lx and address %lx overlap\n", tData.watchPointArray[i].sample.va, sampleData->va);
 				overlap_count++;
 				return true;
 			}
@@ -2513,7 +2513,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 	}
 	//sub_wp_count2++;
 	if(IsOveralpped(sampleData)){
-		fprintf(stderr, "subscribing is dropped because of overlapping\n");
+		//fprintf(stderr, "subscribing is dropped because of overlapping\n");
 		return false; // drop the sample if it overlaps an existing address
 	}
 	sub_wp_count2++;
@@ -2646,7 +2646,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	if(self) {
 	//fprintf(stderr, "arming in the same thread\n");	
 	if(IsOveralppedShared(sampleData, me, self)){
-		fprintf(stderr, "subscribing is dropped because of overlapping\n");
+		//fprintf(stderr, "subscribing is dropped because of overlapping\n");
 		return false; // drop the sample if it overlaps an existing address
 	}
 	sub_wp_count2++;
