@@ -1816,17 +1816,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			//fprintf(stderr, "signal from another thread\n");
 		int loop_counter = 0;
                 int threshold = 50;
-		//do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			if((theCounter & 1) == 0) {
-				/*loop_counter++;
-				if(loop_counter > threshold) {
-					fprintf(stderr, "watchpoint handling is discarded\n");
-					break;
-				}
-				fprintf(stderr, "rejection in OnWatchPoint happens\n");
-				continue;
-			}*/
 			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 				//fprintf(stderr, "watchpoint handling is entered\n");
 
@@ -2682,17 +2673,8 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	int loop_counter = 0;
         int threshold = 50;
 	if(threadDataTable.hashTable[me].os_tid != -1) {
-                //do {
                         uint64_t theCounter = threadDataTable.hashTable[me].counter;
-                        if((theCounter & 1) == 0) {
-                                /*loop_counter++;
-                                if(loop_counter > threshold) {
-                                        fprintf(stderr, "arming is discarded\n");
-                                        break;
-                                }
-				fprintf(stderr, "rejection in SubscribeWatchpointShared happens\n");
-                                continue;
-                        }*/
+                        if((theCounter & 1) == 0) { 
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 
 				if(IsOveralppedShared(sampleData, me, self)){
