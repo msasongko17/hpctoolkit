@@ -505,11 +505,11 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void ReuseWPConfigOverride(void *v){
 	// dont fix IP
-	//wpConfig.dontFixIP = true;
-	//wpConfig.dontDisassembleWPAddress = true;
+	wpConfig.dontFixIP = true;
+	wpConfig.dontDisassembleWPAddress = true;
 	//wpConfig.isLBREnabled = false; //jqswang
 	//fprintf(stderr, "ReuseWPConfigOverride is called\n");
-	wpConfig.replacementPolicy = RDX;
+	//wpConfig.replacementPolicy = RDX;
 	//wpConfig.replacementPolicy = OLDEST;
 }
 
@@ -1127,6 +1127,8 @@ static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int 
 // Finds a victim slot to set a new WP
 static VictimType GetVictim(int * location, ReplacementPolicy policy){
 	// If any WP slot is inactive, return it;
+	/*if(policy == AUTO)
+		fprintf(stderr, "policy is AUTO\n");*/
 	for(int i = 0; i < wpConfig.maxWP; i++){
 		if(!tData.watchPointArray[i].isActive) {
 			*location = i;
@@ -1210,6 +1212,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
 		case RDX:{
 				 // make a random sequence of watchpoints to visit 
 				 // before
+				//fprintf(stderr, "replacement policy is RDX\n");
 				 int indices[wpConfig.maxWP];
 				 for (int i = 0; i < wpConfig.maxWP; i++) {
 					 indices[i] = i;
@@ -1463,6 +1466,7 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
 						}
 						reliableIP = patchedIP;
 					} else {
+						//fprintf(stderr, "dontFixIP\n");
 						// Fake as requested by Xu for reuse clients
 						reliableIP = contextIP-1;
 					}
@@ -1530,6 +1534,7 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
 				}
 				wpt->va = patchedAddr;
 			} else {
+				//fprintf(stderr, "address is not disassembled\n");
 				wpt->va = (void *)-1;
 			}
 			wpt->ctxt = context;

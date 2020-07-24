@@ -597,7 +597,7 @@ void initialize_reuse_ds() {
 void
 dump_rd_histogram()
 {
-	fprintf(stderr, "dump_rd_histogram is called\n");
+	//fprintf(stderr, "dump_rd_histogram is called\n");
         FILE * fp;
         char file_name[PATH_MAX];
         int ret = snprintf(file_name, PATH_MAX, "%s-%ld-all-reuse.hpcrun", hpcrun_files_executable_name(), getpid() );
@@ -1004,12 +1004,12 @@ METHOD_FN(start)
 
 static void ClientTermination(){
   // Cleanup the watchpoint data
-  fprintf(stderr, "ClientTermination is executed here\n");
+  //fprintf(stderr, "ClientTermination is executed here\n");
   hpcrun_stats_num_samples_imprecise_inc(wpStats.numImpreciseSamples);
   hpcrun_stats_num_watchpoints_set_inc(wpStats.numWatchpointsSet);
-  fprintf(stderr, "before WatchpointThreadTerminate\n");
+  //fprintf(stderr, "before WatchpointThreadTerminate\n");
   WatchpointThreadTerminate();
-  fprintf(stderr, "after WatchpointThreadTerminate\n");
+  //fprintf(stderr, "after WatchpointThreadTerminate\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:
       hpcrun_stats_num_writtenBytes_inc(writtenBytes);
@@ -1042,7 +1042,7 @@ static void ClientTermination(){
       hpcrun_stats_num_falseWWIns_inc(falseWWIns);
       hpcrun_stats_num_falseRWIns_inc(falseRWIns);
       hpcrun_stats_num_falseWRIns_inc(falseWRIns);
-      fprintf(stderr, "sample_count: %ld\n", sample_count);
+      //fprintf(stderr, "sample_count: %ld\n", sample_count);
       break;
     case WP_TRUE_SHARING:
     case WP_IPC_TRUE_SHARING:
@@ -1062,7 +1062,7 @@ static void ClientTermination(){
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
 	  for(int i=0; i < reuse_bin_size; i++){
-	    fprintf(stderr, "BIN: %d %lu\n", i, reuse_bin_list[i]);
+	    //fprintf(stderr, "BIN: %d %lu\n", i, reuse_bin_list[i]);
 	    WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
 	  }
 	  /*if(reuse_ds_initialized == false) {
@@ -1121,7 +1121,7 @@ static void ClientTermination(){
 	hpcrun_stats_num_accessedIns_inc(accessedIns);
 	hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
 	hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
-	fprintf(stderr, "until this point\n");
+	//fprintf(stderr, "until this point\n");
       }   break;
     case WP_MT_REUSE:
       {
@@ -1154,7 +1154,7 @@ static void ClientTermination(){
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
-	  fprintf(stderr, "the bin info is dumped\n");
+	  //fprintf(stderr, "the bin info is dumped\n");
 	  //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
 	  //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
@@ -1180,7 +1180,7 @@ static void ClientTermination(){
 		  	ExpandReuseBinList();
 		}
 	  }
-
+/*
 	  do {
           	uint64_t theCounter = reuse_ds_counter;
           	if(theCounter & 1) { 
@@ -1193,7 +1193,13 @@ static void ClientTermination(){
 			reuse_ds_counter++;
 			break;
 		}
-	  } while(1);
+		
+	  } while(1);*/
+
+	  
+	  for(int i=0; i < thread_reuse_bin_size; i++)
+		reuse_bin_list[i] += thread_reuse_bin_list[i];
+          completed_rd_profile_count++;
 
 	  for(int i=0; i < thread_reuse_bin_size; i++){
 	    WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
