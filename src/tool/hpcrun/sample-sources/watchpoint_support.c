@@ -575,7 +575,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 		case 8: pe.bp_len = HW_BREAKPOINT_LEN_8; break;
 		default:
 			EMSG("Unsupported .bp_len %d: %s\n", wpi->sample.wpLength,strerror(errno));
-			fprintf(stderr, "error: Unsupported .bp_len %d: %s\n", wpi->sample.wpLength,strerror(errno));
+			//fprintf(stderr, "error: Unsupported .bp_len %d: %s\n", wpi->sample.wpLength,strerror(errno));
 			monitor_real_abort();
 	}
 	pe.bp_addr = (uintptr_t)sampleData->va;
@@ -627,7 +627,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 			//fprintf(stderr, "error: Failed to set the owner of the perf event file: %s\n", strerror(errno));
 			return;
 		}
-
+		//fprintf(stderr, "this point is reached\n");
 
 		//       CHECK(fcntl(perf_fd, F_SETOWN, gettid()));
 
@@ -638,8 +638,11 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 			wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
 		}
 
-		int idx = fdDataInsert(perf_fd, fown_ex.pid, TD_GET(core_profile_trace_data.id));
+		if(event_type == WP_REUSE_MT || event_type == WP_MT_REUSE) {
+			int idx = fdDataInsert(perf_fd, fown_ex.pid, TD_GET(core_profile_trace_data.id));
+		}
 		//fdDataTablePrettyPrints();
+		//fprintf(stderr, "this point is reached 1\n");
 		//fprintf(stderr, "in fd table, fd: %d, os_tid: %d, tid: %d\n", fdDataTable.hashTable[idx].fd, fdDataTable.hashTable[idx].os_tid, TD_GET(core_profile_trace_data.id));
 	}
 
@@ -649,6 +652,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 	wpi->sample = *sampleData;
 	wpi->startTime = rdtsc();
 	wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
+	//fprintf(stderr, "this point is reached 2\n");
 }
 
 static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleData, int tid, bool modify) {
@@ -816,6 +820,7 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 		// Does not matter whether it was active or not.
 		// If it was not active, enable it.
 		if(wpi->fileHandle != -1) {
+			//fprintf(stderr, "before CreateWatchPoint\n");
 			CreateWatchPoint(wpi, sampleData, true);
 			return true;
 		}
@@ -824,6 +829,7 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 	if(wpi->isActive) {
 		DisArm(wpi);
 	}
+	fprintf(stderr, "before CreateWatchPoint\n");
 	CreateWatchPoint(wpi, sampleData, false);
 	return true;
 }
@@ -1719,12 +1725,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			}
 		}
 
+		//fprintf(stderr, "in OnWatchpoint after location selection\n");
 		if(location == -1) {
 			EMSG("\n WP trigger did not match any known active WP\n");
 			//monitor_real_abort();
 			hpcrun_safe_exit();
 			linux_perf_events_resume();
-			//fprintf("\n WP trigger did not match any known active WP\n");
+			//fprintf(stderr, "WP trigger did not match any known active WP\n");
 			return 0;
 		}
 		wp_count2++;
@@ -1734,6 +1741,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		// WP_REUSE_MT until here
 		WatchPointInfo_t *wpi = &tData.watchPointArray[location];
 
+		//fprintf(stderr, "in OnWatchpoint before preWPAction\n");
 		// Perform Pre watchpoint action
 		switch (wpi->sample.preWPAction) {
 			case DISABLE_WP:
@@ -1748,11 +1756,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				}
 				break;
 			default:
+				//fprintf(stderr, "aborted here\n");
 				assert(0 && "NYI");
 				monitor_real_abort();
 				break;
 		}
 
+		//fprintf(stderr, "in OnWatchpoint before CollectWatchPointTriggerInfo\n");
 		if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
 			tData.numWatchpointDropped++;
 			retVal = DISABLE_WP; // disable if unable to collect any info.
@@ -1760,6 +1770,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			//wp_dropped_counter++;
 		} else {
 			tData.numActiveWatchpointTriggers++;
+			//fprintf(stderr, "in OnWatchpoint before fptr\n");
 			retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
 			//wp_dropped_counter = 0;
 		}
@@ -2499,14 +2510,17 @@ void CaptureValue(SampleData_t * sampleData, WatchPointInfo_t * wpi){
 
 bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue){
 	sub_wp_count1++;
+	//fprintf(stderr, "in SubscribeWatchpoint\n");
 	if(ValidateWPData(sampleData) == false) {
 		return false;
 	}
+	//fprintf(stderr, "in SubscribeWatchpoint after ValidateWPData\n");
 	//sub_wp_count2++;
 	if(IsOveralpped(sampleData)){
 		//fprintf(stderr, "subscribing is dropped because of overlapping\n");
 		return false; // drop the sample if it overlaps an existing address
 	}
+	//fprintf(stderr, "in SubscribeWatchpoint after IsOveralpped\n");
 	sub_wp_count2++;
 
 	// No overlap, look for a victim slot
@@ -2514,6 +2528,7 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 	// Find a slot to install WP
 	//linux_perf_events_events_of_thread(TD_GET(core_profile_trace_data.id));
 	VictimType r = GetVictim(&victimLocation, wpConfig.replacementPolicy);
+	//fprintf(stderr, "in SubscribeWatchpoint after GetVictim\n");
 	sub_wp_count3++;
 	if(r != NONE_AVAILABLE) {
 		// VV IMP: Capture value before arming the WP.

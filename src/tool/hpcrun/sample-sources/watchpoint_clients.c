@@ -704,6 +704,7 @@ int FindThreadReuseBinIndex(uint64_t distance){
 }
 
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
+	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
   int index = FindThreadReuseBinIndex(distance);
   /*if(reuse_bin_size < thread_reuse_bin_size)
 	  reuse_bin_size = thread_reuse_bin_size;*/
@@ -1049,9 +1050,46 @@ static void ClientTermination(){
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
-	  for(int i=0; i < reuse_bin_size; i++){
+	  /*for(int i=0; i < reuse_bin_size; i++){
 	    WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
-	  }
+	  }*/
+	  if(reuse_ds_initialized == false) {
+                if(reuse_bin_size < thread_reuse_bin_size)
+                        reuse_bin_size = thread_reuse_bin_size;
+                reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
+                memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
+
+                reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
+                reuse_bin_pivot_list[0] = reuse_bin_start;
+                for(int i=1; i < reuse_bin_size; i++){
+                        reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+                }
+
+                reuse_ds_initialized = true;
+          } else {
+                  if(reuse_bin_size < thread_reuse_bin_size) {
+                        reuse_bin_size = thread_reuse_bin_size;
+                        ExpandReuseBinList();
+                }
+          }
+
+	  do {
+                uint64_t theCounter = reuse_ds_counter;
+                if(theCounter & 1) {
+                        continue;
+                }
+                if(__sync_bool_compare_and_swap(&reuse_ds_counter, theCounter, theCounter+1)){
+                        for(int i=0; i < thread_reuse_bin_size; i++)
+                                reuse_bin_list[i] += thread_reuse_bin_list[i];
+                        completed_rd_profile_count++;
+                        reuse_ds_counter++;
+                        break;
+                }
+          } while(1);
+
+          for(int i=0; i < thread_reuse_bin_size; i++){
+            WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
+          }
 	}
 
 	WriteWitchTraceOutput("FINAL_COUNTING:");
@@ -1619,14 +1657,15 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  }
 	  if (reuse_output_trace == false){
 
-	    reuse_bin_size = 20;
+	    /*reuse_bin_size = 20;
 	    reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
 	    memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
 	    reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
 	    reuse_bin_pivot_list[0] = reuse_bin_start;
 	    for(int i=1; i < reuse_bin_size; i++){
 	      reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
-	    }
+	    }*/
+	   initialize_reuse_ds();
 	  }
 
 	}
@@ -2640,6 +2679,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 	//fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
       }
       else { //Something wrong happens here and the record is not reliable. Drop it!
+	//fprintf(stderr, "DIFF: %lu\n", val[i][j] - wpi->sample.reuseDistance[i][j]);
 	return ALREADY_DISABLED;
       }
     }
@@ -2673,7 +2713,9 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
       assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
       rd += val[i][0];
     }
+    //fprintf(stderr, "before ReuseAddDistance\n");
     ReuseAddDistance(rd, inc);
+    //fprintf(stderr, "after ReuseAddDistance\n");
   }
 
 #else
@@ -2682,7 +2724,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
-    fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
     if (reuse_concatenate_use_reuse){
       reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
     }else{
@@ -2692,7 +2734,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   else { // REUSE_SPATIAL
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
-    fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
     if (reuse_concatenate_use_reuse){
       reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
     }else{
@@ -2700,16 +2742,16 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
     }
   }
   cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
-  fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+  //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
   cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
   reuseTemporal += inc;
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
     cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-    fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+    //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
   } else {
     cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-    fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+    //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
