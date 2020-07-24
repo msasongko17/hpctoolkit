@@ -1731,6 +1731,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		linux_perf_events_resume();
 		return 0;
 	}
+
 	wp_count1++;
 
 	if(event_type != WP_REUSE_MT) {

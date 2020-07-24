@@ -2680,7 +2680,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseWPCallback\n");
+/*  //fprintf(stderr, "in ReuseWPCallback\n");
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
     // if the ip is 0, let's drop the WP
@@ -2720,7 +2720,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 #ifdef REUSE_HISTO
   //fprintf(stderr, "inside REUSE_HISTO\n");
   //cct_node_t *reuseNode = getPreciseNode(wt->ctxt, wt->pc, temporal_reuse_metric_id );
-  sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+  sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
   cct_node_t *reuseNode = v.sample_node;
 
   if (reuse_output_trace){
@@ -2744,23 +2744,23 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 
   cct_node_t *reusePairNode;
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
-    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
     cct_node_t *reuseNode = v.sample_node;
     //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
     if (reuse_concatenate_use_reuse){
-      reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx]);
     }else{
-      reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
     }
   }
   else { // REUSE_SPATIAL
-    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
     cct_node_t *reuseNode = v.sample_node;
     //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
     if (reuse_concatenate_use_reuse){
-      reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx]);
     }else{
-      reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
     }
   }
   cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
@@ -2777,7 +2777,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
-#endif
+#endif*/
   return ALREADY_DISABLED;
 }
 
