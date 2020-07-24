@@ -829,7 +829,7 @@ static bool ArmWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData) {
 	if(wpi->isActive) {
 		DisArm(wpi);
 	}
-	fprintf(stderr, "before CreateWatchPoint\n");
+	//fprintf(stderr, "before CreateWatchPoint\n");
 	CreateWatchPoint(wpi, sampleData, false);
 	return true;
 }
@@ -911,7 +911,9 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 	tData.os_tid = syscall(__NR_gettid); //gettid();
 
 	tData.counter = 0;
-	threadDataTable.hashTable[me] = tData;
+
+	if(event_type == WP_REUSE_MT)
+		threadDataTable.hashTable[me] = tData;
 
 	#ifdef REUSE_HISTO
 	{
@@ -941,7 +943,8 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
             		}
 		}
 		fprintf(stderr, "no problem until this point\n");*/
-		initialize_reuse_ds();
+		if(event_type == WP_MT_REUSE || event_type == WP_REUSE_MT)
+			initialize_reuse_ds();
 	}
 	#endif
 }
@@ -950,28 +953,42 @@ void WatchpointThreadTerminate(){
 	int me = TD_GET(core_profile_trace_data.id);
 	ThreadData_t threadData;
 	if(event_type == WP_REUSE_MT) {
+		threadDataTable.hashTable[me].os_tid = -1;
 		threadData = threadDataTable.hashTable[me];
+		threadDataTable.hashTable[me].os_tid = -1;
+        	for (int i = 0; i < wpConfig.maxWP; i++) {
+                	if(threadDataTable.hashTable[me].watchPointArray[i].fileHandle != -1) {
+                        	DisArm(&threadDataTable.hashTable[me].watchPointArray[i]);
+                	}	
+        	}
+
+       		if(threadData.lbrDummyFD != -1) {
+                	CloseDummyHardwareEvent(threadDataTable.hashTable[me].lbrDummyFD);
+                	threadDataTable.hashTable[me].lbrDummyFD = -1;
+        	}
+        	threadDataTable.hashTable[me].fs_reg_val = (void*)-1;
+        	threadDataTable.hashTable[me].gs_reg_val = (void*)-1;
 	} else {
 		threadData = tData;
-	}	    
-	threadDataTable.hashTable[me].os_tid = -1;
-	for (int i = 0; i < wpConfig.maxWP; i++) {
-		if(threadDataTable.hashTable[me].watchPointArray[i].fileHandle != -1) {
-			DisArm(&threadDataTable.hashTable[me].watchPointArray[i]);
-		}
-	}
+		for (int i = 0; i < wpConfig.maxWP; i++) {
+        		if(tData.watchPointArray[i].fileHandle != -1) {
+            			DisArm(&tData.watchPointArray[i]);
+        		}
+    		}
 
-	if(threadData.lbrDummyFD != -1) {
-		CloseDummyHardwareEvent(threadDataTable.hashTable[me].lbrDummyFD);
-		threadDataTable.hashTable[me].lbrDummyFD = -1;
-	}
-	threadDataTable.hashTable[me].fs_reg_val = (void*)-1;
-	threadDataTable.hashTable[me].gs_reg_val = (void*)-1;
+    		if(tData.lbrDummyFD != -1) {
+        		CloseDummyHardwareEvent(tData.lbrDummyFD);
+        		tData.lbrDummyFD = -1;
+    		}
+    		tData.fs_reg_val = (void*)-1;
+    		tData.gs_reg_val = (void*)-1;
+	}	    
+	
 
 	//threadDataTablePrettyPrints();
 
-	fprintf(stderr, "threadData.numWatchpointTriggers: %ld\n", threadData.numWatchpointTriggers); 
-	fprintf(stderr, "threadData.numActiveWatchpointTriggers: %ld\n", threadData.numActiveWatchpointTriggers);
+	//fprintf(stderr, "threadData.numWatchpointTriggers: %ld\n", threadData.numWatchpointTriggers); 
+	//fprintf(stderr, "threadData.numActiveWatchpointTriggers: %ld\n", threadData.numActiveWatchpointTriggers);
 	hpcrun_stats_num_watchpoints_triggered_inc(threadData.numWatchpointTriggers);
 	hpcrun_stats_num_watchpoints_imprecise_inc(threadData.numWatchpointImpreciseIP);
 	hpcrun_stats_num_watchpoints_imprecise_address_inc(threadData.numWatchpointImpreciseAddressArbitraryLength);

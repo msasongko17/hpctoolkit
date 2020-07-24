@@ -574,6 +574,8 @@ void prettyPrintReuseHash() {
 
 #endif
 
+static WpClientConfig_t * theWPConfig = NULL;
+
 #ifdef REUSE_HISTO
 
 void initialize_reuse_ds() {
@@ -704,12 +706,20 @@ int FindThreadReuseBinIndex(uint64_t distance){
 }
 
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
-	//fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
-  int index = FindThreadReuseBinIndex(distance);
+  //fprintf(stderr, "distance %ld has happened %ld times\n", distance, inc);
+  //int index = FindThreadReuseBinIndex(distance);
   /*if(reuse_bin_size < thread_reuse_bin_size)
 	  reuse_bin_size = thread_reuse_bin_size;*/
   //reuse_bin_list[index] += inc;
-  thread_reuse_bin_list[index] += inc;
+
+  if(theWPConfig->id == WP_MT_REUSE || theWPConfig->id == WP_REUSE_MT) {
+	int index = FindThreadReuseBinIndex(distance);
+  	thread_reuse_bin_list[index] += inc;
+  } else {
+	int index = FindReuseBinIndex(distance);
+	reuse_bin_list[index] += inc;
+	//fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  }
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
@@ -880,7 +890,7 @@ static WpClientConfig_t wpClientConfig[] = {
 };
 
 
-static WpClientConfig_t * theWPConfig = NULL;
+//static WpClientConfig_t * theWPConfig = NULL;
 
 bool WatchpointClientActive(){
   return theWPConfig != NULL;
@@ -994,11 +1004,12 @@ METHOD_FN(start)
 
 static void ClientTermination(){
   // Cleanup the watchpoint data
-  //fprintf(stderr, "ClientTermination is executed here\n");
+  fprintf(stderr, "ClientTermination is executed here\n");
   hpcrun_stats_num_samples_imprecise_inc(wpStats.numImpreciseSamples);
   hpcrun_stats_num_watchpoints_set_inc(wpStats.numWatchpointsSet);
+  fprintf(stderr, "before WatchpointThreadTerminate\n");
   WatchpointThreadTerminate();
-  //fprintf(stderr, "after WatchpointThreadTerminate\n");
+  fprintf(stderr, "after WatchpointThreadTerminate\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:
       hpcrun_stats_num_writtenBytes_inc(writtenBytes);
@@ -1046,14 +1057,15 @@ static void ClientTermination(){
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
-	  fprintf(stderr, "the bin info is dumped\n");
+	  //fprintf(stderr, "the bin info is dumped\n");
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
-	  /*for(int i=0; i < reuse_bin_size; i++){
+	  for(int i=0; i < reuse_bin_size; i++){
+	    fprintf(stderr, "BIN: %d %lu\n", i, reuse_bin_list[i]);
 	    WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
-	  }*/
-	  if(reuse_ds_initialized == false) {
+	  }
+	  /*if(reuse_ds_initialized == false) {
                 if(reuse_bin_size < thread_reuse_bin_size)
                         reuse_bin_size = thread_reuse_bin_size;
                 reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
@@ -1073,6 +1085,7 @@ static void ClientTermination(){
                 }
           }
 
+	  //fprintf(stderr, "before reuse_bin_list\n");
 	  do {
                 uint64_t theCounter = reuse_ds_counter;
                 if(theCounter & 1) {
@@ -1085,11 +1098,13 @@ static void ClientTermination(){
                         reuse_ds_counter++;
                         break;
                 }
-          } while(1);
+          } while(1);*/
 
-          for(int i=0; i < thread_reuse_bin_size; i++){
+	  //fprintf(stderr, "after reuse_bin_list\n");
+
+          /*for(int i=0; i < thread_reuse_bin_size; i++){
             WriteWitchTraceOutput("BIN: %d %lu\n", i, thread_reuse_bin_list[i]);
-          }
+          }*/
 	}
 
 	WriteWitchTraceOutput("FINAL_COUNTING:");
@@ -1106,6 +1121,7 @@ static void ClientTermination(){
 	hpcrun_stats_num_accessedIns_inc(accessedIns);
 	hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
 	hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
+	fprintf(stderr, "until this point\n");
       }   break;
     case WP_MT_REUSE:
       {
@@ -1657,15 +1673,15 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  }
 	  if (reuse_output_trace == false){
 
-	    /*reuse_bin_size = 20;
+	    reuse_bin_size = 20;
 	    reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*reuse_bin_size);
 	    memset(reuse_bin_list, 0, sizeof(uint64_t)*reuse_bin_size);
 	    reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*reuse_bin_size);
 	    reuse_bin_pivot_list[0] = reuse_bin_start;
 	    for(int i=1; i < reuse_bin_size; i++){
 	      reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
-	    }*/
-	   initialize_reuse_ds();
+	    }
+	   //initialize_reuse_ds();
 	  }
 
 	}
