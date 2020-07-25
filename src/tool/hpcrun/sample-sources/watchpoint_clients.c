@@ -2680,7 +2680,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-/*  //fprintf(stderr, "in ReuseWPCallback\n");
+  //fprintf(stderr, "in ReuseWPCallback\n");
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
     // if the ip is 0, let's drop the WP
@@ -2777,7 +2777,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
-#endif*/
+#endif
   return ALREADY_DISABLED;
 }
 
@@ -2858,7 +2858,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
     //prettyPrintReuseHash();
     ReuseBBEntry_t prev_access;
-    ReadBulletinBoardTransactionally(&prev_access, wt->va, &item_found);
+    ReadBulletinBoardTransactionally(&prev_access, wpi->sample.va, &item_found);
 
     double prev_invalidation_count = 0;
     //fprintf(stderr, "after ReadBulletinBoardTransactionally\n");
@@ -2886,7 +2886,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  }
 	  //fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d\n", increment, prev_access.tid, me);
 	  as_matrix[prev_access.tid][me] += increment;
-	  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+	  if(wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE) {
 	    //fprintf(stderr, "a thread invalidation is detected in thread %d with access type: %d due to access in thread %d with access type %d and increment: %0.2lf\n", prev_access.tid, prev_access.accessType, me, wt->accessType, increment);
 	    prev_invalidation_count = prev_access.failedBBInsert * increment + failedBBRead * increment;
 	    invalidation_matrix[prev_access.tid][me] += increment + prev_invalidation_count;
@@ -4771,59 +4771,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			// before 
 			//ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
 			ReuseBBEntry_t prev_access;
-			int64_t commExpirationPeriod = curTime - storeLastTime;
-			/*ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_found);
-			//int64_t commExpirationPeriod = (storeExpirationPeriod > 0) ? storeExpirationPeriod : (curTime - storeLastTime);
-			int64_t commExpirationPeriod = curTime - storeLastTime;
-			if(item_found == 1) {
-			  fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
-			  if((me != prev_access.tid) && ((curTime - prev_access.time) <= commExpirationPeriod)) {
-			    //fprintf(stderr, "fulfilled condition\n");
-			    //fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time) = %\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
-			    //fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
-			    inter_thread_invalidation_count += metricThreshold;
-			    int max_thread_num = prev_access.tid;
-			    if(max_thread_num < me)
-			    {
-			      max_thread_num = me;
-			    }
-			    if(as_matrix_size < max_thread_num)
-			    {
-			      as_matrix_size =  max_thread_num;
-			    }
-			    //fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d in OnSample\n", (double) metricThreshold, prev_access.tid, me);
-			    as_matrix[prev_access.tid][me] += (double) metricThreshold;
-			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
-			      //fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
-			      invalidation_matrix[prev_access.tid][me] += (double) metricThreshold;
-			    } 
-			    //fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
-			  }
-			  if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= commExpirationPeriod)) {
-			    inter_core_invalidation_count += metricThreshold;
-			    int max_core_num = prev_access.core_id;
-			    if(max_core_num < my_core)
-			    {
-			      max_core_num = my_core;
-			    }
-			    if(as_core_matrix_size < max_core_num)
-			    {
-			      as_core_matrix_size =  max_core_num;
-			    }
-			    as_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-			    //fprintf(stderr, "there are %0.2lf inter-core communications\n", (double) metricThreshold);
-			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
-			      //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
-			      invalidation_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-			    } 
-			  }
-			}*/
-			// after
-			/*sd.eventCountBetweenSamples=eventDiff;
-                        sd.timeBetweenSamples=timeDiff;
-                        sd.sampleTime=curTime;
-                        sd.prevStoreAccess = storeLastTime;
-                        sd.expirationPeriod=(curTime - lastTime);*/
+			int64_t commExpirationPeriod = curTime - storeLastTime;	
 			sd.olderStoreAccess = storeLastTime;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			  ReuseBBEntry_t curr_access= {
