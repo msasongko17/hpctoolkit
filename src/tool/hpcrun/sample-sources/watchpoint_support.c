@@ -436,7 +436,9 @@ __attribute__((constructor))
 				wpConfig.replacementPolicy = OLDEST;
 			} if (0 == strcasecmp(replacementScheme, "NEWEST")) {
 				wpConfig.replacementPolicy = NEWEST;
-			} else {
+			} if (0 == strcasecmp(replacementScheme, "RDX")) {
+                                wpConfig.replacementPolicy = RDX;
+                        } else {
 				// default;
 				wpConfig.replacementPolicy = AUTO;
 			}
@@ -505,11 +507,11 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void ReuseWPConfigOverride(void *v){
 	// dont fix IP
-	wpConfig.dontFixIP = true;
-	wpConfig.dontDisassembleWPAddress = true;
+	//wpConfig.dontFixIP = true;
+	//wpConfig.dontDisassembleWPAddress = true;
 	//wpConfig.isLBREnabled = false; //jqswang
 	//fprintf(stderr, "ReuseWPConfigOverride is called\n");
-	//wpConfig.replacementPolicy = RDX;
+	wpConfig.replacementPolicy = RDX;
 	//wpConfig.replacementPolicy = OLDEST;
 }
 
