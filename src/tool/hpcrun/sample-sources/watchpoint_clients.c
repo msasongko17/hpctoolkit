@@ -4806,7 +4806,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 			wp_arming_count++;
-			SubscribeWatchpoint(&sd, OVERWRITE, false );
+			//SubscribeWatchpoint(&sd, OVERWRITE, false );
+			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true);
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
 		      }
