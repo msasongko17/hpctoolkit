@@ -199,6 +199,8 @@ int global_thread_count;
 static int same_thread_wp_count;
 static int l1_wp_count;
 
+
+bool globalWPIsActive[MAX_WP_SLOTS];
 uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
 /*
@@ -425,7 +427,7 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = wpConfig.maxWP;
+		l1_wp_count = 2;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -486,9 +488,14 @@ __attribute__((constructor))
 		for(int i = 0; i < 503; i++) {
 			threadDataTable.hashTable[i].counter = 0;
 			threadDataTable.hashTable[i].os_tid = -1;
-		} 
+		}
 
-	}
+	for(int i = 0; i < MAX_WP_SLOTS; i++) {
+		globalWPIsActive[i] = false;
+		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+	}	
+
+}
 
 void RedSpyWPConfigOverride(void *v){
 	wpConfig.getFloatType = true;
@@ -1007,6 +1014,18 @@ void WatchpointThreadTerminate(){
 	}
 #endif
 }
+
+bool GetVictimL3(int * location) {
+        for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+                if(!globalWPIsActive[i]) {
+                        *location = i;
+			globalWPIsActive[i] = true;
+                        return true;      
+                }
+        }
+        return false;
+}
+
 
 // Finds a victim slot to set a new WP
 static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int me, bool profile_l1){
