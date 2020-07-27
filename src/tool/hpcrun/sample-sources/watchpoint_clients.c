@@ -4629,11 +4629,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
     case WP_MT_REUSE: {
 			int sType = -1;
 
-			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_HIT",28) == 0)
-                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L3_HIT is detected\n");
+			/*if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_HIT",28) == 0)
+                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L3_HIT is detected\n");*/
 
-			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_MISS",29) == 0)
-                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L3_MISS is detected\n");			
+			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0)
+                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS is detected\n");			
 
 			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
 			  sType = ALL_STORE;
@@ -4808,6 +4808,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			wp_arming_count++;
 			//SubscribeWatchpoint(&sd, OVERWRITE, false );
 			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true);
+			
+			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
+				int location;
+				if(GetVictimL3(&location)) {
+					fprintf(stderr, "location %d is available\n", location);
+				}
+			}
+
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
 		      }
