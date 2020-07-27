@@ -174,6 +174,7 @@ int reuse_store_buffer_metric_id = -1; // store the last time we get an availabl
 
 int *reuse_distance_events = NULL;
 int reuse_distance_num_events = 0;
+int l3_reuse_distance_event = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
@@ -4743,7 +4744,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if (!IsValidAddress(sd.va, precisePC)) {
 			  goto ErrExit; // incorrect access type
 			}
-
+			int me = TD_GET(core_profile_trace_data.id);
+		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
 			//fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "here4\n");
 			// Read the reuse distance event counters
@@ -4762,7 +4764,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			}
 			// update bulletin board here
 			//int item_not_found_flag = 0;
-			int me = TD_GET(core_profile_trace_data.id);
 			int my_core = sched_getcpu(); 
 			uint64_t eventDiff = pmu_counter-prev_event_count;
 			uint64_t timeDiff = curTime-lastTime;
@@ -4808,12 +4809,16 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			wp_arming_count++;
 			//SubscribeWatchpoint(&sd, OVERWRITE, false );
 			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true);
-			
+		
+		      }	
 			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
 				int location;
 				if(GetVictimL3(&location)) {
-					fprintf(stderr, "location %d is available\n", location);
+					uint64_t val[3];
+					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+					linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, me);
 				}
+
 			}
 
 			//fprintf(stderr, "here6\n");

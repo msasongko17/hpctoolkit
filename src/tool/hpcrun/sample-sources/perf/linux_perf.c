@@ -162,6 +162,7 @@
 #define PATH_KERNEL_KPTR_RESTICT    "/proc/sys/kernel/kptr_restrict"
 #define PATH_KERNEL_PERF_PARANOID   "/proc/sys/kernel/perf_event_paranoid"
 
+#define REUSE_HISTO 1
 
 //******************************************************************************
 // type declarations
@@ -177,6 +178,11 @@ struct event_threshold_s {
    struct event_fd_list {
    int fds[2];
    } event_fd_array[503];*/
+
+
+#ifdef REUSE_HISTO
+event_thread_t *event_thread_board[503];
+#endif
 
 //******************************************************************************
 // forward declarations 
@@ -755,12 +761,14 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	extern int *reuse_distance_events;
 	extern int reuse_distance_num_events;
+	extern int l3_reuse_distance_event;
 	reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
 	reuse_distance_num_events = 0;
 	if (reuse_distance_events == NULL){
 		EMSG("Unable to allocate %d bytes", sizeof(int)*num_events);
 		return;
 	}
+	l3_reuse_distance_event = 0;
 
 	int i=0;
 
@@ -840,6 +848,17 @@ METHOD_FN(process_event_list, int lush_metrics)
 			{
 				reuse_distance_events[reuse_distance_num_events++] = i;
 			}
+
+#ifdef REUSE_HISTO
+                if (strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL)
+#else
+                        if (strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                l3_reuse_distance_event = i;
+				fprintf(stderr, "assignment to l3_reuse_distance_event happens here\n");
+                        }
+
 		/**************************************************/
 
 
@@ -913,6 +932,13 @@ METHOD_FN(gen_event_set, int lush_metrics)
 
 	//event_fd_array[TD_GET(core_profile_trace_data.id)].fds[1] = event_thread[1].fd;
 
+	
+#ifdef REUSE_HISTO
+	event_thread_board[TD_GET(core_profile_trace_data.id)] =  event_thread;
+	for (int i=0; i<nevents; i++) {
+		fprintf(stderr, "event %s is initialized in thread %d\n", event_thread_board[TD_GET(core_profile_trace_data.id)][i].event->metric_desc->name, TD_GET(core_profile_trace_data.id));
+	}
+#endif
 	TMSG(LINUX_PERF, "gen_event_set OK");
 }
 
@@ -1078,6 +1104,50 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 	}
 }
 
+
+#ifdef REUSE_HISTO
+int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid){
+	fprintf(stderr, "this function is executed\n");
+	//sample_source_t *self = &obj_name();
+	event_thread_t *event_thread = event_thread_board[tid];
+
+	event_thread_t *current = &(event_thread[event_index]);
+
+
+	int ret = perf_read_event_counter(current, val);
+
+	
+	if (ret < 0) {
+		fprintf(stderr, "problem here\n");
+		return -1; // something wrong here
+	}
+
+	uint64_t sample_period = current->event->attr.sample_period;
+	if (sample_period == 0){ // counting event
+		return 0;
+	} else {
+		// overflow event
+		//assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+		int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+		//fprintf(stderr, "original counter value %ld\n", scaled_val);
+		if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+				|| scaled_val < 0){
+			//jqswang: TODO: it does not filter out all the invalid values
+			//fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+			hpcrun_stats_num_corrected_reuse_distance_inc(1);
+			scaled_val = 0;
+		}
+		//fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
+		fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
+		val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		//fprintf(stderr, "val[0]: %ld\n", val[0]);
+		current->prev_num_overflows = current->num_overflows;
+		val[1] = 0;
+		val[2] = 0;
+		return 0;
+	}
+}
+#endif
 
 // ---------------------------------------------
 // signal handler
