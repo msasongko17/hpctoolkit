@@ -4808,15 +4808,27 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 			wp_arming_count++;
 			//SubscribeWatchpoint(&sd, OVERWRITE, false );
-			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true);
+			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1);
 		
 		      }	
 			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
 				int location;
-				if(GetVictimL3(&location)) {
+				if(1/*GetVictimL3(&location)*/) {
+
+					for(int j=0; j < 3; j++){
+						sd.reuseDistance[0][j] = 0;
+					}
 					uint64_t val[3];
-					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
-					linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, me);
+					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+
+					for(int i = 0; i < global_thread_count; i++) {
+						//if(i != me) {
+						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i);
+						for(int j=0; j < 3; j++){
+                                                	sd.reuseDistance[0][j] += val[j];
+                                        	}
+					}
+
 				}
 
 			}
@@ -4957,11 +4969,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  idx_array[idx] = idx_array[i];
 			  idx_array[i] = tmpVal;
 			}
-			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true)) {
+			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1);
+			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1)) {
 				reuseMtDataInsert(me, curTime, true);
 			  for(int i = 0; i < global_thread_count; i++)
 			    if(idx_array[i] != me)
-			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i], false);
+			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i], false, -1);
 			  //fprintf(stderr, "WP subscribing succeeds\n");
 			} else {
 			  //fprintf(stderr, "WP subscribing fails\n");

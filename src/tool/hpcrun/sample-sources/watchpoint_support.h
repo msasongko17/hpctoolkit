@@ -166,7 +166,7 @@ typedef void (*ClientConfigOverrideCall_t)(void *);
 extern void WatchpointThreadInit();
 extern void WatchpointThreadTerminate();
 extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue);
-extern bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int tid, bool self);
+extern bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int tid, bool self, int location);
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool GetVictimL3(int * location);
