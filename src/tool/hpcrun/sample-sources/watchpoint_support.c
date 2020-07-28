@@ -1478,6 +1478,7 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
 				if (ReadMampBuffer(wpi->mmapBuffer, &preciseIP, sizeof(uint64_t)) < 0) {
 					EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
 					monitor_real_abort();
+					//goto ErrExit;
 				}
 
 				if(! (hdr.misc & PERF_RECORD_MISC_EXACT_IP)){
@@ -1802,7 +1803,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				if((location != -1) && !globalWPIsActive[location]) {
 					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 					location = -1;
-					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[location]);
+					if(threadDataTable.hashTable[me].watchPointArray[location].isActive) {
+						fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed because it is active\n", location, me, TD_GET(core_profile_trace_data.id));
+						DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[location]);
+					}
 					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d has been disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 				}
 			}

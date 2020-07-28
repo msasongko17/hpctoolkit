@@ -2858,16 +2858,10 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 #ifdef REUSE_HISTO
 
+  if(wpi->sample.L1Sample) {
   sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
   cct_node_t *reuseNode = v.sample_node;
 
-  /*if (reuse_output_trace){
-    WriteWitchTraceOutput("REUSE_DISTANCE: %d %d %lu,", hpcrun_cct_persistent_id(wpi->sample.node), hpcrun_cct_persistent_id(reuseNode), inc);
-    for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      WriteWitchTraceOutput(" %lu %lu %lu,", val[i][0], val[i][1], val[i][2]);
-    }
-    WriteWitchTraceOutput("\n");
-  } else{*/
 
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 
@@ -2932,6 +2926,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
   } else {
 	//inc = numDiffSamples;
       	//ReuseAddDistance(rd, inc);
+  }
+  } else {
   }
 #else
 
