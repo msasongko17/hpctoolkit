@@ -774,7 +774,12 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	default_threshold = init_default_count();
 
-	// do things here
+#ifdef REUSE_HISTO
+	for(int i = 0; i < 503; i++) {
+		event_thread_board[i] = NULL;
+	}
+#endif
+	//do things here
 
 	// ----------------------------------------------------------------------
 	// for each perf's event, create the metric descriptor which will be used later
@@ -1115,6 +1120,12 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
         }
 
 	event_thread_t *event_thread = event_thread_board[tid];
+
+
+	if (event_thread == NULL) {
+                fprintf(stderr, "problem here\n");
+                return -1; // something wrong here
+        }
 
 	event_thread_t *current = &(event_thread[event_index]);
 

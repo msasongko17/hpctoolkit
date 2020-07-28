@@ -4801,11 +4801,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 					for(int j=0; j < 3; j++){
 						sd.reuseDistance[0][j] = 0;
 					}
-					uint64_t val[3];
-					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
 
 					for(int i = 0; i < global_thread_count; i++) {
 						//if(i != me) {
+						uint64_t val[3] = { 0 };
 						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i);
 						for(int j=0; j < 3; j++){
                                                 	sd.reuseDistance[0][j] += val[j];

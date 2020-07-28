@@ -428,7 +428,7 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = 2;
+		l1_wp_count = 3;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -1031,9 +1031,13 @@ bool GetVictimL3(int * location) {
                     		globalWPIsActive[i] = false; 
 				if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);
-                    	} 
-			numWatchpointArmingAttempt[i]++;
-			return false;
+				numWatchpointArmingAttempt[i]++;
+				return false;
+                    	} else {
+				*location = i;
+				numWatchpointArmingAttempt[i]++;
+				return true;
+			}
                 }
         }
         for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
@@ -1796,14 +1800,18 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                         }
 				}	
 				if((location != -1) && !globalWPIsActive[location]) {
+					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 					location = -1;
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[location]);
+					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d has been disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 				}
 			}
 		}
 
 		//fprintf(stderr, "in OnWatchpoint after location selection\n");
 		if(location == -1) {
+			if(l1_wp_count <= location)
+                                fprintf(stderr, "in OnWatchpoint trap in thread %d handled by thread %d is rejected\n", me, TD_GET(core_profile_trace_data.id));
 			EMSG("\n WP trigger did not match any known active WP\n");
 			//monitor_real_abort();
 			hpcrun_safe_exit();
@@ -1846,7 +1854,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			//wp_dropped_counter++;
 		} else {
 			tData.numActiveWatchpointTriggers++;
-			//fprintf(stderr, "in OnWatchpoint before fptr\n");
+			if(l1_wp_count <= location)
+				fprintf(stderr, "in OnWatchpoint before fptr trap in thread %d is handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 			retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
 			//wp_dropped_counter = 0;
 		}
