@@ -851,6 +851,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		// Does not matter whether it was active or not.
 		// If it was not active, enable it.
 		if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
+			fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
 			CreateWatchPointShared(wpi, sampleData, tid, true);
 			return true;
 		}
@@ -863,7 +864,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 	if(wpi->fileHandle != -1) {
 		DisArm(wpi);
 	}
-	//fprintf(stderr, "CreateWatchPointShared is entered with false modify\n");
+	fprintf(stderr, "CreateWatchPointShared is entered with false modify\n");
 	CreateWatchPointShared(wpi, sampleData, tid, false);
 	return true;
 }
@@ -920,8 +921,10 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	tData.counter = 0;
 
-	if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
+	//if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
+#ifdef REUSE_HISTO
 		threadDataTable.hashTable[me] = tData;
+#endif
 
 	#ifdef REUSE_HISTO
 	{
@@ -2842,7 +2845,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		if(captureValue) {
 			CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
 		}
-		//fprintf(stderr, "arming another thread to profile L3 2\n");
+		fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
 			//LOG to hpcrun log
 			EMSG("ArmWatchPoint failed for address %p", sampleData->va);

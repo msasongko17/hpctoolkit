@@ -4811,11 +4811,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                                                 	sd.reuseDistance[0][j] += val[j];
                                         	}
 					}
-					printf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0]);
+					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld in thread %d\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0], me);
 
+					sd.first_accessing_tid = me;
 					for(int i = 0; i < global_thread_count; i++) {
                                                 if(i != me) {
-                                                	SubscribeWatchpointShared(&sd, OVERWRITE, false, me, false, location); 
+                                                	SubscribeWatchpointShared(&sd, OVERWRITE, false, i, false, location); 
 						}
                                         }
 
