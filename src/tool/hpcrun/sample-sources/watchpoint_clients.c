@@ -2803,7 +2803,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
   //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
   //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
   //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
+  uint64_t rd = 0;
   uint64_t trapTime = rdtsc();
+  if(wpi->sample.L1Sample) {
   uint64_t val[2][3];
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
@@ -2822,12 +2824,32 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	}*/
     }
   }
-  uint64_t rd = 0;
   for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
     rd += val[i][0];
   }
-
+  } else {
+	 fprintf(stderr, "trap to profile L3\n");
+	 uint64_t val[3];
+	 for(int i=0; i < 3; i++) {
+		 val[i] = 0;
+	 }
+	 for(int i = 0; i < global_thread_count; i++) {
+		uint64_t val1[3];
+ 	 	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i);
+       		for(int j=0; j < 3; j++){
+			val[j] += val1[j];
+		} 	
+	 }
+	 for(int i=0; i < 3; i++) {
+		 if(val[i] >= wpi->sample.reuseDistance[0][i]) {
+                 	val[i] -= wpi->sample.reuseDistance[0][i];
+		 } else { 
+                        return ALREADY_DISABLED;
+                }
+         }
+	rd += val[0];
+  }
   uint64_t inc = 0;
   //fprintf(stderr, "inc: %ld\n", inc);
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -2839,13 +2861,13 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
   sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
   cct_node_t *reuseNode = v.sample_node;
 
-  if (reuse_output_trace){
+  /*if (reuse_output_trace){
     WriteWitchTraceOutput("REUSE_DISTANCE: %d %d %lu,", hpcrun_cct_persistent_id(wpi->sample.node), hpcrun_cct_persistent_id(reuseNode), inc);
     for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
       WriteWitchTraceOutput(" %lu %lu %lu,", val[i][0], val[i][1], val[i][2]);
     }
     WriteWitchTraceOutput("\n");
-  } else{
+  } else{*/
 
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 
@@ -2855,6 +2877,8 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     int item_found = 0;
     int me = TD_GET(core_profile_trace_data.id);
     int my_core = sched_getcpu();
+
+    if(wpi->sample.L1Sample) {
     bool invalidation_flag = false;
     //fprintf(stderr, "looking for address %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
     //prettyPrintReuseHash();
@@ -2874,8 +2898,6 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 	//double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	double increment = (double) hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-	// validate the invalidation by checking the execution time
-	//if((trapTime - prev_access.time) < (trapTime - wpi->sample.prevStoreAccess)) {
 	  int max_thread_num = prev_access.tid;
 	  if(max_thread_num < me)
 	  {
@@ -2894,63 +2916,22 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    ReuseSubDistance(rd, (uint64_t) prev_invalidation_count);
 	    inter_thread_invalidation_count += inc;
 	    invalidation_flag = true;
-	  } 
-	  //fprintf(stderr, "inter-thread communication is detected between thread %d and thread %d because prev_access.time - wpi->sample.sampleTime = %ld and wpi->sample.expirationPeriod - (trapTime - prev_access.time) = %ld\n", prev_access.tid, me, prev_access.time - wpi->sample.sampleTime, wpi->sample.expirationPeriod - (trapTime - prev_access.time));
-	  //fprintf(stderr, "as_matrix is incremented by %0.2lf at trap\n", increment);
-	//}
-	/*if(my_core != prev_access.core_id) {
-	  inter_core_invalidation_count += inc;
-	  int max_core_num = prev_access.core_id;
-	  if(max_core_num < my_core)
-	  {
-	    max_core_num = my_core;
-	  }
-	  if(as_core_matrix_size < max_core_num)
-	  {
-	    as_core_matrix_size =  max_core_num;
-	  }
-	  as_core_matrix[prev_access.core_id][my_core] += increment;
-	  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
-	    //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
-	    invalidation_core_matrix[prev_access.core_id][my_core] += increment;
-	  }
-	}*/
+	  }  
       }
     } else {
 	    //fprintf(stderr, "item not found\n");
-    }
-	    /*if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
-      ReuseBBEntry_t curr_access= {
-	.time=trapTime,  //jqswang: Setting it to WP_READ causes segment fault
-	.tid=TD_GET(core_profile_trace_data.id),
-	.core_id=sched_getcpu(),
-	.accessType=wt->accessType,
-	.address=wt->va,
-	.cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(wt->va)),
-	.accessLen=wt->accessLength,
-	.node=v.sample_node,
-	.eventCountBetweenSamples=wpi->sample.eventCountBetweenSamples,
-	.timeBetweenSamples=wpi->sample.timeBetweenSamples,
-      };
-      //fprintf(stderr, "curr_access.eventCountBetweenSamples: %ld, curr_access.timeBetweenSamples: %ld, tid: %d\n", curr_access.eventCountBetweenSamples, curr_access.timeBetweenSamples, me);
-      //prev_event_count = pmu_counter;
-      reuseHashInsert(curr_access, storeLastTime);
-      //fprintf(stderr, "pretty printing Bulletin Board at trap\n");
-      //prettyPrintReuseHash();
-    }*/
-    // after
+    } 
     if (invalidation_flag == false){
       //fprintf(stderr, "reuse distance is %ld due to absence\n", rd);
 
       inc = numDiffSamples;
-      /*if(((storeLastTime - storeOlderTime) > 0) && ((trapTime - prev_access.time) >= 2 * (storeLastTime - storeOlderTime))) {
-	fprintf(stderr, "reuse distance is detected because entry in bb is too old\n");
-      }
-      fprintf(stderr, "reuse distance %ld has been detected %ld times\n", rd, inc);*/
       ReuseAddDistance(rd, inc);
       reuse_detected_entry_not_in_bb++;
       //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
     }
+  } else {
+	//inc = numDiffSamples;
+      	//ReuseAddDistance(rd, inc);
   }
 #else
 
@@ -4633,8 +4614,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			/*if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_HIT",28) == 0)
                           fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L3_HIT is detected\n");*/
 
-			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0)
-                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS is detected\n");			
+			/*if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0)
+                          fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS is detected\n");*/			
 
 			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
 			  sType = ALL_STORE;
@@ -4803,6 +4784,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			sd.sampleTime=curTime;
 			sd.prevStoreAccess = storeLastTime;
 			sd.expirationPeriod=commExpirationPeriod;
+			sd.L1Sample = true;
 			prev_event_count = pmu_counter;
 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
@@ -4811,15 +4793,16 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1);
 		
 		      }	
-			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
-				int location;
-				if(1/*GetVictimL3(&location)*/) {
+		      if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
+				int location = -1;
+				if(GetVictimL3(&location)) {
 
+					sd.L1Sample = false;
 					for(int j=0; j < 3; j++){
 						sd.reuseDistance[0][j] = 0;
 					}
 					uint64_t val[3];
-					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
 
 					for(int i = 0; i < global_thread_count; i++) {
 						//if(i != me) {
@@ -4828,6 +4811,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                                                 	sd.reuseDistance[0][j] += val[j];
                                         	}
 					}
+					printf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0]);
+
+					for(int i = 0; i < global_thread_count; i++) {
+                                                if(i != me) {
+                                                	SubscribeWatchpointShared(&sd, OVERWRITE, false, me, false, location); 
+						}
+                                        }
 
 				}
 

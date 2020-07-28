@@ -1107,15 +1107,21 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 
 #ifdef REUSE_HISTO
 int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid){
-	fprintf(stderr, "this function is executed\n");
+	//fprintf(stderr, "this function is executed\n");
 	//sample_source_t *self = &obj_name();
+	if (event_index == 0) {
+                fprintf(stderr, "problem here\n");
+                return -1; // something wrong here
+        }
+
 	event_thread_t *event_thread = event_thread_board[tid];
 
 	event_thread_t *current = &(event_thread[event_index]);
 
 
+	//fprintf(stderr, "this function is executed before perf_read_event_counter\n");
 	int ret = perf_read_event_counter(current, val);
-
+	//fprintf(stderr, "this function is executed after perf_read_event_counter\n");
 	
 	if (ret < 0) {
 		fprintf(stderr, "problem here\n");
@@ -1138,7 +1144,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 			scaled_val = 0;
 		}
 		//fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
-		fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
+		//fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
 		val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
 		//fprintf(stderr, "val[0]: %ld\n", val[0]);
 		current->prev_num_overflows = current->num_overflows;

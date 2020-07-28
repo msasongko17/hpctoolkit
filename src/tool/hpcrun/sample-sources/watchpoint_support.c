@@ -201,6 +201,7 @@ static int l1_wp_count;
 
 
 bool globalWPIsActive[MAX_WP_SLOTS];
+int globalWPIsUsers[MAX_WP_SLOTS];
 uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
 /*
@@ -492,6 +493,7 @@ __attribute__((constructor))
 
 	for(int i = 0; i < MAX_WP_SLOTS; i++) {
 		globalWPIsActive[i] = false;
+		globalWPIsUsers[i] = -1;
 		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
 	}	
 
@@ -918,7 +920,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	tData.counter = 0;
 
-	if(event_type == WP_REUSE_MT)
+	if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
 		threadDataTable.hashTable[me] = tData;
 
 	#ifdef REUSE_HISTO
@@ -1016,13 +1018,30 @@ void WatchpointThreadTerminate(){
 }
 
 bool GetVictimL3(int * location) {
+	int me = TD_GET(core_profile_trace_data.id);
+	for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+                if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
+                        double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
+                    	double randValue;
+                   	drand48_r(&tData.randBuffer, &randValue);
+                   	if(randValue <= probabilityToReplace) {
+                    		globalWPIsActive[i] = false; 
+				if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
+					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);
+                    	} 
+			numWatchpointArmingAttempt[i]++;
+			return false;
+                }
+        }
         for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
                 if(!globalWPIsActive[i]) {
                         *location = i;
 			globalWPIsActive[i] = true;
+			globalWPIsUsers[i] = me; 
+			numWatchpointArmingAttempt[i]++;	
                         return true;      
                 }
-        }
+        }	
         return false;
 }
 
@@ -1724,7 +1743,6 @@ void DisableWatchpointWrapper(WatchPointInfo_t *wpi){
 
 
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
-
 	linux_perf_events_pause();
 	wp_count++;
 	void* pc = hpcrun_context_pc(context);
@@ -1762,17 +1780,22 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		if(location == -1) {
 
 			if(l1_wp_count < wpConfig.maxWP) {
+				//fprintf(stderr, "a candidate location for L3 profiling\n");
 				fdData = fdDataGet(info->si_fd);
                 		me = fdData.tid;
 
 				for(int i = l1_wp_count; i < wpConfig.maxWP; i++) {
-                                        //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[fdData.tid].watchPointArray[i].fileHandle);
-                                        if((threadDataTable.hashTable[me].watchPointArray[i].isActive) && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
-                                                //fprintf(stderr, "location is found in WP_REUSE_MT\n");
+                                        //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[me].watchPointArray[i].fileHandle);
+                                        if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
                                                 location = i;
+						fprintf(stderr, "location is found in %d\n", location);
                                                 break;
                                         }
 				}	
+				if((location != -1) && !globalWPIsActive[location]) {
+					location = -1;
+					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[location]);
+				}
 			}
 		}
 
@@ -1802,6 +1825,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			case DISABLE_WP:
 				//fprintf(stderr, "in DISABLE_WP\n");
 				DisableWatchpointWrapper(wpi);
+				if(location >= l1_wp_count)
+					globalWPIsActive[location] = false;
 				break;
 			default:
 				//fprintf(stderr, "aborted here\n");
@@ -2765,7 +2790,6 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 
 
 bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me, bool profile_l1, int location){
-	//fprintf(stderr, "in SubscribeWatchpointShared, wp of thread %d is armed by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 	sub_wp_count1++;
 	if(ValidateWPData(sampleData) == false) {
 		return false;
@@ -2807,30 +2831,24 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                 return true;	
 	}
 	} else {
+	//fprintf(stderr, "arming another thread to profile L3 0\n");
 	if(threadDataTable.hashTable[me].os_tid != -1) {
-                        uint64_t theCounter = threadDataTable.hashTable[me].counter; 
+		//fprintf(stderr, "arming another thread to profile L3 1\n");
+        	uint64_t theCounter = threadDataTable.hashTable[me].counter; 
 
-				if(IsOveralppedShared(sampleData, me, profile_l1)){
-                        		return false;
-                		}
-                		sub_wp_count2++;
-                		int victimLocation = -1;
+        	sub_wp_count2++;
 
-				VictimType r = GetVictimShared(&victimLocation, wpConfig.replacementPolicy, me, profile_l1);
-				sub_wp_count3++;
-				if(r != NONE_AVAILABLE) {
-					if(captureValue) {
-						CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[victimLocation]);
-					}
-					//fprintf(stderr, "ArmWatchPointShared on another thread\n");
-					if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[victimLocation] , sampleData, me) == false){
-						//LOG to hpcrun log
-						EMSG("ArmWatchPoint failed for address %p", sampleData->va);
-						return false;
-					}
-					return true;
-				}
-				none_available_count++;
+		sub_wp_count3++;
+		if(captureValue) {
+			CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
+		}
+		//fprintf(stderr, "arming another thread to profile L3 2\n");
+		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
+			//LOG to hpcrun log
+			EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+			return false;
+		}
+		return true;
 	}
 	}
 	// after
