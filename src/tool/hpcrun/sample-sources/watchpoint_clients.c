@@ -4721,6 +4721,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if (!IsValidAddress(sd.va, precisePC)) {
 			  goto ErrExit; // incorrect access type
 			}
+			DisableWPforL3();
 			int me = TD_GET(core_profile_trace_data.id);
 		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
 			//fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);

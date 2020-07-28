@@ -190,6 +190,7 @@ extern void RedSpyWPConfigOverride(void *v);
 extern void LoadSpyWPConfigOverride(void *v);
 extern bool WatchpointClientActive();
 extern void DisableWatchpointWrapper(WatchPointInfo_t *wpi);
+extern void DisableWPforL3();
 
 static inline  uint64_t rdtsc(){
     unsigned int lo,hi;

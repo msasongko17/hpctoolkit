@@ -462,7 +462,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		td->precise_pc = 0;
 	}
 	//fprintf(stderr, "counter: %0.2lf\n", counter); 
-	//fprintf(stderr, "event: %s\n", current->event->metric_desc->name);
+	fprintf(stderr, "event: %s\n", current->event->metric_desc->name);
 	*sv = hpcrun_sample_callpath(context, current->event->metric,
 			(hpcrun_metricVal_t) {.r=counter},
 			0/*skipInner*/, 0/*isSync*/, &info);

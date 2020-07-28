@@ -1020,6 +1020,15 @@ void WatchpointThreadTerminate(){
 #endif
 }
 
+void DisableWPforL3() {
+	int me = TD_GET(core_profile_trace_data.id);
+	for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+		if(!globalWPIsActive[i] && threadDataTable.hashTable[me].watchPointArray[i].isActive) {
+			DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);
+		}	
+	}
+}
+
 bool GetVictimL3(int * location) {
 	int me = TD_GET(core_profile_trace_data.id);
 	for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
@@ -1796,18 +1805,18 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                         //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[me].watchPointArray[i].fileHandle);
                                         if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
                                                 location = i;
-						fprintf(stderr, "location is found in %d\n", location);
+						//fprintf(stderr, "location is found in %d\n", location);
                                                 break;
                                         }
 				}	
-				if((location != -1) && !globalWPIsActive[location]) {
-					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
+				if((location != -1) && (!globalWPIsActive[location] || (threadDataTable.hashTable[me].os_tid == -1))) {
+					//fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 					location = -1;
 					if(threadDataTable.hashTable[me].watchPointArray[location].isActive) {
-						fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed because it is active\n", location, me, TD_GET(core_profile_trace_data.id));
+						//fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be disarmed because it is active\n", location, me, TD_GET(core_profile_trace_data.id));
 						DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[location]);
 					}
-					fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d has been disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
+					//fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d has been disarmed\n", location, me, TD_GET(core_profile_trace_data.id));
 				}
 			}
 		}
@@ -1839,7 +1848,9 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		switch (wpi->sample.preWPAction) {
 			case DISABLE_WP:
 				//fprintf(stderr, "in DISABLE_WP\n");
-				DisableWatchpointWrapper(wpi);
+				//if(location < l1_wp_count)
+				if(wpi->isActive)
+					DisableWatchpointWrapper(wpi);
 				if(location >= l1_wp_count)
 					globalWPIsActive[location] = false;
 				break;
@@ -1866,7 +1877,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 		switch (retVal) {
 			case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
-						       assert(wpi->isActive == false);
+						       if (location < l1_wp_count)
+						       		assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
 						       if (location < l1_wp_count) {
 								tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
