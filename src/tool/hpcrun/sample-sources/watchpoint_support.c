@@ -119,14 +119,14 @@ extern int event_type;
 extern uint64_t l3_profile_counter;
 
 typedef struct globalReuseEntry{
-  uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t time;
   int tid;
   bool active;
   char dummy[CACHE_LINE_SZ];
 } globalReuseEntry_t;
 
 typedef struct globalReuseTable{
-  volatile uint64_t counter __attribute__((aligned(64)));
   struct globalReuseEntry table[MAX_WP_SLOTS];
   //struct SharedData * hashTable;
 } globalReuseTable_t;
@@ -515,6 +515,7 @@ __attribute__((constructor))
 		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
 		globalReuseWPs.table[i].time = -1;
 		globalReuseWPs.table[i].active = false;
+		globalReuseWPs.table[i].counter = 0;
 	}	
 	l3_profile_counter = 0;
 }
@@ -1946,15 +1947,25 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				} else {
 					tData.numActiveWatchpointTriggers++;
 					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
-					retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+					uint64_t theCounter = globalReuseWPs.table[location].counter;
+					if((theCounter & 1) == 0) {
+                        		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+					if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid) && (globalReuseWPs.table[location].active == true)) {
+						retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+						numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL; 
+						globalReuseWPs.table[location].active = false;
+					}
+					globalReuseWPs.table[location].counter++;
+					}
+					}
+					retVal = ALREADY_DISABLED;
 					//wp_dropped_counter = 0;
 				}
 
 				switch (retVal) {
 					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
 						       assert(wpi->isActive == false);
-						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
-							numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;					       
+						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
 					       }
 					       break;

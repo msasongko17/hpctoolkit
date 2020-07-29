@@ -2930,7 +2930,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       	//ReuseAddDistance(rd, inc);
   }
   } else {
-	  fprintf(stderr, "trap to profile L3 is finishing\n");
+	  fprintf(stderr, "trap to profile L3 is finishing on sample %ld\n", wpi->sample.sampleTime);
   }
 #else
 
@@ -4814,6 +4814,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld in thread %d\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0], me);
 
 					sd.first_accessing_tid = me;
+					sd.sampleTime=curTime;
 					for(int i = 0; i < global_thread_count; i++) {
                                                 if(i != me) {
                                                 	SubscribeWatchpointShared(&sd, OVERWRITE, false, i, false, location); 
