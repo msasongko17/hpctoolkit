@@ -161,7 +161,7 @@ typedef struct ThreadData{
 	struct drand48_data randBuffer;
 	WatchPointInfo_t watchPointArray[MAX_WP_SLOTS];
 	WatchPointUpCall_t fptr;
-	volatile uint64_t counter;
+	volatile uint64_t counter[MAX_WP_SLOTS];
 	char dummy[CACHE_LINE_SZ];
 } ThreadData_t;
 
@@ -489,7 +489,8 @@ __attribute__((constructor))
 		}
 
 		for(int i = 0; i < 503; i++) {
-			threadDataTable.hashTable[i].counter = 0;
+			for(int j = 0; j < MAX_WP_SLOTS; j++)
+				threadDataTable.hashTable[i].counter[j] = 0;
 			threadDataTable.hashTable[i].os_tid = -1;
 		}
 
@@ -921,7 +922,8 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	tData.os_tid = syscall(__NR_gettid); //gettid();
 
-	tData.counter = 0;
+	for(int i = 0; i < MAX_WP_SLOTS; i++)
+		tData.counter[i] = 0;
 
 	//if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
 #ifdef REUSE_HISTO
@@ -1804,7 +1806,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                         //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[me].watchPointArray[i].fileHandle);
                                         if(threadDataTable.hashTable[me].watchPointArray[i].isActive /*&& globalWPIsActive[i]*/ && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 					       	location = i;
-						theCounter = threadDataTable.hashTable[me].counter;
+						//theCounter = threadDataTable.hashTable[me].counter;
 						fprintf(stderr, "location is found in %d\n", location);
                                                 break;
                                         }
@@ -1883,9 +1885,9 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			fprintf(stderr, "this region has been entered\n");
 			//uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			//do {
-			uint64_t theCounter = threadDataTable.hashTable[me].counter;
+			uint64_t theCounter = threadDataTable.hashTable[me].counter[location];
                         if((theCounter & 1) == 0) {
-                        if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+                        if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter[location], theCounter, theCounter+1)){
 				//fprintf(stderr, "this region is entered\n");
 				fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be handled\n", location, me, TD_GET(core_profile_trace_data.id));
 				wp_count2++;
@@ -1909,7 +1911,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				default:
 					//fprintf(stderr, "aborted here\n");
 					assert(0 && "NYI");
-					threadDataTable.hashTable[me].counter++;
+					threadDataTable.hashTable[me].counter[location]++;
 					monitor_real_abort();
 					break;
 				}
@@ -1937,7 +1939,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					default: // Retain the state
 						break;
 				}
-				threadDataTable.hashTable[me].counter++;
+				threadDataTable.hashTable[me].counter[location]++;
 				//break;
 			}
 			}			
@@ -1958,9 +1960,9 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			//fprintf(stderr, "signal from another thread\n");
 		int loop_counter = 0;
                 int threshold = 50;
-			uint64_t theCounter = threadDataTable.hashTable[me].counter;
+			uint64_t theCounter = threadDataTable.hashTable[me].counter[0];
 			if((theCounter & 1) == 0) {
-			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter[0], theCounter, theCounter+1)){
 				//fprintf(stderr, "watchpoint handling is entered\n");
 
 				for(int i = same_thread_wp_count; i < wpConfig.maxWP; i++) {
@@ -1974,7 +1976,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				if(location == -1) {
 					EMSG("\n WP trigger did not match any known active WP\n");
 					//monitor_real_abort();
-					threadDataTable.hashTable[me].counter++;
+					threadDataTable.hashTable[me].counter[0]++;
 					//linux_perf_events_other_thread_resume(me);
 					hpcrun_safe_exit();
 					linux_perf_events_resume();
@@ -1994,7 +1996,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						DisableWatchpointWrapper(wpi);
 						break;
 					default:
-						threadDataTable.hashTable[me].counter++;
+						threadDataTable.hashTable[me].counter[0]++;
 						assert(0 && "NYI");
 						monitor_real_abort();
 						break;
@@ -2030,7 +2032,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 							break;
 				}
 
-				threadDataTable.hashTable[me].counter++;
+				threadDataTable.hashTable[me].counter[0]++;
 				//break;	
 			}
 			//fprintf(stderr, "rejection in OnWatchPoint happens\n");
@@ -2916,10 +2918,10 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	//fprintf(stderr, "arming another thread to profile L3 0\n");
 	if(threadDataTable.hashTable[me].os_tid != -1) {
 		//fprintf(stderr, "arming another thread to profile L3 1\n");
-        	uint64_t theCounter = threadDataTable.hashTable[me].counter; 
+        	uint64_t theCounter = threadDataTable.hashTable[me].counter[location]; 
 
 		if((theCounter & 1) == 0) {
-			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
+			if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter[location], theCounter, theCounter+1)){
         	sub_wp_count2++;
 
 		sub_wp_count3++;
@@ -2930,10 +2932,10 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
 			//LOG to hpcrun log
 			EMSG("ArmWatchPoint failed for address %p", sampleData->va);
-			threadDataTable.hashTable[me].counter++;
+			threadDataTable.hashTable[me].counter[location]++;
 			return false;
 		}
-		threadDataTable.hashTable[me].counter++;
+		threadDataTable.hashTable[me].counter[location]++;
 		return true;
 			}
 		}
