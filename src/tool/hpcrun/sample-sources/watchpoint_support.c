@@ -1802,7 +1802,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 				for(int i = l1_wp_count; i < wpConfig.maxWP; i++) {
                                         //fprintf(stderr, "info->si_fd: %d, fd in table: %d\n", info->si_fd, threadDataTable.hashTable[me].watchPointArray[i].fileHandle);
-                                        if(threadDataTable.hashTable[me].watchPointArray[i].isActive && globalWPIsActive[i] && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
+                                        if(threadDataTable.hashTable[me].watchPointArray[i].isActive /*&& globalWPIsActive[i]*/ && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 					       	location = i;
 						theCounter = threadDataTable.hashTable[me].counter;
 						fprintf(stderr, "location is found in %d\n", location);
@@ -1899,10 +1899,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					DisableWatchpointWrapper(wpi);
 					/*if(location >= l1_wp_count)
 						globalWPIsActive[location] = false;*/
-					if(globalWPIsActive[location]) {
+					/*if(globalWPIsActive[location]) {
 						globalWPIsActive[location] = false;
 						handle_flag = true;
-					}
+					}*/
 					break;
 				default:
 					//fprintf(stderr, "aborted here\n");
@@ -1912,14 +1912,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					break;
 				}
 
-				if( (false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) || !handle_flag) {
+				if( (false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) /*|| !handle_flag*/) {
 					tData.numWatchpointDropped++;
 					retVal = DISABLE_WP; // disable if unable to collect any info.
 					wp_dropped++;
 					//wp_dropped_counter++;
 				} else {
 					tData.numActiveWatchpointTriggers++;
-					//fprintf(stderr, "in OnWatchpoint before fptr\n");
+					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", location, me, TD_GET(core_profile_trace_data.id));
 					retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
 					//wp_dropped_counter = 0;
 				}

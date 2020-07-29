@@ -4795,7 +4795,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		      }	
 		      if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
 				int location = -1;
-				if(GetVictimL3(&location)) {
+				if(GetVictimL3(&location) && (global_thread_count > 1)) {
 
 					sd.L1Sample = false;
 					for(int j=0; j < 3; j++){
