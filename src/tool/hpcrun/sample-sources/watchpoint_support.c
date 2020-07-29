@@ -430,7 +430,7 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = 3;
+		l1_wp_count = 1;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -1882,7 +1882,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 			fprintf(stderr, "this region has been entered\n");
 			//uint64_t theCounter = threadDataTable.hashTable[me].counter;
-			do {
+			//do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if((theCounter & 1) == 0) {
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
@@ -1938,11 +1938,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						break;
 				}
 				threadDataTable.hashTable[me].counter++;
-				break;
+				//break;
 			}
 			}			
 
-			} while(1);
+			//} while(1);
 		}
 	} else if(event_type == WP_REUSE_MT) {
 
