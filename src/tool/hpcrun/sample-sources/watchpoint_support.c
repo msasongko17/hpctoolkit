@@ -1038,7 +1038,7 @@ bool GetVictimL3(int * location) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
-                   	if(randValue <= probabilityToReplace) {
+                   	if(1/*randValue <= probabilityToReplace*/) {
                     		globalWPIsActive[i] = false; 
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
@@ -1882,6 +1882,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 
 			fprintf(stderr, "this region has been entered\n");
 			//uint64_t theCounter = threadDataTable.hashTable[me].counter;
+			do {
+			uint64_t theCounter = threadDataTable.hashTable[me].counter;
                         if((theCounter & 1) == 0) {
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter, theCounter, theCounter+1)){
 				//fprintf(stderr, "this region is entered\n");
@@ -1912,14 +1914,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					break;
 				}
 
-				if( (false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) /*|| !handle_flag*/) {
+				if( (false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) /*|| !handle_flag*/) {
 					tData.numWatchpointDropped++;
 					retVal = DISABLE_WP; // disable if unable to collect any info.
 					wp_dropped++;
 					//wp_dropped_counter++;
 				} else {
 					tData.numActiveWatchpointTriggers++;
-					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", location, me, TD_GET(core_profile_trace_data.id));
+					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 					retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
 					//wp_dropped_counter = 0;
 				}
@@ -1936,9 +1938,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						break;
 				}
 				threadDataTable.hashTable[me].counter++;
+				break;
 			}
 			}			
 
+			} while(1);
 		}
 	} else if(event_type == WP_REUSE_MT) {
 
