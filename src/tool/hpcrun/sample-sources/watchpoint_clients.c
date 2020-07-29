@@ -179,6 +179,8 @@ int l3_reuse_distance_event = 0;
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
 
+uint64_t l3_profile_counter = 0;
+
 #ifdef REUSE_HISTO
 bool reuse_output_trace = false;
 double reuse_bin_start = 0;
@@ -2928,6 +2930,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       	//ReuseAddDistance(rd, inc);
   }
   } else {
+	  fprintf(stderr, "trap to profile L3 is finishing\n");
   }
 #else
 
@@ -4721,7 +4724,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			if (!IsValidAddress(sd.va, precisePC)) {
 			  goto ErrExit; // incorrect access type
 			}
-			DisableWPforL3();
+			//DisableWPforL3();
 			int me = TD_GET(core_profile_trace_data.id);
 		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
 			//fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);
