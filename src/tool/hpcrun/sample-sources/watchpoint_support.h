@@ -170,7 +170,7 @@ extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overw
 extern bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int tid, bool self, int location);
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
-extern bool GetVictimL3(int * location);
+extern bool GetVictimL3(int * location, uint64_t sampleTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);

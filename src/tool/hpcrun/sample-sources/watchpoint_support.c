@@ -118,10 +118,25 @@ extern int event_type;
 
 extern uint64_t l3_profile_counter;
 
+typedef struct globalReuseEntry{
+  uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
+  int tid;
+  bool active;
+  char dummy[CACHE_LINE_SZ];
+} globalReuseEntry_t;
+
+typedef struct globalReuseTable{
+  volatile uint64_t counter __attribute__((aligned(64)));
+  struct globalReuseEntry table[MAX_WP_SLOTS];
+  //struct SharedData * hashTable;
+} globalReuseTable_t;
+
 //const WatchPointInfo_t dummyWPInfo = {.sample = {}, .startTime =0, .fileHandle= -1, .isActive= false, .mmapBuffer=0};
 //const struct DUMMY_WATCHPOINT dummyWP[MAX_WP_SLOTS];
 
 //ReuseMtHashTable_t reuseMtBulletinBoard = {.counter = 0};
+
+globalReuseTable_t globalReuseWPs;
 
 typedef enum WP_CLIENT_ID{
 	WP_DEADSPY,
@@ -430,7 +445,7 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = 1;
+		l1_wp_count = 3;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -498,6 +513,8 @@ __attribute__((constructor))
 		globalWPIsActive[i] = false;
 		globalWPIsUsers[i] = -1;
 		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+		globalReuseWPs.table[i].time = -1;
+		globalReuseWPs.table[i].active = false;
 	}	
 	l3_profile_counter = 0;
 }
@@ -1033,18 +1050,21 @@ void DisableWPforL3() {
 	}
 }
 
-bool GetVictimL3(int * location) {
+bool GetVictimL3(int * location, uint64_t sampleTime) {
 	int me = TD_GET(core_profile_trace_data.id);
 	for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
                 if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
-                   	if(1/*randValue <= probabilityToReplace*/) {
-                    		globalWPIsActive[i] = false; 
+                   	if(randValue <= probabilityToReplace) {
+                    		globalWPIsActive[i] = false;
+				fprintf(stderr, "opening position in %d\n", i); 
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
-                    	}
+                    	} else {
+				fprintf(stderr, "global wp in %d is retained\n", i);
+			}
 			numWatchpointArmingAttempt[i]++;
 			return false;
                 }
@@ -1054,7 +1074,9 @@ bool GetVictimL3(int * location) {
                         *location = i;
 			globalWPIsActive[i] = true;
 			globalWPIsUsers[i] = me; 
-			numWatchpointArmingAttempt[i]++;	
+			globalReuseWPs.table[i].tid = me;
+			globalReuseWPs.table[i].active = true;	
+			globalReuseWPs.table[i].time = sampleTime;
                         return true;      
                 }
         }	
@@ -1901,8 +1923,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					case DISABLE_WP:
 					//fprintf(stderr, "in DISABLE_WP\n");
 					DisableWatchpointWrapper(wpi);
-					/*if(location >= l1_wp_count)
-						globalWPIsActive[location] = false;*/
+					if(location >= l1_wp_count)
+						globalWPIsActive[location] = false;
 					/*if(globalWPIsActive[location]) {
 						globalWPIsActive[location] = false;
 						handle_flag = true;
@@ -1932,7 +1954,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
 						       assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
-						       
+							numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
 					       }
 					       break;
