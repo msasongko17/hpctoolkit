@@ -98,9 +98,9 @@ typedef struct SampleData{
     int first_accessing_tid;
     int first_accessing_core_id;
     uint64_t bulletinBoardTimestamp;
-    uint64_t olderStoreAccess;
-    uint64_t prevStoreAccess;
     uint64_t expirationPeriod;
+    int loadCount;
+    int storeCount;
     AccessType accessType; // load or store
     AccessType samplerAccessType;
     SampleType sampleType;
@@ -115,8 +115,6 @@ typedef struct SampleData{
     bool isBackTrace;
     bool L1Sample;
     ReuseType reuseType;
-    uint64_t eventCountBetweenSamples;
-    uint64_t timeBetweenSamples;
     uint64_t reuseDistance[2][3];
     uint64_t sampleTime;
 } SampleData_t;

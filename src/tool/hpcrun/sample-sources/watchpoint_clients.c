@@ -207,6 +207,8 @@ __thread int last_to = 0;
 
 double as_count;
 double invalidation_count;
+int load_count = 0;
+int store_count = 0;
 #else
 #endif
 
@@ -3026,17 +3028,27 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
   } else {
 
 	  uint64_t sharer = wpConfig.maxWP - l1_wp_count;
+	  //double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+          //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 	  if((me == wpi->sample.first_accessing_tid) && ((trapTime - L2MissLastTime) > 2 * (L2MissLastTime - L2MissOlderTime))) {
 	  	fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to capacity miss\n", wpi->sample.sampleTime);
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-
-    		uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+          	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
-		L3ReuseAddDistance(rd, global_thread_count / sharer * inc);
+		int load_difference = load_count - wpi->sample.loadCount;
+		int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_difference + store_difference) / load_difference;
+		uint64_t increment = global_thread_count / sharer * inc * (uint64_t) load_store_ratio;
+		L3ReuseAddDistance(rd, increment);
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
+		//inc = numDiffSamples;
 		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
-		L3ReuseAddDistance(rd, global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+		int load_difference = load_count - wpi->sample.loadCount;
+                int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_difference + store_difference) / load_difference;
+		uint64_t increment = global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * (uint64_t) load_store_ratio;
+		L3ReuseAddDistance(rd, increment);
 	  }
   }
 #else
@@ -4723,10 +4735,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			/*if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0)
                           fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS is detected\n");*/			
 
-			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
 			  sType = ALL_STORE;
-			else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
+			  store_count++;
+			}
+			else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0) {
 			  sType = ALL_LOAD;
+			  load_count++;
+			}
 			else sType = UNKNOWN_SAMPLE_TYPE;
 			if(accessType == LOAD_AND_STORE) {
 			  if(sType == ALL_LOAD)
@@ -4861,7 +4877,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			//ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
 			ReuseBBEntry_t prev_access;
 			int64_t commExpirationPeriod = curTime - storeLastTime;	
-			sd.olderStoreAccess = storeLastTime;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			  ReuseBBEntry_t curr_access= {
 			    .time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
@@ -4871,9 +4886,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			    .address=data_addr,
 			    .cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(data_addr)),
 			    .accessLen=accessLen,
-			    .node=node,
-			    .eventCountBetweenSamples=eventDiff,	
-			    .timeBetweenSamples=timeDiff,
+			    .node=node,	
 			    .failedBBInsert=failedBBInsert,
 			  };
 			  //fprintf(stderr, "sampled cache line: %lx in thread %d\n", curr_access.cacheLineBaseAddress, curr_access.tid);
@@ -4886,10 +4899,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  //fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
 			  //prettyPrintReuseHash();
 			}
-			sd.eventCountBetweenSamples=eventDiff;
-			sd.timeBetweenSamples=timeDiff;
 			sd.sampleTime=curTime;
-			sd.prevStoreAccess = storeLastTime;
 			sd.expirationPeriod=commExpirationPeriod;
 			sd.L1Sample = true;
 			prev_event_count = pmu_counter;
@@ -4939,6 +4949,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
 					sd.first_accessing_tid = me;
 					sd.sampleTime=curTime;
+					sd.loadCount = load_count;
+					sd.storeCount = store_count;
 					for(int i = 0; i < cur_global_thread_count; i++) {
                                         	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
                                         }
@@ -5063,10 +5075,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			uint64_t eventDiff = pmu_counter-prev_event_count;
 			uint64_t timeDiff = curTime-lastTime;
 			int item_not_found_flag = 0;	
-			sd.eventCountBetweenSamples=eventDiff;
-			sd.timeBetweenSamples=timeDiff;
 			sd.sampleTime=curTime;
-			sd.prevStoreAccess = storeLastTime;
 			sd.expirationPeriod=(curTime - lastTime);
 			sd.first_accessing_tid = me;
 			prev_event_count = pmu_counter;
