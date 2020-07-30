@@ -186,8 +186,12 @@ bool reuse_output_trace = false;
 double reuse_bin_start = 0;
 double reuse_bin_ratio = 0;
 uint64_t * reuse_bin_list = NULL;
+uint64_t * l3_reuse_bin_list = NULL;
 double * reuse_bin_pivot_list = NULL; // store the bin intervals
+double * l3_reuse_bin_pivot_list = NULL;
 int reuse_bin_size = 0;
+int l3_reuse_bin_size = 0;
+
 int completed_rd_profile_count = 0;
 
 bool reuse_ds_initialized = false;
@@ -372,6 +376,10 @@ __thread uint64_t prev_timestamp = 0;
 __thread int64_t lastTime = 0;
 __thread int64_t storeOlderTime = 0;
 __thread int64_t storeLastTime = 0;
+
+__thread int64_t L2MissLastTime = 0;
+__thread int64_t L2MissOlderTime = 0;
+
 __thread int64_t failedBBInsert = 0;
 __thread int64_t failedBBRead = 0;
 __thread int64_t storeExpirationPeriod = 0;
@@ -618,6 +626,27 @@ dump_rd_histogram()
         fclose(fp);
 }
 
+void
+dump_l3_rd_histogram()
+{
+        //fprintf(stderr, "dump_rd_histogram is called\n");
+        FILE * fp;
+        char file_name[PATH_MAX];
+        int ret = snprintf(file_name, PATH_MAX, "%s-%ld-all-l3-reuse.hpcrun", hpcrun_files_executable_name(), getpid() );
+        if ( ret < 0 || ret >= PATH_MAX){
+                return -1;
+        }
+
+        fp = fopen (file_name, "w+");
+        fprintf(fp, "BIN_START: %lf\n", reuse_bin_start);
+        fprintf(fp, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+
+        for(int i=0; i < l3_reuse_bin_size; i++){
+            fprintf(fp, "BIN: %d %lu\n", i, l3_reuse_bin_list[i]);
+        }
+        fclose(fp);
+}
+
 void ExpandReuseBinList(){
   // each time we double the size of reuse_bin_list
   uint64_t *old_reuse_bin_list = reuse_bin_list;
@@ -634,6 +663,28 @@ void ExpandReuseBinList(){
   memcpy(reuse_bin_pivot_list, old_reuse_bin_pivot_list, sizeof(double) * old_reuse_bin_size);
   for(int i=old_reuse_bin_size; i < reuse_bin_size; i++){
     reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+  }
+
+  //hpcrun_free(old_reuse_bin_list);
+  //hpcrun_free(old_reuse_bin_pivot_list);
+}
+
+void L3ExpandReuseBinList(){
+  // each time we double the size of reuse_bin_list
+  uint64_t *old_reuse_bin_list = l3_reuse_bin_list;
+  double *old_reuse_bin_pivot_list = l3_reuse_bin_pivot_list;
+  int old_reuse_bin_size = l3_reuse_bin_size;
+  l3_reuse_bin_size *= 2;
+
+  l3_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t) * l3_reuse_bin_size);
+  memset(l3_reuse_bin_list, 0, sizeof(uint64_t) * l3_reuse_bin_size);
+  memcpy(l3_reuse_bin_list, old_reuse_bin_list, sizeof(uint64_t) * old_reuse_bin_size);
+
+  l3_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double) * l3_reuse_bin_size);
+  memset(l3_reuse_bin_pivot_list, 0, sizeof(double) * l3_reuse_bin_size);
+  memcpy(l3_reuse_bin_pivot_list, old_reuse_bin_pivot_list, sizeof(double) * old_reuse_bin_size);
+  for(int i=old_reuse_bin_size; i < l3_reuse_bin_size; i++){
+    l3_reuse_bin_pivot_list[i] = l3_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
   }
 
   //hpcrun_free(old_reuse_bin_list);
@@ -686,6 +737,32 @@ int FindReuseBinIndex(uint64_t distance){
   return left + 1;
 }
 
+int L3FindReuseBinIndex(uint64_t distance){
+  //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[0]: %0.2lf\n", distance, reuse_bin_pivot_list[0]);
+  if (distance < l3_reuse_bin_pivot_list[0]){
+    //fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf\n", reuse_bin_pivot_list[0]);
+    return 0;
+  }
+  if (distance >= l3_reuse_bin_pivot_list[l3_reuse_bin_size - 1]){
+    L3ExpandReuseBinList();
+    return L3FindReuseBinIndex(distance);
+  }
+
+  int left = 0, right = reuse_bin_size - 1;
+  while(left + 1 < right){
+    int mid = (left + right) / 2;
+    //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
+    if ( distance < l3_reuse_bin_pivot_list[mid]){
+      right = mid;
+    } else {
+      left = mid;
+    }
+  }
+  assert(left + 1 == right);
+  return left + 1;
+}
+
+
 int FindThreadReuseBinIndex(uint64_t distance){
   if (distance < thread_reuse_bin_pivot_list[0]){
     return 0;
@@ -718,12 +795,17 @@ void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   if(theWPConfig->id == WP_MT_REUSE || theWPConfig->id == WP_REUSE_MT) {
 	int index = FindThreadReuseBinIndex(distance);
   	thread_reuse_bin_list[index] += inc;
-  } else {
+  } else if (theWPConfig->id == WP_REUSE) {
 	int index = FindReuseBinIndex(distance);
 	reuse_bin_list[index] += inc;
 	//fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
   }
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+}
+
+void L3ReuseAddDistance(uint64_t distance, uint64_t inc ){
+	int index = L3FindReuseBinIndex(distance);
+        l3_reuse_bin_list[index] += inc;
 }
 
 void ReuseSubDistance(uint64_t distance, uint64_t dec ){
@@ -1223,6 +1305,7 @@ static void ClientTermination(){
 	CloseWitchTraceOutput();
 	if(completed_rd_profile_count == global_thread_count) {
 		dump_rd_histogram();
+		dump_l3_rd_histogram();
 	}
 
 #endif
@@ -1860,6 +1943,16 @@ METHOD_FN(process_event_list, int lush_metrics)
                         //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
             }
 	    fprintf(stderr, "no problem until this point, in process_event_list, WP_MT_REUSE\n");*/
+	    
+	    l3_reuse_bin_size = 20;
+            l3_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*l3_reuse_bin_size);
+            memset(l3_reuse_bin_list, 0, sizeof(uint64_t)*l3_reuse_bin_size);
+            l3_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*l3_reuse_bin_size);
+            l3_reuse_bin_pivot_list[0] = reuse_bin_start;
+            for(int i=1; i < l3_reuse_bin_size; i++){
+              l3_reuse_bin_pivot_list[i] = l3_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+            }
+
 	    initialize_reuse_ds();
 	  }
 
@@ -2860,6 +2953,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
 #ifdef REUSE_HISTO
 
+  int me = TD_GET(core_profile_trace_data.id);
+  int my_core = sched_getcpu();
+
   if(wpi->sample.L1Sample) {
   sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
   cct_node_t *reuseNode = v.sample_node;
@@ -2871,8 +2967,6 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
     // before
     int item_found = 0;
-    int me = TD_GET(core_profile_trace_data.id);
-    int my_core = sched_getcpu();
 
     if(wpi->sample.L1Sample) {
     bool invalidation_flag = false;
@@ -2930,7 +3024,20 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       	//ReuseAddDistance(rd, inc);
   }
   } else {
-	  fprintf(stderr, "trap to profile L3 is finishing on sample %ld\n", wpi->sample.sampleTime);
+
+	  uint64_t sharer = wpConfig.maxWP - l1_wp_count;
+	  if((me == wpi->sample.first_accessing_tid) && ((trapTime - L2MissLastTime) > 2 * (L2MissLastTime - L2MissOlderTime))) {
+	  	fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to capacity miss\n", wpi->sample.sampleTime);
+		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+
+    		uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+		inc = numDiffSamples;
+		L3ReuseAddDistance(rd, global_thread_count / sharer * inc);
+	  }
+	  else if (me != wpi->sample.first_accessing_tid) {
+		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
+		L3ReuseAddDistance(rd, global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+	  }
   }
 #else
 
@@ -4798,7 +4905,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 				if(GetVictimL3(&location, curTime) && (global_thread_count > 1)) {
 
 					sd.L1Sample = false;
-					for(int j=0; j < 3; j++){
+					for(int j=0; j < 3; j++) {
 						sd.reuseDistance[0][j] = 0;
 					}
 					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
@@ -4822,10 +4929,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                                                 fprintf(stderr, "indices[%d]: %d\n", i, indices[i]);
                                         }
 					for(int i = 0; i < cur_global_thread_count; i++) {
-						//if(i != me) {
 						uint64_t val[3] = { 0 };
 						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, indices[i]);
-						for(int j=0; j < 3; j++){
+						for(int j=0; j < 3; j++) {
                                                 	sd.reuseDistance[0][j] += val[j];
                                         	}
 					}
@@ -4838,10 +4944,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                                         }
 
 				}
-
+				L2MissOlderTime = L2MissLastTime;
+				L2MissLastTime = curTime;
 			}
-
-			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
 		      }
 		      break;
@@ -4988,7 +5093,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  //fprintf(stderr, "WP subscribing fails\n");
 			}
 			free(idx_array);
-			//}
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
   }

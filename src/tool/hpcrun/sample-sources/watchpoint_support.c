@@ -214,7 +214,7 @@ int fdDataInsert(int fd, pid_t os_tid, int tid) {
 int global_thread_count;
 
 static int same_thread_wp_count;
-static int l1_wp_count;
+int l1_wp_count;
 
 
 bool globalWPIsActive[MAX_WP_SLOTS];
