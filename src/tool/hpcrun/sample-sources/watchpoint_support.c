@@ -111,6 +111,58 @@
 #define HANDLE_ERROR_IF_ANY(val, expected, errstr) {if (val != expected) {perror(errstr); abort();}}
 #define SAMPLES_POST_FULL_RESET_VAL (1)
 
+// reuse queue before
+
+#define MAX 512
+
+uint64_t queueCounter = 0;
+int tidQueue[MAX];
+int front = 0;
+int rear = -1;
+int entryCount = 0;
+
+int peekQueue() {
+   return tidQueue[front];
+}
+
+bool isEmpty() {
+   return entryCount == 0;
+}
+
+bool isFull() {
+   return entryCount == MAX;
+}
+
+int queueSize() {
+   return entryCount;
+}  
+
+void insertQueue(int tid) {
+
+   if(!isFull()) {
+	
+      if(rear == MAX-1) {
+         rear = -1;            
+      }       
+
+      tidQueue[++rear] = tid;
+      entryCount++;
+   }
+}
+
+int removeDataQueue() {
+   int tid = tidQueue[front++];
+	
+   if(front == MAX) {
+      front = 0;
+   }
+	
+   entryCount--;
+   return tid;  
+}
+
+// reuse queue after
+
 
 WPConfig_t wpConfig;
 
@@ -518,6 +570,7 @@ __attribute__((constructor))
 		globalReuseWPs.table[i].counter = 0;
 	}	
 	l3_profile_counter = 0;
+	queueCounter = 0;
 }
 
 void RedSpyWPConfigOverride(void *v){
@@ -945,7 +998,8 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 	//if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
 #ifdef REUSE_HISTO
-		threadDataTable.hashTable[me] = tData;
+	threadDataTable.hashTable[me] = tData;
+	insertQueue(me);
 #endif
 
 	#ifdef REUSE_HISTO
@@ -1058,7 +1112,7 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
-                   	if(randValue <= probabilityToReplace) {
+                   	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.05)) {
                     		globalWPIsActive[i] = false;
 				fprintf(stderr, "opening position in %d\n", i); 
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
@@ -1070,8 +1124,26 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
 			return false;
                 }
         }
+
+	uint64_t theCounter = queueCounter;
+        if((theCounter & 1) == 0)
+                if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
+			while((queueSize() > 0) && (threadDataTable.hashTable[peekQueue()].os_tid == -1)){
+				removeDataQueue();
+			}
+			queueCounter++;
+		}
+
+
         for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
-                if(!globalWPIsActive[i]) {
+        	if(!globalWPIsActive[i] && (me == peekQueue())) {
+			uint64_t theCounter = queueCounter;
+        		if((theCounter & 1) == 0)
+                		if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
+					int tid = removeDataQueue();
+                        		insertQueue(tid);
+					queueCounter++;
+				}
                         *location = i;
 			globalWPIsActive[i] = true;
 			globalWPIsUsers[i] = me; 
