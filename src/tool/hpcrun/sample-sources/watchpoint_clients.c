@@ -4803,10 +4803,28 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 					}
 					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
 
-					for(int i = 0; i < global_thread_count; i++) {
+					int cur_global_thread_count = global_thread_count;
+					int indices[cur_global_thread_count];
+                                 	for (int i = 0; i < cur_global_thread_count; i++) {
+                                        	indices[i] = i;
+                                 	}
+                                 	//fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+                                 	int wp_index = cur_global_thread_count;
+                                 	while (wp_index) {
+                                         	int index = rdtsc() % wp_index;
+                                         	wp_index--;
+                                         	int swap = indices[index];
+                                         	indices[index] = indices[wp_index];
+                                         	indices[wp_index] = swap;
+                                 	}
+
+					for (int i = 0; i < cur_global_thread_count; i++) {
+                                                fprintf(stderr, "indices[%d]: %d\n", i, indices[i]);
+                                        }
+					for(int i = 0; i < cur_global_thread_count; i++) {
 						//if(i != me) {
 						uint64_t val[3] = { 0 };
-						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i);
+						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, indices[i]);
 						for(int j=0; j < 3; j++){
                                                 	sd.reuseDistance[0][j] += val[j];
                                         	}
@@ -4815,10 +4833,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 
 					sd.first_accessing_tid = me;
 					sd.sampleTime=curTime;
-					for(int i = 0; i < global_thread_count; i++) {
-                                                if(i != me) {
-                                                	SubscribeWatchpointShared(&sd, OVERWRITE, false, i, false, location); 
-						}
+					for(int i = 0; i < cur_global_thread_count; i++) {
+                                        	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
                                         }
 
 				}
