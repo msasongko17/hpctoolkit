@@ -1112,7 +1112,7 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
-                   	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.05)) {
+                   	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
                     		globalWPIsActive[i] = false;
 				fprintf(stderr, "opening position in %d\n", i); 
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
@@ -1125,34 +1125,33 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                 }
         }
 
-	uint64_t theCounter = queueCounter;
+	/*uint64_t theCounter = queueCounter;
         if((theCounter & 1) == 0)
                 if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
 			while((queueSize() > 0) && (threadDataTable.hashTable[peekQueue()].os_tid == -1)){
 				removeDataQueue();
 			}
 			queueCounter++;
-		}
+		}*/
 
 
+	uint64_t theCounter = queueCounter;
+                        if((theCounter & 1) == 0)
+                                if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
         for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
         	if(!globalWPIsActive[i] && (me == peekQueue())) {
-			uint64_t theCounter = queueCounter;
-        		if((theCounter & 1) == 0)
-                		if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
-					int tid = removeDataQueue();
-                        		insertQueue(tid);
-					queueCounter++;
-				}
                         *location = i;
 			globalWPIsActive[i] = true;
 			globalWPIsUsers[i] = me; 
 			globalReuseWPs.table[i].tid = me;
 			globalReuseWPs.table[i].active = true;	
 			globalReuseWPs.table[i].time = sampleTime;
+			queueCounter++;
                         return true;      
                 }
-        }	
+        }
+	queueCounter++;
+	}	
         return false;
 }
 

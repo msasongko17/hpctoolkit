@@ -3035,19 +3035,25 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
-		int load_difference = load_count - wpi->sample.loadCount;
-		int store_difference = store_count - wpi->sample.storeCount;
-		double load_store_ratio = (double) (load_difference + store_difference) / load_difference;
-		uint64_t increment = global_thread_count / sharer * inc * (uint64_t) load_store_ratio;
+		//int load_difference = load_count - wpi->sample.loadCount;
+		//int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
+		if(load_store_ratio <= 0)
+			load_store_ratio = 1.0;
+		uint64_t increment = global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf\n", global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio);
 		L3ReuseAddDistance(rd, increment);
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 		//inc = numDiffSamples;
 		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
-		int load_difference = load_count - wpi->sample.loadCount;
-                int store_difference = store_count - wpi->sample.storeCount;
-		double load_store_ratio = (double) (load_difference + store_difference) / load_difference;
-		uint64_t increment = global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * (uint64_t) load_store_ratio;
+		//int load_difference = load_count - wpi->sample.loadCount;
+                //int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
+                if(load_store_ratio <= 0)
+                        load_store_ratio = 1.0;
+		uint64_t increment = global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf", global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio);
 		L3ReuseAddDistance(rd, increment);
 	  }
   }
