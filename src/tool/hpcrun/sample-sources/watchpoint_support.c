@@ -264,6 +264,7 @@ int fdDataInsert(int fd, pid_t os_tid, int tid) {
 }
 
 int global_thread_count;
+int dynamic_global_thread_count;
 
 static int same_thread_wp_count;
 int l1_wp_count;
@@ -396,6 +397,7 @@ __attribute__((constructor))
 	static void InitConfig(){
 		//printf("InitConfig is called\n");
 		global_thread_count = 0;
+		dynamic_global_thread_count = 0;
 		/*if(!init_adamant) {
 		  init_adamant = 1;*/
 		//adm_initialize();
@@ -947,6 +949,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
 	global_thread_count++;
+	dynamic_global_thread_count++;
 	//fprintf(stderr, "in WatchpointThreadInit, WP_MT_REUSE\n");
 	//printf("WatchpointThreadInit is called by thread with os id %d and id %d, thread count %d\n", gettid(), TD_GET(core_profile_trace_data.id), global_thread_count);
 	int me = TD_GET(core_profile_trace_data.id);
@@ -1038,6 +1041,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 void WatchpointThreadTerminate(){
 	int me = TD_GET(core_profile_trace_data.id);
+	dynamic_global_thread_count--;
 	ThreadData_t threadData;
 	if(event_type == WP_REUSE_MT) {
 		threadDataTable.hashTable[me].os_tid = -1;
@@ -1055,6 +1059,27 @@ void WatchpointThreadTerminate(){
         	}
         	threadDataTable.hashTable[me].fs_reg_val = (void*)-1;
         	threadDataTable.hashTable[me].gs_reg_val = (void*)-1;
+	} else if (event_type == WP_MT_REUSE) {
+
+		for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+                	if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
+                		globalWPIsActive[i] = false; 
+                	}
+        	}
+		threadData = tData;
+                for (int i = 0; i < wpConfig.maxWP; i++) {
+                        if(tData.watchPointArray[i].fileHandle != -1) {
+                                DisArm(&tData.watchPointArray[i]);
+                        }
+                }
+
+                if(tData.lbrDummyFD != -1) {
+                        CloseDummyHardwareEvent(tData.lbrDummyFD);
+                        tData.lbrDummyFD = -1;
+                }
+                tData.fs_reg_val = (void*)-1;
+                tData.gs_reg_val = (void*)-1;
+
 	} else {
 		threadData = tData;
 		for (int i = 0; i < wpConfig.maxWP; i++) {
@@ -1114,7 +1139,7 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                    	drand48_r(&tData.randBuffer, &randValue);
                    	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
                     		globalWPIsActive[i] = false;
-				fprintf(stderr, "opening position in %d\n", i); 
+				fprintf(stderr, "a position in %d is opened by thread %d\n", i, me); 
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
                     	} else {
@@ -1139,7 +1164,8 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                         if((theCounter & 1) == 0)
                                 if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
         for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
-        	if(!globalWPIsActive[i] && (me == peekQueue())) {
+        	if(!globalWPIsActive[i]) {
+			fprintf(stderr, "open position in %d is taken by thread %d\n", i, me);
                         *location = i;
 			globalWPIsActive[i] = true;
 			globalWPIsUsers[i] = me; 
