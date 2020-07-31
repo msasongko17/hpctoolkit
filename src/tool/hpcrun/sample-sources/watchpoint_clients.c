@@ -3101,7 +3101,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 }
 
 static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseMtWPCallback, handler at thread %d due to trap at thread %d\n", TD_GET(core_profile_trace_data.id), wpi->trap_origin_tid);
+  //fprintf(stderr, "in MtReuseWPCallback\n");
   trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
@@ -3110,181 +3110,151 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     return ALREADY_DISABLED;
   }
 #endif //jqswang
-  /*uint64_t val[2][3];
-    for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
-      //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
-      for(int j=0; j < 3; j++){
-        if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
-          val[i][j] -= wpi->sample.reuseDistance[i][j];
-        }
-        else { //Something wrong happens here and the record is not reliable. Drop it!
-          fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-          return ALREADY_DISABLED;
-          //return RETAIN_WP;
-        }
-      }
-    }
-    uint64_t rd = 0;
-    for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
-      rd += val[i][0];
-    }
   //fprintf(stderr, "there is a trap\n");
   //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
   //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
   //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
-  //before
-  double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-  //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
-  //Increment of reuse distance with distance rd is the number of samples
-  // in the context since the last WP trap multiplied by sample period
-  uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-  uint64_t inc = numDiffSamples;*/
-
-  //fprintf(stderr, "frequency or detected reuse distance: %ld\n", inc);
-  bool reuse_flag = false;
-  uint64_t reuseMtIdx = reuseMtIndexGet(wpi->sample.sampleTime);
-  if((reuseMtBulletinBoard.hashTable[reuseMtIdx].time == wpi->sample.sampleTime) && (reuseMtBulletinBoard.hashTable[reuseMtIdx].tid == wpi->sample.first_accessing_tid)) {
-    if(reuseMtBulletinBoard.hashTable[reuseMtIdx].active == true) {
-      if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
-	//fprintf(stderr, "a reuse is detected in thread %d from thread %d reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, reuseMtIdx);
-	reuse_flag = true;
-      }
-      else if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE) || (wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) {
-	double increment = 0;
-	int max_thread_num = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
-	if(max_thread_num < wpi->trap_origin_tid)
-	{
-	  max_thread_num = wpi->trap_origin_tid;
-	}
-	if(as_matrix_size < max_thread_num)
-	{
-	  as_matrix_size =  max_thread_num;
-	}
-	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
-	  //fprintf(stderr, "an invalidation is detected in thread %d from thread %d with amount %0.2lf reuseMtIdx: %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid, (double) inc, reuseMtIdx);
-	  /*if(inc == 0) {
-	    inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-	    //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
-	  }*/
-	  increment = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-	  invalidation_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (increment + increment * inter_wp_dropped_counter);
-	  /*ReuseSubDistance(rd, (uint64_t) (increment * inter_wp_dropped_counter));
-	  last_trap_is_invalidation = true;
-	  last_inc = inc;
-	  last_rd = rd;
-	  last_from = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
-	  last_to = wpi->trap_origin_tid;*/
-	}
-	/*if(inc == 0) {
-	  inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-	  //fprintf(stderr, "inc is converted from 0 to %ld\n", inc);
-	}*/
-	as_matrix[reuseMtBulletinBoard.hashTable[reuseMtIdx].tid][wpi->trap_origin_tid] += (double) (increment + increment * inter_wp_dropped_counter);
-      }
-      //prettyPrintReuseMtHash();
-      reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-    } else {
-      if(wpi->trap_origin_tid == reuseMtBulletinBoard.hashTable[reuseMtIdx].tid) {
-	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false reuse is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
-	uint64_t trapTime = rdtsc();
-    	uint64_t val[2][3];
-    	for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      		assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
-      		//fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
-      		for(int j=0; j < 3; j++){
-        		if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
-          			val[i][j] -= wpi->sample.reuseDistance[i][j];
-        		}
-        		else { //Something wrong happens here and the record is not reliable. Drop it!
-          			fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-          			return ALREADY_DISABLED;
-          				//return RETAIN_WP;
-        		}
-
-      		}	
-    	}
-    	uint64_t rd = 0;
-    	for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      		assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
-      		rd += val[i][0];
-    	}
-
-	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-    	//fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
-    	//Increment of reuse distance with distance rd is the number of samples 
-    	// in the context since the last WP trap multiplied by sample period
-    	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    	uint64_t inc = numDiffSamples;
-    	//fprintf(stderr, "inc: %ld\n", inc);
-    	//int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
-
-    	//uint64_t time_distance = rdtsc() - wpi->startTime;
-
-	  ReuseSubDistance(rd, (uint64_t) (inc * inter_wp_dropped_counter));
-          last_trap_is_invalidation = true;
-          last_inc = inc;
-          last_rd = rd;
-          last_from = reuseMtBulletinBoard.hashTable[reuseMtIdx].tid;
-          last_to = wpi->trap_origin_tid;
-      }
-      else {
-	//reuseMtBulletinBoard.hashTable[reuseMtIdx].active = false;
-	//fprintf(stderr, "a false communication/invalidation is detected in thread %d from thread %d\n", wpi->trap_origin_tid, reuseMtBulletinBoard.hashTable[reuseMtIdx].tid);
-      }
-    }
-  } else {
-	  //fprintf(stderr, "discarded because of hash collision\n");
-  }
-  //after
+  uint64_t rd = 0;
   uint64_t trapTime = rdtsc();
-  if (reuse_flag) {
-    uint64_t val[2][3];
-    for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
-      //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
-      for(int j=0; j < 3; j++){
-	if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
-	  val[i][j] -= wpi->sample.reuseDistance[i][j];
-	} 
-	else { //Something wrong happens here and the record is not reliable. Drop it!
-	  fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-	  return ALREADY_DISABLED;
-	  //return RETAIN_WP;
-	}
-
+  if(wpi->sample.L1Sample) {
+  uint64_t val[2][3];
+  for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+    assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
+    //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
+    for(int j=0; j < 3; j++){
+      if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
+	val[i][j] -= wpi->sample.reuseDistance[i][j];
+      } 
+      else { //Something wrong happens here and the record is not reliable. Drop it!
+	//fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
+	return ALREADY_DISABLED;
       }
     }
-    uint64_t rd = 0;
-    for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
-      assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
-      rd += val[i][0];
-    }
-    // Report a reuse
-    // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
-    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-    //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
-    //Increment of reuse distance with distance rd is the number of samples 
-    // in the context since the last WP trap multiplied by sample period
-    uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-    uint64_t inc = numDiffSamples;
-    //fprintf(stderr, "inc: %ld\n", inc);
-    int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
-
-    uint64_t time_distance = rdtsc() - wpi->startTime;
-
-    //compute reuse distance here
-
-    ReuseAddDistance(rd, inc);
-    last_trap_is_invalidation = false;
-    last_inc = inc;
-    last_rd = rd;
   }
+  for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
+    assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
+    rd += val[i][0];
+  }
+  } else {
+	 fprintf(stderr, "trap to profile L3\n");
+	 uint64_t val[3];
+	 for(int i=0; i < 3; i++) {
+		 val[i] = 0;
+	 }
+	 for(int i = 0; i < global_thread_count; i++) {
+		uint64_t val1[3];
+ 	 	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i);
+       		for(int j=0; j < 3; j++){
+			val[j] += val1[j];
+		} 	
+	 }
+	 for(int i=0; i < 3; i++) {
+		 if(val[i] >= wpi->sample.reuseDistance[0][i]) {
+                 	val[i] -= wpi->sample.reuseDistance[0][i];
+		 } else { 
+                        return ALREADY_DISABLED;
+                }
+         }
+	rd += val[0];
+  }
+  uint64_t inc = 0;
+  //fprintf(stderr, "inc: %ld\n", inc);
+  int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
+  uint64_t time_distance = rdtsc() - wpi->startTime;
+
+#ifdef REUSE_HISTO
+
+  int me = TD_GET(core_profile_trace_data.id);
+  int my_core = sched_getcpu();
+  if(wpi->sample.L1Sample) {
+	uint64_t sharer = l1_wp_count;
+	  //double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+          //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+	  if(me == wpi->sample.first_accessing_tid) {
+	  	fprintf(stderr, "trap to profile L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
+		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+          	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+		inc = numDiffSamples;
+		uint64_t increment = dynamic_global_thread_count / sharer * inc;
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld\n", inc, increment);
+		ReuseAddDistance(rd, increment);
+	  }
+	  else if (me != wpi->sample.first_accessing_tid) {
+		  fprintf(stderr, "trap to invalidate on L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
+	  } 
+  } else {
+
+	  uint64_t sharer = wpConfig.maxWP - l1_wp_count;
+	  //double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+          //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+	  if((me == wpi->sample.first_accessing_tid) && ((trapTime - L2MissLastTime) > 2 * (L2MissLastTime - L2MissOlderTime))) {
+	  	fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to capacity miss\n", wpi->sample.sampleTime);
+		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+          	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+		inc = numDiffSamples;
+		//int load_difference = load_count - wpi->sample.loadCount;
+		//int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
+		if(load_store_ratio <= 0)
+			load_store_ratio = 1.0;
+		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio);
+		L3ReuseAddDistance(rd, increment);
+	  }
+	  else if (me != wpi->sample.first_accessing_tid) {
+		//inc = numDiffSamples;
+		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
+		//int load_difference = load_count - wpi->sample.loadCount;
+                //int store_difference = store_count - wpi->sample.storeCount;
+		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
+                if(load_store_ratio <= 0)
+                        load_store_ratio = 1.0;
+		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio);
+		L3ReuseAddDistance(rd, increment);
+	  }
+  }
+#else
+
+  //fprintf(stderr, "this region is executed\n");
+  cct_node_t *reusePairNode;
+  if (wpi->sample.reuseType == REUSE_TEMPORAL){
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
+    }
+  }
+  else { // REUSE_SPATIAL
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx]);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+    }
+  }
+  cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
+  //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+  cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+
+  reuseTemporal += inc;
+  if (wpi->sample.reuseType == REUSE_TEMPORAL){
+    cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+  } else {
+    cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+  }
+  cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
+  cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+#endif
   return ALREADY_DISABLED;
-  //return RETAIN_WP;
 }
 
 // Handles the debug register trap (callback). When the PC reaches an adress (breakpoint) or accesses a designated adress (watchpoint), the cpu is trapped.
@@ -5064,6 +5034,30 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			//fprintf(stderr, "here4\n");
 			// Read the reuse distance event counters
 			// We assume the reading event is load, store or both.
+		int me = TD_GET(core_profile_trace_data.id);
+		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
+			int location = -1;
+			if(GetVictimL1(&location, curTime) && (dynamic_global_thread_count > 1)) {
+
+			int cur_global_thread_count = global_thread_count;
+			int indices[cur_global_thread_count];
+                        for (int i = 0; i < cur_global_thread_count; i++) {
+                        	indices[i] = i;
+                        }
+                                 	//fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+                        int wp_index = cur_global_thread_count;
+                        while (wp_index) {
+                        	int index = rdtsc() % wp_index;
+                                wp_index--;
+                                int swap = indices[index];
+                                indices[index] = indices[wp_index];
+                                indices[wp_index] = swap;
+                        }
+
+			for (int i = 0; i < cur_global_thread_count; i++) {
+                        	fprintf(stderr, "indices[%d]: %d\n", i, indices[i]);
+                        }
+
 			uint64_t pmu_counter = 0;
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 			  uint64_t val[3];
@@ -5080,36 +5074,68 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			//int item_not_found_flag = 0;
 			int me = TD_GET(core_profile_trace_data.id);
 			int my_core = sched_getcpu();
-			uint64_t eventDiff = pmu_counter-prev_event_count;
-			uint64_t timeDiff = curTime-lastTime;
 			int item_not_found_flag = 0;	
 			sd.sampleTime=curTime;
-			sd.expirationPeriod=(curTime - lastTime);
 			sd.first_accessing_tid = me;
+			sd.L1Sample = true;
 			prev_event_count = pmu_counter;
 
-			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
-			wp_arming_count++;
-			int * idx_array = (int *) calloc (global_thread_count, sizeof(int));
-			for(int i = 0; i < global_thread_count; i++)
-			  idx_array[i] = i;
-			for(int i = 0; i < global_thread_count/2; i ++) {
-			  int idx = rdtsc() % global_thread_count;
-			  int tmpVal = idx_array[idx];
-			  idx_array[idx] = idx_array[i];
-			  idx_array[i] = tmpVal;
+			for(int i = 0; i < cur_global_thread_count; i++) {
+                        	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], true, location); 
+                        }
+		      }
+		}
+
+		if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
+				int location = -1;
+				if(GetVictimL3(&location, curTime) && (dynamic_global_thread_count > 1)) {
+
+					sd.L1Sample = false;
+					for(int j=0; j < 3; j++) {
+						sd.reuseDistance[0][j] = 0;
+					}
+					//fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+
+					int cur_global_thread_count = global_thread_count;
+					int indices[cur_global_thread_count];
+                                 	for (int i = 0; i < cur_global_thread_count; i++) {
+                                        	indices[i] = i;
+                                 	}
+                                 	//fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+                                 	int wp_index = cur_global_thread_count;
+                                 	while (wp_index) {
+                                         	int index = rdtsc() % wp_index;
+                                         	wp_index--;
+                                         	int swap = indices[index];
+                                         	indices[index] = indices[wp_index];
+                                         	indices[wp_index] = swap;
+                                 	}
+
+					for (int i = 0; i < cur_global_thread_count; i++) {
+                                                fprintf(stderr, "indices[%d]: %d\n", i, indices[i]);
+                                        }
+					for(int i = 0; i < cur_global_thread_count; i++) {
+						uint64_t val[3] = { 0 };
+						linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, indices[i]);
+						for(int j=0; j < 3; j++) {
+                                                	sd.reuseDistance[0][j] += val[j];
+                                        	}
+					}
+					fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld in thread %d\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0], me);
+
+					sd.first_accessing_tid = me;
+					sd.sampleTime=curTime;
+					sd.loadCount = load_count;
+					sd.storeCount = store_count;
+					for(int i = 0; i < cur_global_thread_count; i++) {
+						if(indices[i] != me)
+                                        		SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location);
+                                        }
+
+				}
+				L2MissOlderTime = L2MissLastTime;
+				L2MissLastTime = curTime;
 			}
-			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1);
-			if (true == SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1)) {
-				reuseMtDataInsert(me, curTime, true);
-			  for(int i = 0; i < global_thread_count; i++)
-			    if(idx_array[i] != me)
-			      SubscribeWatchpointShared(&sd, OVERWRITE, false, idx_array[i], false, -1);
-			  //fprintf(stderr, "WP subscribing succeeds\n");
-			} else {
-			  //fprintf(stderr, "WP subscribing fails\n");
-			}
-			free(idx_array);
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
   }
