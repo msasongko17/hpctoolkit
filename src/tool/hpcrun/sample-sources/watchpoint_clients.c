@@ -4959,7 +4959,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 					sd.loadCount = load_count;
 					sd.storeCount = store_count;
 					for(int i = 0; i < cur_global_thread_count; i++) {
-                                        	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
+						if(indices[i] != me)
+                                        		SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
                                         }
 
 				}
