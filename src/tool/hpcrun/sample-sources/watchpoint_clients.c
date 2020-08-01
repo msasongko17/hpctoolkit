@@ -3043,19 +3043,25 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 			load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
 		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio);
-		L3ReuseAddDistance(rd, increment);
+		L3ReuseAddDistance(rd, inc);
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
+
+		sample_val_t v = hpcrun_sample_callpath(wt->ctxt, wpi->sample.sampledMetricId, SAMPLE_NO_INC, 0, 0, NULL);
+  		cct_node_t *reuseNode = v.sample_node;
 		//inc = numDiffSamples;
 		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
 		//int load_difference = load_count - wpi->sample.loadCount;
                 //int store_difference = store_count - wpi->sample.storeCount;
+		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+                uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(reuseNode, wpi->sample.sampledMetricId, myProportion);
+                inc = numDiffSamples;
 		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
                 if(load_store_ratio <= 0)
                         load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
 		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio);
-		L3ReuseAddDistance(rd, increment);
+		L3ReuseAddDistance(rd, inc);
 	  }
   }
 #else
@@ -3176,9 +3182,10 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
-		uint64_t increment = dynamic_global_thread_count / sharer * inc;
-		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld\n", inc, increment);
-		ReuseAddDistance(rd, increment);
+		double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
+		double increment = thread_sharer_ratio * inc;
+		fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf\n", increment, (uint64_t) increment, thread_sharer_ratio);
+		ReuseAddDistance(rd, inc);
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 		  fprintf(stderr, "trap to invalidate on L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
@@ -4888,6 +4895,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		
 		      }	
 		      if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
+				fprintf(stderr, "a MEM_LOAD_UOPS_RETIRED.L2_MISS sample is being handled\n");
 				int location = -1;
 				if(GetVictimL3(&location, curTime) && (dynamic_global_thread_count > 1)) {
 

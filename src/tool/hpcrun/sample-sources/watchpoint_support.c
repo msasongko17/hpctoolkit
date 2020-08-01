@@ -115,7 +115,8 @@
 
 #define MAX 512
 
-uint64_t queueCounter = 0;
+uint64_t L1Counter = 0;
+uint64_t L3Counter = 0;
 int tidQueue[MAX];
 int front = 0;
 int rear = -1;
@@ -572,7 +573,8 @@ __attribute__((constructor))
 		globalReuseWPs.table[i].counter = 0;
 	}	
 	l3_profile_counter = 0;
-	queueCounter = 0;
+	L1Counter = 0;
+	L3Counter = 0;
 }
 
 void RedSpyWPConfigOverride(void *v){
@@ -1044,6 +1046,14 @@ void WatchpointThreadTerminate(){
 	dynamic_global_thread_count--;
 	ThreadData_t threadData;
 	if(event_type == WP_REUSE_MT) {
+
+		for(int i = 0; i < wpConfig.maxWP; i++){
+                        if(globalWPIsUsers[i] == me) {
+                                globalWPIsActive[i] = false;
+				globalWPIsUsers[i] = -1;
+                        }
+                }
+
 		threadDataTable.hashTable[me].os_tid = -1;
 		threadData = threadDataTable.hashTable[me];
 		threadDataTable.hashTable[me].os_tid = -1;
@@ -1062,8 +1072,9 @@ void WatchpointThreadTerminate(){
 	} else if (event_type == WP_MT_REUSE) {
 
 		for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
-                	if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
-                		globalWPIsActive[i] = false; 
+                	if(globalWPIsUsers[i] == me) {
+                		globalWPIsActive[i] = false;
+				globalWPIsUsers[i] = -1; 
                 	}
         	}
 		threadData = tData;
@@ -1131,43 +1142,54 @@ void DisableWPforL3() {
 }
 
 bool GetVictimL3(int * location, uint64_t sampleTime) {
-	int me = TD_GET(core_profile_trace_data.id);
-	for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+        int me = TD_GET(core_profile_trace_data.id);
+        for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
                 if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
-                    	double randValue;
-                   	drand48_r(&tData.randBuffer, &randValue);
-                   	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
-                    		globalWPIsActive[i] = false;
-				fprintf(stderr, "a position in %d is opened by thread %d\n", i, me); 
-				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
-					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
-                    	} else {
-				fprintf(stderr, "global wp in %d is retained\n", i);
-			}
-			numWatchpointArmingAttempt[i]++;
-			return false;
-                }
-        }	
-
-	uint64_t theCounter = queueCounter;
-                        if((theCounter & 1) == 0)
-                                if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
-        for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
-        	if(!globalWPIsActive[i]) {
-			fprintf(stderr, "open position in %d is taken by thread %d\n", i, me);
-                        *location = i;
-			globalWPIsActive[i] = true;
-			globalWPIsUsers[i] = me; 
-			globalReuseWPs.table[i].tid = me;
-			globalReuseWPs.table[i].active = true;	
-			globalReuseWPs.table[i].time = sampleTime;
-			queueCounter++;
-                        return true;      
+                        double randValue;
+                        drand48_r(&tData.randBuffer, &randValue);
+                        if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
+                                globalWPIsActive[i] = false;
+                                globalWPIsUsers[i] = -1;
+                                fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
+                                /*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
+                                        DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
+                        } else {
+                                fprintf(stderr, "global wp in %d is retained\n", i);
+                        }
+                        numWatchpointArmingAttempt[i]++;
+                        return false;
+                } else if (globalWPIsUsers[i] == me) {
+                        globalWPIsUsers[i] = -1;
+                        return false;
                 }
         }
-	queueCounter++;
-	}	
+
+	uint64_t theCounter = L3Counter;
+                if((theCounter & 1) == 0)
+                        if(__sync_bool_compare_and_swap(&L3Counter, theCounter, theCounter+1)) {
+                                for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
+                                        if(globalWPIsUsers[i] == -1)
+                                                *location = i;
+                                }
+                                L3Counter++;
+                        }
+
+        /*uint64_t theCounter = queueCounter;
+                if((theCounter & 1) == 0)
+                        if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {*/
+                if(*location != -1) {
+                        fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
+                        globalWPIsActive[*location] = true;
+                        globalWPIsUsers[*location] = me;
+                        globalReuseWPs.table[*location].tid = me;
+                        globalReuseWPs.table[*location].active = true;
+                        globalReuseWPs.table[*location].time = sampleTime;
+                        //queueCounter++;
+                        return true;
+                }
+        /*queueCounter++;
+        }*/
         return false;
 }
 
@@ -1181,6 +1203,7 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
                    	drand48_r(&tData.randBuffer, &randValue);
                    	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
                     		globalWPIsActive[i] = false;
+				globalWPIsUsers[i] = -1;
 				fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
@@ -1189,28 +1212,38 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
 			}
 			numWatchpointArmingAttempt[i]++;
 			return false;
-                }
+                } else if (globalWPIsUsers[i] == me) {
+			globalWPIsUsers[i] = -1;
+			return false;
+		}
         }
 
 
-	uint64_t theCounter = queueCounter;
+	uint64_t theCounter = L1Counter;
+                if((theCounter & 1) == 0)
+                        if(__sync_bool_compare_and_swap(&L1Counter, theCounter, theCounter+1)) {
+				for(int i = 0; i < l1_wp_count; i++){
+					if(globalWPIsUsers[i] == -1)
+						*location = i;
+				}
+				L1Counter++;
+        		}
+
+	/*uint64_t theCounter = queueCounter;
         	if((theCounter & 1) == 0)
-                	if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {
-        for(int i = 0; i < l1_wp_count; i++){
-        	if(!globalWPIsActive[i]) {
-			fprintf(stderr, "open position in %d is taken by thread %d\n", i, me);
-                        *location = i;
-			globalWPIsActive[i] = true;
-			globalWPIsUsers[i] = me;
-			globalReuseWPs.table[i].tid = me;
-			globalReuseWPs.table[i].active = true;
-			globalReuseWPs.table[i].time = sampleTime;
-			queueCounter++;
+                	if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {*/
+        	if(*location != -1) {
+			fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
+			globalWPIsActive[*location] = true;
+			globalWPIsUsers[*location] = me;
+			globalReuseWPs.table[*location].tid = me;
+			globalReuseWPs.table[*location].active = true;
+			globalReuseWPs.table[*location].time = sampleTime;
+			//queueCounter++;
                         return true;
                 }
-        }
-	queueCounter++;
-	}
+	/*queueCounter++;
+	}*/
         return false;
 }
 
