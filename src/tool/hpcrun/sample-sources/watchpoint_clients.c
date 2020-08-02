@@ -5045,7 +5045,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		int me = TD_GET(core_profile_trace_data.id);
 		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
 			int location = -1;
-			if(GetVictimL1(&location, curTime) && (dynamic_global_thread_count > 1)) {
+			if(GetVictimL1(&location, curTime)) {
 
 			int cur_global_thread_count = global_thread_count;
 			int indices[cur_global_thread_count];
