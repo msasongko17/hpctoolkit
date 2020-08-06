@@ -571,6 +571,8 @@ __attribute__((constructor))
 		globalReuseWPs.table[i].time = -1;
 		globalReuseWPs.table[i].active = false;
 		globalReuseWPs.table[i].counter = 0;
+		globalReuseWPs.table[i].inc = 0;
+		globalReuseWPs.table[i].rd = 0;
 	}	
 	l3_profile_counter = 0;
 	L1Counter = 0;
