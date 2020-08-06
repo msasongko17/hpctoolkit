@@ -73,6 +73,10 @@
 #define IS_8_BYTE_ALIGNED(addr) (!((size_t)(addr) & (7)))
 
 #define WASTE_THRESHOLD (10)
+
+#define MAX_WP_SLOTS (5)
+#define CACHE_LINE_SIZE (64)
+
 //#define FINE_GRAINED_WP
 
 typedef enum AccessType {LOAD, STORE, LOAD_AND_STORE, UNKNOWN} AccessType;
@@ -141,6 +145,7 @@ typedef struct WatchPointTrigger{
     FloatType floatType;
     AccessType accessType;
     int accessLength; // access length
+    int location;
 } WatchPointTrigger_t;
 
 // Data structure that is maintained per WP armed
@@ -156,6 +161,21 @@ typedef struct WPConfig {
     ReplacementPolicy replacementPolicy;
     int maxWP;
 } WPConfig_t;
+
+typedef struct globalReuseEntry{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t time;
+  int tid;
+  bool active;
+  uint64_t rd;
+  uint64_t inc;
+  char dummy[CACHE_LINE_SZ];
+} globalReuseEntry_t;
+
+typedef struct globalReuseTable{
+  struct globalReuseEntry table[MAX_WP_SLOTS];
+  //struct SharedData * hashTable;
+} globalReuseTable_t;
 
 extern WPConfig_t wpConfig;
 extern int l1_wp_count;

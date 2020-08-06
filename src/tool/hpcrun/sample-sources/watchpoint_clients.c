@@ -251,6 +251,8 @@ extern __thread uint64_t intra_wp_dropped_counter;
 
 ReuseMtHashTable_t reuseMtBulletinBoard;
 
+extern globalReuseTable_t globalReuseWPs;
+
 //ReuseMtBBEntry_t reuseMtDataGet(uint64_t timestamp);
 //
 ReuseMtHashTable_t reuseMtBulletinBoard = {.counter = 0};
@@ -3029,40 +3031,50 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	  uint64_t sharer = wpConfig.maxWP - l1_wp_count;
 	  //double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-	  if((me == wpi->sample.first_accessing_tid) && ((trapTime - L2MissLastTime) > 2 * (L2MissLastTime - L2MissOlderTime))) {
+	  if((me == wpi->sample.first_accessing_tid) /*&& ((trapTime - L2MissLastTime) > 2 * (L2MissLastTime - L2MissOlderTime))*/) {
 	  	fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to capacity miss\n", wpi->sample.sampleTime);
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
 		//int load_difference = load_count - wpi->sample.loadCount;
 		//int store_difference = store_count - wpi->sample.storeCount;
-		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
+		if(globalReuseWPs.table[wt->location].rd > 0)
+			L3ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+		else
+			globalReuseWPs.table[wt->location].inc = inc;
+			//globalWPIsActive[wt->location].inc = inc; 
+		/*double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
 		if(load_store_ratio <= 0)
 			load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
 		uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
 		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
-		L3ReuseAddDistance(rd_with_store, inc);
+		//L3ReuseAddDistance(rd_with_store, inc);
+		*/
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 
-		sample_val_t v = hpcrun_sample_callpath(wt->ctxt, wpi->sample.sampledMetricId, SAMPLE_NO_INC, 0, 0, NULL);
-  		cct_node_t *reuseNode = v.sample_node;
+		//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, wpi->sample.sampledMetricId, SAMPLE_NO_INC, 0, 0, NULL);
+  		//cct_node_t *reuseNode = v.sample_node;
 		//inc = numDiffSamples;
 		fprintf(stderr, "trap to profile L3 is finishing on sample %ld due to invalidation\n", wpi->sample.sampleTime);
 		//int load_difference = load_count - wpi->sample.loadCount;
                 //int store_difference = store_count - wpi->sample.storeCount;
-		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+		//double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
 		fprintf(stderr, "GetWeightedMetricDiffAndReset in profiling L3 cache in handling trap by different thread\n");
-                uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(reuseNode, wpi->sample.sampledMetricId, myProportion);
-                inc = numDiffSamples;
+                //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(reuseNode, wpi->sample.sampledMetricId, myProportion);
+                //inc = numDiffSamples;
 		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
                 if(load_store_ratio <= 0)
                         load_store_ratio = 1.0;
-		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
+		//uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
 		uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
-		fprintf(stderr, "handling trap by different thread uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
-		L3ReuseAddDistance(rd_with_store, inc);
+		if(globalReuseWPs.table[wt->location].inc > 0)
+                        L3ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
+		else
+			globalReuseWPs.table[wt->location].rd = rd_with_store;
+		//fprintf(stderr, "handling trap by different thread uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+		//L3ReuseAddDistance(rd_with_store, inc);
 	  }
   }
 #else
@@ -4951,8 +4963,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 					sd.loadCount = load_count;
 					sd.storeCount = store_count;
 					for(int i = 0; i < cur_global_thread_count; i++) {
-						if(indices[i] != me)
-                                        		SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
+						//if(indices[i] != me)
+                                        	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location); 
                                         }
 
 				}

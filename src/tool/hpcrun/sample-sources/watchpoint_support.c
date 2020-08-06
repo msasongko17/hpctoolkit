@@ -74,10 +74,10 @@
 
 //extern int init_adamant;
 
-#define MAX_WP_SLOTS (5)
+//#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
 #define ADDRESSES_OVERLAP(addr1, len1, addr2, len2) (((addr1)+(len1) > (addr2)) && ((addr2)+(len2) > (addr1) ))
-#define CACHE_LINE_SIZE (64)
+//#define CACHE_LINE_SIZE (64)
 //#define ALT_STACK_SZ (4 * SIGSTKSZ)
 #define ALT_STACK_SZ ((1L<<20) > 4 * SIGSTKSZ? (1L<<20): 4* SIGSTKSZ)
 
@@ -171,7 +171,7 @@ extern int event_type;
 
 extern uint64_t l3_profile_counter;
 
-typedef struct globalReuseEntry{
+/*typedef struct globalReuseEntry{
   volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
   uint64_t time;
   int tid;
@@ -182,7 +182,7 @@ typedef struct globalReuseEntry{
 typedef struct globalReuseTable{
   struct globalReuseEntry table[MAX_WP_SLOTS];
   //struct SharedData * hashTable;
-} globalReuseTable_t;
+} globalReuseTable_t;*/
 
 //const WatchPointInfo_t dummyWPInfo = {.sample = {}, .startTime =0, .fileHandle= -1, .isActive= false, .mmapBuffer=0};
 //const struct DUMMY_WATCHPOINT dummyWP[MAX_WP_SLOTS];
@@ -2093,15 +2093,33 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				} else {
 					tData.numActiveWatchpointTriggers++;
 					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+					if(me == wpi->sample.first_accessing_tid) {
+						do {
+							uint64_t theCounter = globalReuseWPs.table[location].counter;
+                                        if((theCounter & 1) == 0) {
+                                        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+                                        if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid)) {
+                                                wpt.location = location;
+						retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+                                                numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+                                        }
+                                        globalReuseWPs.table[location].counter++;
+					break;
+                                        }
+                                        }
+						} while(1);
+					} else {
 					uint64_t theCounter = globalReuseWPs.table[location].counter;
 					if((theCounter & 1) == 0) {
                         		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
 					if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid) && (globalReuseWPs.table[location].active == true)) {
+						wpt.location = location;
 						retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
 						numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL; 
 						globalReuseWPs.table[location].active = false;
 					}
 					globalReuseWPs.table[location].counter++;
+					}
 					}
 					}
 					retVal = ALREADY_DISABLED;
