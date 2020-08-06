@@ -751,7 +751,7 @@ int L3FindReuseBinIndex(uint64_t distance){
     return L3FindReuseBinIndex(distance);
   }
 
-  int left = 0, right = reuse_bin_size - 1;
+  int left = 0, right = l3_reuse_bin_size - 1;
   while(left + 1 < right){
     int mid = (left + right) / 2;
     //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
@@ -761,7 +761,9 @@ int L3FindReuseBinIndex(uint64_t distance){
       left = mid;
     }
   }
+  //fprintf(stderr, "left + 1: %d, right: %d\n", left + 1, right);
   assert(left + 1 == right);
+	  
   return left + 1;
 }
 
@@ -3051,6 +3053,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		//int load_difference = load_count - wpi->sample.loadCount;
                 //int store_difference = store_count - wpi->sample.storeCount;
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+		fprintf(stderr, "GetWeightedMetricDiffAndReset in profiling L3 cache in handling trap by different thread\n");
                 uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(reuseNode, wpi->sample.sampledMetricId, myProportion);
                 inc = numDiffSamples;
 		double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
@@ -3058,7 +3061,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                         load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
 		uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
-		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+		fprintf(stderr, "handling trap by different thread uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
 		L3ReuseAddDistance(rd_with_store, inc);
 	  }
   }
