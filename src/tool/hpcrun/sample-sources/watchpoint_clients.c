@@ -3038,8 +3038,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 		if(load_store_ratio <= 0)
 			load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
-		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio);
-		L3ReuseAddDistance(rd, inc);
+		uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+		L3ReuseAddDistance(rd_with_store, inc);
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 
@@ -3056,8 +3057,9 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
                 if(load_store_ratio <= 0)
                         load_store_ratio = 1.0;
 		uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
-		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio);
-		L3ReuseAddDistance(rd, inc);
+		uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
+		fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+		L3ReuseAddDistance(rd_with_store, inc);
 	  }
   }
 #else
@@ -3202,8 +3204,9 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
                 if(load_store_ratio <= 0)
                         load_store_ratio = 1.0;
                 uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (inc * load_store_ratio);
-                fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio);
-                L3ReuseAddDistance(rd, inc);
+                uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
+                fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+                L3ReuseAddDistance(rd_with_store, inc); 
           }
 else if (me != wpi->sample.first_accessing_tid) {
 
@@ -3216,16 +3219,17 @@ else if (me != wpi->sample.first_accessing_tid) {
                 double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
                 uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(reuseNode, wpi->sample.sampledMetricId, myProportion);
                 inc = numDiffSamples;
-                double load_store_ratio;
-		if(load_count > 0.0)
+                double load_store_ratio; //= (double) (load_count + store_count) / (double) load_count;
+		if(load_count > 0)
 			load_store_ratio = (double) (load_count + store_count) / (double) load_count;
 		else
 			load_store_ratio = 1.0;
                 if(load_store_ratio <= 0)
                         load_store_ratio = 1.0;
                 uint64_t increment = dynamic_global_thread_count / sharer * (uint64_t) (hpcrun_id2metric(wpi->sample.sampledMetricId)->period * load_store_ratio);
-                fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf", dynamic_global_thread_count / sharer * hpcrun_id2metric(wpi->sample.sampledMetricId)->period, increment, (uint64_t) load_store_ratio, load_store_ratio);
-                L3ReuseAddDistance(rd, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+                uint64_t rd_with_store = (uint64_t) (rd * load_store_ratio);
+                fprintf(stderr, "uncalibrated: %ld, calibrated: %ld, load_store_ratio: %ld, load_store_ratio: %0.2lf, rd: %ld, rd_with_store: %d\n", dynamic_global_thread_count / sharer * inc, increment, (uint64_t) load_store_ratio, load_store_ratio, rd, rd_with_store);
+                L3ReuseAddDistance(rd_with_store, inc); 
           } 
 	  
   }
@@ -4960,6 +4964,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
 			//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));
+			if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
+                          //sType = ALL_STORE;
+                          store_count++;
+                        }
+                        else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0) {
+                          //sType = ALL_LOAD;
+                          load_count++;
+                        }
+
 			int64_t storeCurTime = 0;
 			if(accessType == STORE || accessType == LOAD_AND_STORE)
 			  storeCurTime = curTime;
