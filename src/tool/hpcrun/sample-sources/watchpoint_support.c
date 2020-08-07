@@ -500,7 +500,7 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = 3;
+		l1_wp_count = 1;
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -2205,7 +2205,49 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				} else {
 					tData.numActiveWatchpointTriggers++;
 					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
-					uint64_t theCounter = globalReuseWPs.table[location].counter;
+					
+					if(location < l1_wp_count) {
+						uint64_t theCounter = globalReuseWPs.table[location].counter;
+                                        	if((theCounter & 1) == 0) {
+                                        	if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+                                        	if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid) && (globalReuseWPs.table[location].active == true)) {
+                                                	retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+                                                	numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+                                                	globalReuseWPs.table[location].active = false;
+                                        	}
+                                        	globalReuseWPs.table[location].counter++;
+                                        	}
+                                        	}
+					} else if(me == wpi->sample.first_accessing_tid) {
+                                                do {
+                                                        uint64_t theCounter = globalReuseWPs.table[location].counter;
+                                        if((theCounter & 1) == 0) {
+                                        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+                                        if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid)) {
+                                                wpt.location = location;
+                                                retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+                                                numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+                                        }
+                                        globalReuseWPs.table[location].counter++;
+                                        break;
+                                        }
+                                        }
+                                                } while(1);
+                                        } else {
+                                        uint64_t theCounter = globalReuseWPs.table[location].counter;
+                                        if((theCounter & 1) == 0) {
+                                        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+                                        if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid) && (globalReuseWPs.table[location].active == true)) {
+                                                wpt.location = location;
+                                                retVal = tData.fptr(wpi, 0, wpt.accessLength,  &wpt);
+                                                numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+                                                globalReuseWPs.table[location].active = false;
+                                        }
+                                        globalReuseWPs.table[location].counter++;
+                                        }
+                                        }
+                                        }
+					/*uint64_t theCounter = globalReuseWPs.table[location].counter;
 					if((theCounter & 1) == 0) {
                         		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
 					if((wpi->sample.sampleTime == globalReuseWPs.table[location].time) && (wpi->sample.first_accessing_tid == globalReuseWPs.table[location].tid) && (globalReuseWPs.table[location].active == true)) {
@@ -2215,7 +2257,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					}
 					globalReuseWPs.table[location].counter++;
 					}
-					}
+					}*/
 					retVal = ALREADY_DISABLED;
 				}
 
