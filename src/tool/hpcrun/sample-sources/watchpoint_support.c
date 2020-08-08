@@ -500,8 +500,15 @@ __attribute__((constructor))
 		else
 			wpConfig.maxWP = i;
 		same_thread_wp_count = 1;
-		l1_wp_count = 1;
-		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
+		//l1_wp_count = 1;
+		int l1_wp_count_temp = atoi(getenv(L1_WATCHPOINT_SIZE));
+		if(l1_wp_count_temp < wpConfig.maxWP)
+                        l1_wp_count = l1_wp_count_temp;
+                else
+                        l1_wp_count = wpConfig.maxWP;
+
+		fprintf(stderr, "wpConfig.maxWP is %d\n", wpConfig.maxWP);
+		fprintf(stderr, "l1_wp_count is %d\n", l1_wp_count);
 
 		// Should we get the floating point type in an access?
 		wpConfig.getFloatType = false;
@@ -931,7 +938,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		// Does not matter whether it was active or not.
 		// If it was not active, enable it.
 		if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
-			fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
+			//fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
 			CreateWatchPointShared(wpi, sampleData, tid, true);
 			return true;
 		}
@@ -944,7 +951,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 	if(wpi->fileHandle != -1) {
 		DisArm(wpi);
 	}
-	fprintf(stderr, "CreateWatchPointShared is entered with false modify\n");
+	//fprintf(stderr, "CreateWatchPointShared is entered with false modify\n");
 	CreateWatchPointShared(wpi, sampleData, tid, false);
 	return true;
 }
@@ -1150,14 +1157,14 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                         double randValue;
                         drand48_r(&tData.randBuffer, &randValue);
-                        if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
+                        if((randValue <= probabilityToReplace) /*|| (probabilityToReplace < 0.1)*/) {
                                 globalWPIsActive[i] = false;
                                 globalWPIsUsers[i] = -1;
-                                fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
+                                //fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
                                 /*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
                                         DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
                         } else {
-                                fprintf(stderr, "global wp in %d is retained\n", i);
+                                //fprintf(stderr, "global wp in %d is retained\n", i);
                         }
                         numWatchpointArmingAttempt[i]++;
                         return false;
@@ -1181,7 +1188,7 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                 if((theCounter & 1) == 0)
                         if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {*/
                 if(*location != -1) {
-                        fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
+                        //fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
                         globalWPIsActive[*location] = true;
                         globalWPIsUsers[*location] = me;
                         globalReuseWPs.table[*location].tid = me;
@@ -1203,15 +1210,15 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
                         double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
-                   	if((randValue <= probabilityToReplace) || (probabilityToReplace < 0.1)) {
+                   	if((randValue <= probabilityToReplace) /*|| (probabilityToReplace < 0.1)*/) {
                     		globalWPIsActive[i] = false;
 				globalWPIsUsers[i] = -1;
-				fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
+				//fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
-                    	} else {
+                    	} /*else {
 				fprintf(stderr, "global wp in %d is retained\n", i);
-			}
+			}*/
 			numWatchpointArmingAttempt[i]++;
 			return false;
                 } else if (globalWPIsUsers[i] == me) {
@@ -1235,7 +1242,7 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
         	if((theCounter & 1) == 0)
                 	if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {*/
         	if(*location != -1) {
-			fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
+			//fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
 			globalWPIsActive[*location] = true;
 			globalWPIsUsers[*location] = me;
 			globalReuseWPs.table[*location].tid = me;
@@ -1987,7 +1994,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                         if(threadDataTable.hashTable[me].watchPointArray[i].isActive /*&& globalWPIsActive[i]*/ && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 					       	location = i;
 						//theCounter = threadDataTable.hashTable[me].counter;
-						fprintf(stderr, "location is found in %d\n", location);
+						//fprintf(stderr, "location is found in %d\n", location);
                                                 break;
                                         }
 				}	
@@ -2053,14 +2060,14 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 		}
 		} else {
 
-			fprintf(stderr, "this region has been entered\n");
+			//fprintf(stderr, "this region has been entered\n");
 			//uint64_t theCounter = threadDataTable.hashTable[me].counter;
 			//do {
 			uint64_t theCounter = threadDataTable.hashTable[me].counter[location];
                         if((theCounter & 1) == 0) {
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter[location], theCounter, theCounter+1)){
 				//fprintf(stderr, "this region is entered\n");
-				fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be handled\n", location, me, TD_GET(core_profile_trace_data.id));
+				//fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be handled\n", location, me, TD_GET(core_profile_trace_data.id));
 				wp_count2++;
 
 				WatchPointTrigger_t wpt;
@@ -2094,7 +2101,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					//wp_dropped_counter++;
 				} else {
 					tData.numActiveWatchpointTriggers++;
-					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+					//fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 					if(me == wpi->sample.first_accessing_tid) {
 						do {
 							uint64_t theCounter = globalReuseWPs.table[location].counter;
@@ -2157,7 +2164,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 	if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 				location = i;
 				//theCounter = threadDataTable.hashTable[me].counter;
-				fprintf(stderr, "location is found in %d\n", location);
+				//fprintf(stderr, "location is found in %d\n", location);
                                	break;
 			}
 		}
@@ -2171,12 +2178,12 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 			return 0;
 		}	
 
-			fprintf(stderr, "this region has been entered\n");
+			//fprintf(stderr, "this region has been entered\n");
 			uint64_t theCounter = threadDataTable.hashTable[me].counter[location];
                         if((theCounter & 1) == 0) {
                         if(__sync_bool_compare_and_swap(&threadDataTable.hashTable[me].counter[location], theCounter, theCounter+1)){
 				//fprintf(stderr, "this region is entered\n");
-				fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be handled\n", location, me, TD_GET(core_profile_trace_data.id));
+				//fprintf(stderr, "WP in location %d due to trap in thread %d handled by thread %d is about to be handled\n", location, me, TD_GET(core_profile_trace_data.id));
 				wp_count2++;
 
 				WatchPointTrigger_t wpt;
@@ -2204,7 +2211,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					wp_dropped++;
 				} else {
 					tData.numActiveWatchpointTriggers++;
-					fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+					//fprintf(stderr, "in OnWatchpoint before fptr in thread %d handled by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 					
 					if(location < l1_wp_count) {
 						uint64_t theCounter = globalReuseWPs.table[location].counter;
@@ -3103,7 +3110,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                 if(captureValue) {
                         CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
                 }
-                fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+                //fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
                 if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
                         //LOG to hpcrun log
                         EMSG("ArmWatchPoint failed for address %p", sampleData->va);
@@ -3131,7 +3138,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 		if(captureValue) {
 			CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
 		}
-		fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+		//fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
 		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
 			//LOG to hpcrun log
 			EMSG("ArmWatchPoint failed for address %p", sampleData->va);

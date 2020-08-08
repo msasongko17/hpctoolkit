@@ -53,6 +53,7 @@ const char* HPCRUN_OBJECT_LEVEL        = "HPCRUN_OBJECT_LEVEL";
 const char* OBJECT_SIZE_THRESHOLD        = "OBJECT_SIZE_THRESHOLD";
 const char* BULLETIN_BOARD_SIZE    = "BULLETIN_BOARD_SIZE";
 const char* WATCHPOINT_SIZE        = "WATCHPOINT_SIZE";
+const char* L1_WATCHPOINT_SIZE        = "L1_WATCHPOINT_SIZE";
 const char* HPCRUN_TRACE           = "HPCRUN_TRACE";
 
 const char* PAPI_EVENT_LIST        = "PAPI_EVENT_LIST";

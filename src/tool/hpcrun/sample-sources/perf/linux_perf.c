@@ -861,7 +861,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 #endif
                         {
                                 l3_reuse_distance_event = i;
-				fprintf(stderr, "assignment to l3_reuse_distance_event happens here\n");
+				//fprintf(stderr, "assignment to l3_reuse_distance_event happens here\n");
                         }
 
 		/**************************************************/
@@ -940,9 +940,9 @@ METHOD_FN(gen_event_set, int lush_metrics)
 	
 #ifdef REUSE_HISTO
 	event_thread_board[TD_GET(core_profile_trace_data.id)] =  event_thread;
-	for (int i=0; i<nevents; i++) {
+	/*for (int i=0; i<nevents; i++) {
 		fprintf(stderr, "event %s is initialized in thread %d\n", event_thread_board[TD_GET(core_profile_trace_data.id)][i].event->metric_desc->name, TD_GET(core_profile_trace_data.id));
-	}
+	}*/
 #endif
 	TMSG(LINUX_PERF, "gen_event_set OK");
 }
