@@ -1308,7 +1308,7 @@ static void ClientTermination(){
       {
 #ifdef REUSE_HISTO
 	//sample_count++;
-	fprintf(stderr, "sample_count: %ld\n", sample_count);
+	/*fprintf(stderr, "sample_count: %ld\n", sample_count);
 	fprintf(stderr, "wp_arming_count: %ld\n", wp_arming_count);
 	fprintf(stderr, "trap_count: %ld\n", trap_count);
 	fprintf(stderr, "create_wp_count: %ld\n", create_wp_count);
@@ -1325,7 +1325,7 @@ static void ClientTermination(){
 	fprintf(stderr, "intra_wp_dropped_counter: %ld\n", intra_wp_dropped_counter);
 	fprintf(stderr, "inter_wp_dropped_counter: %ld\n", inter_wp_dropped_counter);
 	fprintf(stderr, "wp_active: %ld\n", wp_active);
-	fprintf(stderr, "subscribe_dropped: %ld\n", subscribe_dropped);
+	fprintf(stderr, "subscribe_dropped: %ld\n", subscribe_dropped);*/
 
 	if(last_trap_is_invalidation) {
 		invalidation_matrix[last_from][last_to] += (double) (last_inc * inter_wp_dropped_counter);
@@ -1339,7 +1339,7 @@ static void ClientTermination(){
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
-	  fprintf(stderr, "the bin info is dumped\n");
+	  //fprintf(stderr, "the bin info is dumped\n");
 	  //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
 	  //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
@@ -1386,8 +1386,8 @@ static void ClientTermination(){
 	  }
 	}
 
-	fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
-	fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+//	fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+	//fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
 	WriteWitchTraceOutput("FINAL_COUNTING:");
 	for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
 	  assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
@@ -3140,6 +3140,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   uint64_t rd = 0;
   uint64_t trapTime = rdtsc();
   if(wpi->sample.L1Sample) {
+  if(wt->location >= same_thread_l1_wp_count) {
   uint64_t val[2][3];
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
@@ -3157,6 +3158,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
     rd += val[i][0];
+  }
   }
   } else {
 	 //fprintf(stderr, "trap to profile L3\n");
@@ -3196,6 +3198,10 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
           //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 	  if(me == wpi->sample.first_accessing_tid) {
 	  	//fprintf(stderr, "trap to profile L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
+		if(wt->location < same_thread_l1_wp_count) {
+		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+                uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+		} else {
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
@@ -3203,6 +3209,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 		double increment = thread_sharer_ratio * inc;
 		//fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf\n", increment, (uint64_t) increment, thread_sharer_ratio);
 		ReuseAddDistance(rd, inc);
+		}
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 		  //fprintf(stderr, "trap to invalidate on L1 is finishing on sample %ld\n", wpi->sample.sampleTime);

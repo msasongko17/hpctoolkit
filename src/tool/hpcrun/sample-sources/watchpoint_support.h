@@ -179,6 +179,7 @@ typedef struct globalReuseTable{
 
 extern WPConfig_t wpConfig;
 extern int l1_wp_count;
+extern int same_thread_l1_wp_count;
 
 typedef WPTriggerActionType (*WatchPointUpCall_t)(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 typedef void (*ClientConfigOverrideCall_t)(void *);
