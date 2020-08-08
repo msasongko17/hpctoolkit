@@ -269,7 +269,7 @@ int dynamic_global_thread_count;
 
 static int same_thread_wp_count;
 int l1_wp_count;
-
+int same_thread_l1_wp_count;
 
 bool globalWPIsActive[MAX_WP_SLOTS];
 int globalWPIsUsers[MAX_WP_SLOTS];
@@ -507,8 +507,15 @@ __attribute__((constructor))
                 else
                         l1_wp_count = wpConfig.maxWP;
 
+		int same_thread_l1_wp_count_temp = atoi(getenv(SAME_THREAD_L1_WATCHPOINT_SIZE));
+                if(same_thread_l1_wp_count_temp < l1_wp_count)
+                        same_thread_l1_wp_count = same_thread_l1_wp_count_temp;
+                else
+                        same_thread_l1_wp_count = l1_wp_count;
+
 		fprintf(stderr, "wpConfig.maxWP is %d\n", wpConfig.maxWP);
 		fprintf(stderr, "l1_wp_count is %d\n", l1_wp_count);
+		fprintf(stderr, "same_thread_l1_wp_count is %d\n", same_thread_l1_wp_count);
 
 		// Should we get the floating point type in an access?
 		wpConfig.getFloatType = false;

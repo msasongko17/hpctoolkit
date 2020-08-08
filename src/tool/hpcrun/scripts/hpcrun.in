@@ -200,6 +200,7 @@ HPCRUN_EVENT_LIST=
 BULLETIN_BOARD_SIZE=127
 WATCHPOINT_SIZE=4
 L1_WATCHPOINT_SIZE=4
+SAME_THREAD_L1_WATCHPOINT_SIZE=4
 
 while test "x$1" != x
 do
@@ -327,6 +328,14 @@ do
 
 	# --------------------------------------------------
 
+        --same-thread-l1-debug-register-size )
+            arg_ok "$1" || die "missing argument for $arg"
+            SAME_THREAD_L1_WATCHPOINT_SIZE=$1
+            shift
+            ;;
+
+	# --------------------------------------------------
+
 	-r | --retain-recursion )
 	    export HPCRUN_RETAIN_RECURSION=1
 	    ;;
@@ -388,6 +397,7 @@ export BULLETIN_BOARD_SIZE
 export OBJECT_SIZE_THRESHOLD
 export WATCHPOINT_SIZE
 export L1_WATCHPOINT_SIZE
+export SAME_THREAD_L1_WATCHPOINT_SIZE
 
 # Add default sampling source if needed.
 case "$HPCRUN_EVENT_LIST" in
