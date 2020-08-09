@@ -802,12 +802,12 @@ void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   if(theWPConfig->id == WP_MT_REUSE || theWPConfig->id == WP_REUSE_MT) {
 	int index = FindThreadReuseBinIndex(distance);
   	thread_reuse_bin_list[index] += inc;
+	fprintf(stderr, "distance %ld has happened %ld times with index %d in thread %d\n", distance, inc, index, TD_GET(core_profile_trace_data.id));
   } else if (theWPConfig->id == WP_REUSE) {
 	int index = FindReuseBinIndex(distance);
 	reuse_bin_list[index] += inc;
 	//fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
   }
-  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
 void L3ReuseAddDistance(uint64_t distance, uint64_t inc ){
@@ -3141,17 +3141,25 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   uint64_t trapTime = rdtsc();
   if(wpi->sample.L1Sample) {
   if(wt->location >= same_thread_l1_wp_count) {
+  int me = TD_GET(core_profile_trace_data.id);
   uint64_t val[2][3];
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
-    //fprintf(stderr, "REUSE counter %ld\n", val[i][0]);
+    fprintf(stderr, "REUSE counter %ld in thread %d event %d armed by thread %d with USE counter: %ld\n", val[i][0], me, reuse_distance_events[i], wpi->sample.first_accessing_tid, wpi->sample.reuseDistance[i][0]);
     for(int j=0; j < 3; j++){
       if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
 	val[i][j] -= wpi->sample.reuseDistance[i][j];
       } 
       else { //Something wrong happens here and the record is not reliable. Drop it!
 	//fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
-	return ALREADY_DISABLED;
+	//return ALREADY_DISABLED;
+	val[i][j] += hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+	if (val[i][j] >= wpi->sample.reuseDistance[i][j]) {
+		val[i][j] -= wpi->sample.reuseDistance[i][j];
+	}
+	else { 
+		return ALREADY_DISABLED;
+	}
       }
     }
   }
@@ -5166,6 +5174,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                         	fprintf(stderr, "indices[%d]: %d\n", i, indices[i]);
                         }*/
 
+			int me = TD_GET(core_profile_trace_data.id);
 			uint64_t pmu_counter = 0;
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 			  uint64_t val[3];
@@ -5174,13 +5183,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			  //fprintf(stderr, "after assert\n");
 			  //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
 			  //fprintf(stderr, "USE %lx -- ", val[0]);
-			  //fprintf(stderr, "USE counter %ld\n", val[0]);
+			  fprintf(stderr, "USE1 counter %ld in thread %d for event %d\n", val[0], me, reuse_distance_events[i]);
 			  memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);
 			  pmu_counter += val[0];
 			}
 			// update bulletin board here
 			//int item_not_found_flag = 0;
-			int me = TD_GET(core_profile_trace_data.id);
+			//int me = TD_GET(core_profile_trace_data.id);
 			int my_core = sched_getcpu();
 			int item_not_found_flag = 0;	
 			sd.sampleTime=curTime;
@@ -5192,6 +5201,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			for(int i = 0; i < cur_global_thread_count; i++) {
                         	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], true, location); 
                         }
+
+			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+                          uint64_t val[3];
+                          //fprintf(stderr, "before assert\n");
+                          assert(linux_perf_read_event_counter( reuse_distance_events[i], val) >= 0);
+                          //fprintf(stderr, "after assert\n");
+                          //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
+                          //fprintf(stderr, "USE %lx -- ", val[0]);
+                          fprintf(stderr, "USE2 counter %ld in thread %d for event %d\n", val[0], me, reuse_distance_events[i]);
+                        }
+
 		      } else if (location == -1) {
 			int me = TD_GET(core_profile_trace_data.id);
 			sd.sampleTime=curTime;
