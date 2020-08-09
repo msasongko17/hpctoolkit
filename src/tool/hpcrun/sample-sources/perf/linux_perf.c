@@ -1065,7 +1065,7 @@ void linux_perf_events_other_thread_resume(int idx){
 	  }*/
 }
 
-/*
+
 // OUTPUT: val, it is a uint64_t array and has at least 3 elements.
 // For a counting event, val[0] is the actual value read from counter; val[1] is the time enabling; val[2] is time running
 // For a overflow event, val[0] is the actual scaled value; val[1] and val[2] are set to 0
@@ -1108,8 +1108,9 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 		val[2] = 0;
 		return 0;
 	}
-}*/
+}
 
+/*
 // OUTPUT: val, it is a uint64_t array and has at least 3 elements.
 // For a counting event, val[0] is the actual value read from counter; val[1] is the time enabling; val[2] is time running
 // For a overflow event, val[0] is the actual scaled value; val[1] and val[2] are set to 0
@@ -1148,7 +1149,7 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
     val[2] = 0;
     return 0;
   }
-}
+}*/
 
 #ifdef REUSE_HISTO
 int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid){
