@@ -89,7 +89,6 @@ extern const char* BULLETIN_BOARD_SIZE;
 extern const char* OBJECT_SIZE_THRESHOLD;
 extern const char* WATCHPOINT_SIZE;
 extern const char* L1_WATCHPOINT_SIZE;
-extern const char* SAME_THREAD_L1_WATCHPOINT_SIZE;
 
 extern const char* HPCRUN_TRACE;
 
