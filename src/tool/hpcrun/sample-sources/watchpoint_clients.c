@@ -3193,22 +3193,24 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   int me = TD_GET(core_profile_trace_data.id);
   int my_core = sched_getcpu();
   if(wpi->sample.L1Sample) {
-	uint64_t sharer = l1_wp_count;
+	uint64_t sharer = get_active_global_wpis();
 	  //double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           //uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 	  if(me == wpi->sample.first_accessing_tid) {
-	  	//fprintf(stderr, "trap to profile L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
+	  	//fprintf(stderr, "trap to profile L1 is finishing on same_thread_l1_wp_count case\n");
 		if(wt->location < same_thread_l1_wp_count) {
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
                 uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+		fprintf(stderr, "trap to profile L1 is finishing on same_thread_l1_wp_count case in thread %d\n", me);
 		} else {
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		inc = numDiffSamples;
 		double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
 		double increment = thread_sharer_ratio * inc;
-		//fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf\n", increment, (uint64_t) increment, thread_sharer_ratio);
-		ReuseAddDistance(rd, inc);
+		fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf, dynamic_global_thread_count: %ld, sharer: %ld\n", increment, (uint64_t) increment, thread_sharer_ratio, dynamic_global_thread_count, sharer);
+		ReuseAddDistance(rd, (uint64_t) increment);
+		fprintf(stderr, "trap to profile L1 is finishing on l1_wp_count case in thread %d\n", me);
 		}
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
@@ -5186,9 +5188,23 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			sd.L1Sample = true;
 			prev_event_count = pmu_counter;
 
+			//fprintf(stderr, "WP is armed in all threads in position %d by thread %d\n", location, me);
 			for(int i = 0; i < cur_global_thread_count; i++) {
                         	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], true, location); 
                         }
+		      } else if (location == -1) {
+			int me = TD_GET(core_profile_trace_data.id);
+			sd.sampleTime=curTime;
+                        //sd.expirationPeriod=commExpirationPeriod;
+			sd.first_accessing_tid = me;
+                        sd.L1Sample = true;
+                        //prev_event_count = pmu_counter;
+
+                        //fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
+                        wp_arming_count++;
+                        //SubscribeWatchpoint(&sd, OVERWRITE, false );
+                        SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, -1);
+
 		      }
 		}
 
