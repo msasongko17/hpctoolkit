@@ -1207,7 +1207,8 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
 	int me = TD_GET(core_profile_trace_data.id);
 	for(int i = 0; i < l1_wp_count; i++){
                 if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
-                        double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
+			wpConfig.maxWP/((double)wpConfig.maxWP+tData.samplePostFull);
+                        double probabilityToReplace =  wpConfig.maxWP/((double)wpConfig.maxWP+numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
                    	if((randValue <= probabilityToReplace) /*|| (probabilityToReplace < 0.1)*/) {

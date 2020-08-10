@@ -5192,7 +5192,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			sd.L1Sample = true;
 			prev_event_count = pmu_counter;
 
-			for(int i = 0; i < cur_global_thread_count; i++) {
+			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, location);
+
+			for(int i = 0; i < MIN(8, cur_global_thread_count) /*cur_global_thread_count*/; i++) {
+				if(indices[i] != me)
                         	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], true, location); 
                         }
 		      }
