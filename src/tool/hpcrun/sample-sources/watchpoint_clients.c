@@ -2915,13 +2915,13 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       else { //Something wrong happens here and the record is not reliable. Drop it!
         //fprintf(stderr, "Something wrong happens here and the record is not reliable because val[%d][%d] - wpi->sample.reuseDistance[%d][%d] = %ld\n", i, j, i, j, val[i][j] -= wpi->sample.reuseDistance[i][j]);
         //return ALREADY_DISABLED;
-        /*val[i][j] += hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+        val[i][j] += hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
         if (val[i][j] >= wpi->sample.reuseDistance[i][j]) {
                val[i][j] -= wpi->sample.reuseDistance[i][j];
         }
-        else {*/
+        else {
                 return ALREADY_DISABLED;
-        //}
+        }
       }
     }
   }  
@@ -3021,7 +3021,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
       //fprintf(stderr, "reuse distance is %ld with inc %ld\n", rd, inc);
 
       inc = numDiffSamples;
-      fprintf(stderr, "reuse distance is %ld with inc %ld\n", rd, inc);
+      //fprintf(stderr, "reuse distance is %ld with inc %ld\n", rd, inc);
       ReuseAddDistance(rd, inc);
       reuse_detected_entry_not_in_bb++;
       //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
