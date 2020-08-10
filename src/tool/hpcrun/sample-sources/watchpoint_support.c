@@ -2198,7 +2198,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					case DISABLE_WP:
 					//fprintf(stderr, "in DISABLE_WP\n");
 					DisableWatchpointWrapper(wpi);
-					globalWPIsActive[location] = false;	
+					globalWPIsActive[location] = false;
+					globalWPIsUsers[location] = -1;	
 					break;
 				default:
 					//fprintf(stderr, "aborted here\n");
