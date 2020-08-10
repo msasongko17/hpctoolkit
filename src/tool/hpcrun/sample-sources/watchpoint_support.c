@@ -1294,18 +1294,20 @@ static VictimType GetVictimShared(int * location, ReplacementPolicy policy, int 
                 	double probabilityToReplace =  1.0/((double)tData.numWatchpointArmingAttempt[idx]);
                 	double randValue;
                 	drand48_r(&tData.randBuffer, &randValue);
-                	if(randValue <= probabilityToReplace /* 1 */) {
+                	if(randValue <= probabilityToReplace /* 1 */ ) {
                         	*location = idx;
+				//tData.numWatchpointArmingAttempt[idx] = SAMPLES_POST_FULL_RESET_VAL; 
                         	//fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
-                        	for(int j = 0; j < l1_wp_count; j++){
-                                	tData.numWatchpointArmingAttempt[j]++;
-                        	}
+                        	//for(int j = 0; j < l1_wp_count; j++){
+                                tData.numWatchpointArmingAttempt[idx]++;
+                        	//}
                         	return NON_EMPTY_SLOT;
                 	}
+			tData.numWatchpointArmingAttempt[i]++;
         	}
-        	for(int i = 0; i < l1_wp_count; i++) {
+        	/*for(int i = 0; i < l1_wp_count; i++) {
                 	tData.numWatchpointArmingAttempt[i]++;
-        	}
+        	}*/
 
 	} else {
 		for(int i = l1_wp_count; i < wpConfig.maxWP; i++){

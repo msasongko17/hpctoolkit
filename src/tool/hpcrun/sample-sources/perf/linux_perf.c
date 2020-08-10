@@ -1104,9 +1104,9 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows >= 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
 		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->prev_num_overflows >= 0) ? (current->prev_num_overflows * sample_period + scaled_val) : scaled_val);
 		//fprintf(stderr, "val[0]: %ld\n", val[0]);
-		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->prev_num_overflows >= 0) ? (current->prev_num_overflows * sample_period + scaled_val) : scaled_val);
-		//current->prev_num_overflows = current->num_overflows;
-		val[0] = current->num_overflows * sample_period + scaled_val;
+		val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		current->prev_num_overflows = current->num_overflows;
+		//val[0] = current->num_overflows * sample_period + scaled_val;
 		val[1] = 0;
 		val[2] = 0;
 		return 0;
