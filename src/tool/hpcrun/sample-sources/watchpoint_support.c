@@ -1232,8 +1232,10 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
                 if((theCounter & 1) == 0)
                         if(__sync_bool_compare_and_swap(&L1Counter, theCounter, theCounter+1)) {
 				for(int i = 0; i < l1_wp_count; i++){
-					if(globalWPIsUsers[i] == -1)
+					if(globalWPIsUsers[i] == -1) {
 						*location = i;
+						globalWPIsUsers[i] = me;
+					}
 				}
 				L1Counter++;
         		}
@@ -1244,7 +1246,6 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
         	if(*location != -1) {
 			//fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
 			globalWPIsActive[*location] = true;
-			globalWPIsUsers[*location] = me;
 			globalReuseWPs.table[*location].tid = me;
 			globalReuseWPs.table[*location].active = true;
 			globalReuseWPs.table[*location].time = sampleTime;

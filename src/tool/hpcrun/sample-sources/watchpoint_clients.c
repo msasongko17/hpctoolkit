@@ -3147,7 +3147,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   uint64_t val[2][3];
  
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-    assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
+    assert(linux_perf_read_event_counter_reuse_mt( reuse_distance_events[i], val[i]) >= 0);
     //fprintf(stderr, "REUSE counter %ld in thread %d event %d armed by thread %d with USE counter: %ld\n", val[i][0], me, reuse_distance_events[i], wpi->sample.first_accessing_tid, wpi->sample.reuseDistance[i][0]);
     for(int j=0; j < 3; j++){
       if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
@@ -5174,7 +5174,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 			  uint64_t val[3];
 			  //fprintf(stderr, "before assert\n");
-			  assert(linux_perf_read_event_counter( reuse_distance_events[i], val) >= 0);
+			  assert(linux_perf_read_event_counter_reuse_mt( reuse_distance_events[i], val) >= 0);
 			  //fprintf(stderr, "after assert\n");
 			  //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
 			  //fprintf(stderr, "USE %lx -- ", val[0]);
