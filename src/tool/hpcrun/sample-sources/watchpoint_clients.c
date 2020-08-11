@@ -3272,16 +3272,16 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 			//double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
 			//double increment = thread_sharer_ratio * inc;
 		//fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf\n", increment, (uint64_t) increment, thread_sharer_ratio);
-			max_event_count = (max_event_count < hpcrun_id2metric(wpi->sample.sampledMetricId)->period) ? hpcrun_id2metric(wpi->sample.sampledMetricId)->period : max_event_count;
-			uint64_t increment = MIN(max_event_count, inc);	
+			//max_event_count = (max_event_count < hpcrun_id2metric(wpi->sample.sampledMetricId)->period) ? hpcrun_id2metric(wpi->sample.sampledMetricId)->period : max_event_count;
+			//uint64_t increment = MIN(max_event_count, inc);	
 	
 			ReuseAddDistance(rd, inc);
-			fprintf(stderr, "reuse is detected in node %d %ld times, node in the table is %d, max_event_count: %ld, period: %ld, inc: %ld\n", hpcrun_cct_persistent_id(wpi->sample.node), increment, invalidatedNode.node_id, max_event_count, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, inc);
+			fprintf(stderr, "reuse is detected in node %d %ld times, node in the table is %d, max_event_count: %ld, period: %ld, inc: %ld\n", hpcrun_cct_persistent_id(wpi->sample.node), inc, invalidatedNode.node_id, max_event_count, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, inc);
 		} else if (wpi->sample.sampleTime > invalidatedNode.time) {
 			fprintf(stderr, "reuse is detected in node %d because of timing\n", hpcrun_cct_persistent_id(wpi->sample.node));
                         ReuseAddDistance(rd, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
 		} else {
-			fprintf(stderr, "reuse in node %d is rejected, node in the table is %d\n", hpcrun_cct_persistent_id(wpi->sample.node), invalidatedNode.node_id);
+			//fprintf(stderr, "reuse in node %d is rejected, node in the table is %d\n", hpcrun_cct_persistent_id(wpi->sample.node), invalidatedNode.node_id);
 		}
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
@@ -3294,6 +3294,16 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 				//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
     				//cct_node_t *reuseNode = v.sample_node;
 				//invalidatedNodeTableInsert(hpcrun_cct_persistent_id(reuseNode), trapTime);
+				int64_t expirationPeriod = storeLastTime - storeOlderTime;
+				
+				if((expirationPeriod > 0) && ((trapTime - wpi->sample.sampleTime) <= 2 * expirationPeriod) && (wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE)) {
+					sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+                                	cct_node_t *reuseNode = v.sample_node;
+					fprintf(stderr, "invalidation is done by node %d\n", hpcrun_cct_persistent_id(reuseNode));
+                                	invalidatedNodeTableInsert(hpcrun_cct_persistent_id(reuseNode), trapTime);
+					
+				}
+					
                         	invalidatedNodeBoard.counter++;
                 	}
             	}
@@ -5136,8 +5146,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
                         }
 
 			int64_t storeCurTime = 0;
-			if(accessType == STORE || accessType == LOAD_AND_STORE)
+			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			  storeCurTime = curTime;
+			  storeOlderTime = storeLastTime;
+                          storeLastTime = storeCurTime;
+			}
 #ifdef REUSE_HISTO
 #else
 			if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
