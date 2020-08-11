@@ -249,6 +249,35 @@ extern __thread uint64_t subscribe_dropped;
 extern __thread uint64_t inter_wp_dropped_counter;
 extern __thread uint64_t intra_wp_dropped_counter;
 
+typedef struct invalidatedNodeEntry{
+  volatile uint64_t time __attribute__((aligned(CACHE_LINE_SZ)));
+  int node_id;
+  char dummy[CACHE_LINE_SZ];
+} invalidatedNodeEntry_t;
+
+typedef struct invalidatedNodeTable{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  struct invalidatedNodeEntry table[503];
+  //struct SharedData * hashTable;
+} invalidatedNodeTable_t;
+
+invalidatedNodeTable_t invalidatedNodeBoard;
+
+int invalidatedNodeTableInsert(int node_id, uint64_t timestamp) {
+        int idx = node_id % 503;
+        //printf("fd: %d is inserted to index: %d\n", fd, idx);
+        invalidatedNodeBoard.table[idx].node_id = node_id;
+        invalidatedNodeBoard.table[idx].time = timestamp;
+	fprintf(stderr, "node %d is inserted\n", node_id);
+        return idx;
+}
+
+invalidatedNodeEntry_t invalidatedNodeTableGet(int node_id) {
+        int idx = node_id % 503;
+        //printf("fd: %d is inserted to index: %d\n", fd, idx);
+        return invalidatedNodeBoard.table[idx];
+}
+
 ReuseMtHashTable_t reuseMtBulletinBoard;
 
 extern globalReuseTable_t globalReuseWPs;
@@ -467,6 +496,8 @@ static void CloseWitchTraceOutput(){
     hpcio_outbuf_close(out_ptr);
   }
 }
+
+#define MAX(a,b)  (((a)<=(b))?(b):(a))
 
 static int WriteWitchTraceOutput(const char *fmt, ...){
 #define LOCAL_BUFFER_SIZE 1024
@@ -1947,7 +1978,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	    initialize_reuse_ds();
 	  }
-
+	  invalidatedNodeBoard.counter = 0;
 	}
 #else
 	{
@@ -2134,6 +2165,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	  }
 
+	  invalidatedNodeBoard.counter = 0;
 	}
 #else
 	{
@@ -3012,6 +3044,14 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    ReuseSubDistance(rd, (uint64_t) prev_invalidation_count);
 	    inter_thread_invalidation_count += inc;
 	    invalidation_flag = true;
+	    fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
+	    uint64_t theCounter = invalidatedNodeBoard.counter;
+	    if((theCounter & 1) == 0) {
+    		if(__sync_bool_compare_and_swap(&invalidatedNodeBoard.counter, theCounter, theCounter+1)){ 
+			invalidatedNodeTableInsert(hpcrun_cct_persistent_id(wpi->sample.node), trapTime);
+			invalidatedNodeBoard.counter++;
+		}
+	    }
 	  }  
       }
     } else {
@@ -3019,11 +3059,19 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
     } 
     if (invalidation_flag == false){
       //fprintf(stderr, "reuse distance is %ld with inc %ld\n", rd, inc);
+      int node_id = hpcrun_cct_persistent_id(wpi->sample.node);
+      invalidatedNodeEntry_t invalidatedNode = invalidatedNodeTableGet(node_id);
 
-      inc = numDiffSamples;
-      //fprintf(stderr, "reuse distance is %ld with inc %ld\n", rd, inc);
-      ReuseAddDistance(rd, inc);
-      reuse_detected_entry_not_in_bb++;
+      // before
+      int64_t expirationPeriod = storeLastTime - storeOlderTime;
+      // after
+
+      if((invalidatedNode.node_id != node_id) || ((expirationPeriod > 0) && ((trapTime - invalidatedNode.time) > 2 * expirationPeriod))) {
+      	inc = numDiffSamples;
+      	fprintf(stderr, "reuse distance is %ld with inc %ld in node %d\n", rd, inc, hpcrun_cct_persistent_id(wpi->sample.node));
+      	ReuseAddDistance(rd, inc);
+      	reuse_detected_entry_not_in_bb++;
+      }
       //ResetWeightedMetric(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
     }
   } else {
@@ -3143,12 +3191,16 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
   //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
   uint64_t rd = 0;
   uint64_t trapTime = rdtsc();
+  uint64_t max_event_count = 0;
   if(wpi->sample.L1Sample) {
   uint64_t val[2][3];
+
+  //fprintf(stderr, "reuse_distance_events[0]: %d, reuse_distance_events[1]: %d, wpi->sample.sampledMetricId: %d\n", reuse_distance_events[0], reuse_distance_events[1], wpi->sample.sampledMetricId);
  
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(linux_perf_read_event_counter_reuse_mt( reuse_distance_events[i], val[i]) >= 0);
     //fprintf(stderr, "REUSE counter %ld in thread %d event %d armed by thread %d with USE counter: %ld\n", val[i][0], me, reuse_distance_events[i], wpi->sample.first_accessing_tid, wpi->sample.reuseDistance[i][0]);
+    //fprintf(stderr, "reuse_distance_events[0]: %d, reuse_distance_events[1]: %d, wpi->sample.sampledMetricId: %d\n", reuse_distance_events[0], reuse_distance_events[1], sample.sampledMetricId);
     for(int j=0; j < 3; j++){
       if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
         val[i][j] -= wpi->sample.reuseDistance[i][j];
@@ -3167,6 +3219,8 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
     }
   }
  
+  max_event_count = MAX(val[0][0], val[1][0]);
+
   for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(val[i][1] == 0 && val[i][2] == 0); // no counter multiplexing allowed
     rd += val[i][0];
@@ -3211,14 +3265,38 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	  	//fprintf(stderr, "trap to profile L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
 		double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-		inc = numDiffSamples;
-		double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
-		double increment = thread_sharer_ratio * inc;
+		int node_id = hpcrun_cct_persistent_id(wpi->sample.node);
+      		invalidatedNodeEntry_t invalidatedNode = invalidatedNodeTableGet(node_id);
+		if(invalidatedNode.node_id != node_id) {
+			inc = numDiffSamples;
+			//double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
+			//double increment = thread_sharer_ratio * inc;
 		//fprintf(stderr, "unrounded: %0.2lf, rounded: %ld, thread_sharer_ratio: %0.2lf\n", increment, (uint64_t) increment, thread_sharer_ratio);
-		ReuseAddDistance(rd, inc);
+			max_event_count = (max_event_count < hpcrun_id2metric(wpi->sample.sampledMetricId)->period) ? hpcrun_id2metric(wpi->sample.sampledMetricId)->period : max_event_count;
+			uint64_t increment = MIN(max_event_count, inc);	
+	
+			ReuseAddDistance(rd, inc);
+			fprintf(stderr, "reuse is detected in node %d %ld times, node in the table is %d, max_event_count: %ld, period: %ld, inc: %ld\n", hpcrun_cct_persistent_id(wpi->sample.node), increment, invalidatedNode.node_id, max_event_count, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, inc);
+		} else if (wpi->sample.sampleTime > invalidatedNode.time) {
+			fprintf(stderr, "reuse is detected in node %d because of timing\n", hpcrun_cct_persistent_id(wpi->sample.node));
+                        ReuseAddDistance(rd, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+		} else {
+			fprintf(stderr, "reuse in node %d is rejected, node in the table is %d\n", hpcrun_cct_persistent_id(wpi->sample.node), invalidatedNode.node_id);
+		}
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 		  //fprintf(stderr, "trap to invalidate on L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
+		fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
+		uint64_t theCounter = invalidatedNodeBoard.counter;
+            	if((theCounter & 1) == 0) {
+                	if(__sync_bool_compare_and_swap(&invalidatedNodeBoard.counter, theCounter, theCounter+1)){
+                        	invalidatedNodeTableInsert(hpcrun_cct_persistent_id(wpi->sample.node), trapTime);
+				//sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    				//cct_node_t *reuseNode = v.sample_node;
+				//invalidatedNodeTableInsert(hpcrun_cct_persistent_id(reuseNode), trapTime);
+                        	invalidatedNodeBoard.counter++;
+                	}
+            	}
 	  } 
   } else {
 
@@ -5193,6 +5271,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			prev_event_count = pmu_counter;
 
 			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, location);
+			sd.type=WP_WRITE;
 
 			for(int i = 0; i < MIN(8, cur_global_thread_count) /*cur_global_thread_count*/; i++) {
 				if(indices[i] != me)
