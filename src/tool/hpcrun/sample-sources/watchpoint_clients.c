@@ -268,7 +268,7 @@ int invalidatedNodeTableInsert(int node_id, uint64_t timestamp) {
         //printf("fd: %d is inserted to index: %d\n", fd, idx);
         invalidatedNodeBoard.table[idx].node_id = node_id;
         invalidatedNodeBoard.table[idx].time = timestamp;
-	fprintf(stderr, "node %d is inserted\n", node_id);
+	//fprintf(stderr, "node %d is inserted\n", node_id);
         return idx;
 }
 
@@ -3267,6 +3267,7 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
           	uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 		int node_id = hpcrun_cct_persistent_id(wpi->sample.node);
       		invalidatedNodeEntry_t invalidatedNode = invalidatedNodeTableGet(node_id);
+		int64_t expirationPeriod = storeLastTime - storeOlderTime;
 		if(invalidatedNode.node_id != node_id) {
 			inc = numDiffSamples;
 			//double thread_sharer_ratio = (double) dynamic_global_thread_count / (double) sharer; 
@@ -3276,9 +3277,9 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 			//uint64_t increment = MIN(max_event_count, inc);	
 	
 			ReuseAddDistance(rd, inc);
-			fprintf(stderr, "reuse is detected in node %d %ld times, node in the table is %d, max_event_count: %ld, period: %ld, inc: %ld\n", hpcrun_cct_persistent_id(wpi->sample.node), inc, invalidatedNode.node_id, max_event_count, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, inc);
-		} else if (wpi->sample.sampleTime > invalidatedNode.time) {
-			fprintf(stderr, "reuse is detected in node %d because of timing\n", hpcrun_cct_persistent_id(wpi->sample.node));
+			//fprintf(stderr, "reuse is detected in node %d %ld times, node in the table is %d, max_event_count: %ld, period: %ld, inc: %ld\n", hpcrun_cct_persistent_id(wpi->sample.node), inc, invalidatedNode.node_id, max_event_count, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, inc);
+		} else if ((wpi->sample.sampleTime > invalidatedNode.time) && ((trapTime - invalidatedNode.time) > 2 * expirationPeriod)) {
+			//fprintf(stderr, "reuse is detected in node %d because of timing\n", hpcrun_cct_persistent_id(wpi->sample.node));
                         ReuseAddDistance(rd, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
 		} else {
 			//fprintf(stderr, "reuse in node %d is rejected, node in the table is %d\n", hpcrun_cct_persistent_id(wpi->sample.node), invalidatedNode.node_id);
@@ -3286,7 +3287,9 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 	  }
 	  else if (me != wpi->sample.first_accessing_tid) {
 		  //fprintf(stderr, "trap to invalidate on L1 is finishing on sample %ld\n", wpi->sample.sampleTime);
-		fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
+		//fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
+		sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+                cct_node_t *reuseNode = v.sample_node;
 		uint64_t theCounter = invalidatedNodeBoard.counter;
             	if((theCounter & 1) == 0) {
                 	if(__sync_bool_compare_and_swap(&invalidatedNodeBoard.counter, theCounter, theCounter+1)){
@@ -3296,10 +3299,8 @@ static WPTriggerActionType ReuseMtWPCallback(WatchPointInfo_t *wpi, int startOff
 				//invalidatedNodeTableInsert(hpcrun_cct_persistent_id(reuseNode), trapTime);
 				int64_t expirationPeriod = storeLastTime - storeOlderTime;
 				
-				if((expirationPeriod > 0) && ((trapTime - wpi->sample.sampleTime) <= 2 * expirationPeriod) && (wpi->sample.accessType == STORE || wpi->sample.accessType == LOAD_AND_STORE)) {
-					sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
-                                	cct_node_t *reuseNode = v.sample_node;
-					fprintf(stderr, "invalidation is done by node %d\n", hpcrun_cct_persistent_id(reuseNode));
+				if((wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) {
+					//fprintf(stderr, "invalidation is done by node %d\n", hpcrun_cct_persistent_id(reuseNode));
                                 	invalidatedNodeTableInsert(hpcrun_cct_persistent_id(reuseNode), trapTime);
 					
 				}
