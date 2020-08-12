@@ -190,6 +190,7 @@ extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePoli
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool GetVictimL3(int * location, uint64_t sampleTime);
 extern bool GetVictimL1(int * location, uint64_t sampleTime);
+extern bool ArmWatchPointProb(int * location);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);

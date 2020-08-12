@@ -3044,7 +3044,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 	    ReuseSubDistance(rd, (uint64_t) prev_invalidation_count);
 	    inter_thread_invalidation_count += inc;
 	    invalidation_flag = true;
-	    fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
+	    //fprintf(stderr, "invalidation is detected in node %d\n", hpcrun_cct_persistent_id(wpi->sample.node));
 	    uint64_t theCounter = invalidatedNodeBoard.counter;
 	    if((theCounter & 1) == 0) {
     		if(__sync_bool_compare_and_swap(&invalidatedNodeBoard.counter, theCounter, theCounter+1)){ 
@@ -3068,7 +3068,7 @@ static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOff
 
       if((invalidatedNode.node_id != node_id) || ((expirationPeriod > 0) && ((trapTime - invalidatedNode.time) > 2 * expirationPeriod))) {
       	inc = numDiffSamples;
-      	fprintf(stderr, "reuse distance is %ld with inc %ld in node %d\n", rd, inc, hpcrun_cct_persistent_id(wpi->sample.node));
+      	//fprintf(stderr, "reuse distance is %ld with inc %ld in node %d\n", rd, inc, hpcrun_cct_persistent_id(wpi->sample.node));
       	ReuseAddDistance(rd, inc);
       	reuse_detected_entry_not_in_bb++;
       }
@@ -5241,7 +5241,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 		int me = TD_GET(core_profile_trace_data.id);
 		if (strstr(hpcrun_id2metric(sampledMetricId)->name, "MEM_UOPS_RETIRED") != NULL) {
 			int location = -1;
-			if(GetVictimL1(&location, curTime)) {
+			if(GetVictimL1(&location, curTime) && ArmWatchPointProb(&location)) {
 
 			int cur_global_thread_count = global_thread_count;
 			int indices[cur_global_thread_count];
@@ -5287,7 +5287,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, 
 			SubscribeWatchpointShared(&sd, OVERWRITE, false, me, true, location);
 			sd.type=WP_WRITE;
 
-			for(int i = 0; i < MIN(8, cur_global_thread_count) /*cur_global_thread_count*/; i++) {
+			for(int i = 0; i < cur_global_thread_count /*cur_global_thread_count*/; i++) {
 				if(indices[i] != me)
                         	SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], true, location); 
                         }

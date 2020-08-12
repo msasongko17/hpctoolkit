@@ -274,6 +274,7 @@ int l1_wp_count;
 bool globalWPIsActive[MAX_WP_SLOTS];
 int globalWPIsUsers[MAX_WP_SLOTS];
 uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
+uint64_t numWatchpointArmingAttemptSameThread[MAX_WP_SLOTS];
 
 /*
 uint64_t reuseMtDataInsert(int tid, uint64_t timestamp, bool active_flag) {
@@ -575,6 +576,7 @@ __attribute__((constructor))
 		globalWPIsActive[i] = false;
 		globalWPIsUsers[i] = -1;
 		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+		numWatchpointArmingAttemptSameThread[i] = SAMPLES_POST_FULL_RESET_VAL;
 		globalReuseWPs.table[i].time = -1;
 		globalReuseWPs.table[i].active = false;
 		globalReuseWPs.table[i].counter = 0;
@@ -1178,8 +1180,10 @@ bool GetVictimL3(int * location, uint64_t sampleTime) {
                 if((theCounter & 1) == 0)
                         if(__sync_bool_compare_and_swap(&L3Counter, theCounter, theCounter+1)) {
                                 for(int i = l1_wp_count; i < wpConfig.maxWP; i++){
-                                        if(globalWPIsUsers[i] == -1)
+                                        if(globalWPIsUsers[i] == -1) {
                                                 *location = i;
+						break;
+					}
                                 }
                                 L3Counter++;
                         }
@@ -1208,24 +1212,30 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
 	for(int i = 0; i < l1_wp_count; i++){
                 if(globalWPIsActive[i] && (globalWPIsUsers[i] == me)) {
 			wpConfig.maxWP/((double)wpConfig.maxWP+tData.samplePostFull);
-                        double probabilityToReplace =  wpConfig.maxWP/((double)wpConfig.maxWP+numWatchpointArmingAttempt[i]);
+                        double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[i]);
                     	double randValue;
                    	drand48_r(&tData.randBuffer, &randValue);
                    	if((randValue <= probabilityToReplace) /*|| (probabilityToReplace < 0.1)*/) {
                     		globalWPIsActive[i] = false;
 				globalWPIsUsers[i] = -1;
-				//fprintf(stderr, "a position in %d is opened by thread %d\n", i, me);
+				numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+				fprintf(stderr, "a position in %d is opened by thread %d randValue: %0.2lf and probabilityToReplace: %0.2lf\n", i, me, randValue, probabilityToReplace);
+				return false;
 				/*if(threadDataTable.hashTable[me].watchPointArray[i].isActive)
 					DisableWatchpointWrapper(&threadDataTable.hashTable[me].watchPointArray[i]);*/
                     	} /*else {
 				fprintf(stderr, "global wp in %d is retained\n", i);
 			}*/
+			*location = i;
 			numWatchpointArmingAttempt[i]++;
-			return false;
-                } else if (globalWPIsUsers[i] == me) {
-			globalWPIsUsers[i] = -1;
-			return false;
+			return true;
 		}
+		 /*else if (globalWPIsUsers[i] == me) {
+			fprintf(stderr, "a position in %d is opened by thread %d here\n", i, me);
+			globalWPIsUsers[i] = -1;
+			numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+			return false;
+		}*/
         }
 
 
@@ -1236,6 +1246,7 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
 					if(globalWPIsUsers[i] == -1) {
 						*location = i;
 						globalWPIsUsers[i] = me;
+						break;
 					}
 				}
 				L1Counter++;
@@ -1245,17 +1256,38 @@ bool GetVictimL1(int * location, uint64_t sampleTime) {
         	if((theCounter & 1) == 0)
                 	if(__sync_bool_compare_and_swap(&queueCounter, theCounter, theCounter+1)) {*/
         	if(*location != -1) {
-			//fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
+			fprintf(stderr, "open position in %d is taken by thread %d\n", *location, me);
 			globalWPIsActive[*location] = true;
 			globalReuseWPs.table[*location].tid = me;
 			globalReuseWPs.table[*location].active = true;
 			globalReuseWPs.table[*location].time = sampleTime;
+			numWatchpointArmingAttemptSameThread[*location] = SAMPLES_POST_FULL_RESET_VAL;
 			//queueCounter++;
+			numWatchpointArmingAttempt[*location]++;
                         return true;
                 }
 	/*queueCounter++;
 	}*/
         return false;
+}
+
+bool ArmWatchPointProb(int * location) {
+
+	double probabilityToReplace =  1.0/((double)numWatchpointArmingAttemptSameThread[*location]);
+        double randValue;
+        drand48_r(&tData.randBuffer, &randValue);
+        if(randValue <= probabilityToReplace /* 1 */ ) {
+                //tData.numWatchpointArmingAttempt[idx] = SAMPLES_POST_FULL_RESET_VAL; 
+                //fprintf(stderr, "arming watchpoint at i: %d and probability: %0.4lf\n", i, probabilityToReplace);
+                //for(int j = 0; j < l1_wp_count; j++){
+                numWatchpointArmingAttemptSameThread[*location]++;
+		fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttemptSameThread[*location]-1);
+                //}
+                return true;
+        }
+	fprintf(stderr, "watchpoint is retained\n");
+        numWatchpointArmingAttemptSameThread[*location]++;
+	return false;
 }
 
 // Finds a victim slot to set a new WP
@@ -2200,7 +2232,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					//fprintf(stderr, "in DISABLE_WP\n");
 					DisableWatchpointWrapper(wpi);
 					globalWPIsActive[location] = false;
-					globalWPIsUsers[location] = -1;	
+					globalWPIsUsers[location] = -1;
+					fprintf(stderr, "location %d is opened by trap\n", location);	
 					break;
 				default:
 					//fprintf(stderr, "aborted here\n");
