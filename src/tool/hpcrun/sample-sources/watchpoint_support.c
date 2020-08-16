@@ -67,6 +67,7 @@
 
 //extern int init_adamant;
 
+#define REUSE_HISTO 1
 #define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
 #define ADDRESSES_OVERLAP(addr1, len1, addr2, len2) (((addr1)+(len1) > (addr2)) && ((addr2)+(len2) > (addr1) ))
@@ -104,6 +105,7 @@
 #define HANDLE_ERROR_IF_ANY(val, expected, errstr) {if (val != expected) {perror(errstr); abort();}}
 #define SAMPLES_POST_FULL_RESET_VAL (1)
 
+#define MAX_THREAD_SIZE 503
 
 WPConfig_t wpConfig;
 
@@ -119,6 +121,7 @@ typedef struct ThreadData{
 	void * gs_reg_val;
 	uint64_t samplePostFull;
 	uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
+	pid_t os_tid;
 	long numWatchpointTriggers;
 	long numActiveWatchpointTriggers;
 	long numWatchpointImpreciseIP;
@@ -130,8 +133,16 @@ typedef struct ThreadData{
 	struct drand48_data randBuffer;
 	WatchPointInfo_t watchPointArray[MAX_WP_SLOTS];
 	WatchPointUpCall_t fptr;
+	volatile uint64_t counter[MAX_WP_SLOTS];
 	char dummy[CACHE_LINE_SZ];
 } ThreadData_t;
+
+typedef struct threadDataTableStruct{
+        struct ThreadData hashTable[MAX_THREAD_SIZE];
+        //struct SharedData * hashTable;
+} ThreadDataTable_t;
+
+ThreadDataTable_t threadDataTable;
 
 static __thread ThreadData_t tData;
 __thread uint64_t create_wp_count = 0;
@@ -360,9 +371,14 @@ __attribute__((constructor))
 			wpConfig.dontDisassembleWPAddress = false;
 		}
 
+	
+	for(int i = 0; i < 503; i++) {
+		for(int j = 0; j < MAX_WP_SLOTS; j++)
+			threadDataTable.hashTable[i].counter[j] = 0;
+		threadDataTable.hashTable[i].os_tid = -1;
+        }
 
-
-	}
+}
 
 void RedSpyWPConfigOverride(void *v){
 	wpConfig.getFloatType = true;
@@ -631,6 +647,18 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 	if(wpConfig.isLBREnabled) {
 		CreateDummyHardwareEvent();
 	}
+
+#ifdef REUSE_HISTO
+	int me = TD_GET(core_profile_trace_data.id);
+	tData.os_tid = syscall(__NR_gettid); //gettid();
+
+	for(int i = 0; i < MAX_WP_SLOTS; i++)
+		tData.counter[i] = 0;
+
+	//if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
+	threadDataTable.hashTable[me] = tData;
+#endif
+
 }
 
 void WatchpointThreadTerminate(){
@@ -1329,6 +1357,17 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
 	return false;
 }
 
+
+bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, int me, bool profile_l1, int location){
+	sub_wp_count1++;
+	if(ValidateWPData(sampleData) == false) {
+		return false;
+	}
+	if(profile_l1) {
+		if(threadDataTable.hashTable[me].os_tid != -1) {
+		}
+	}
+}
 
 bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime){
 	if(ValidateWPData(sampleData) == false) {
