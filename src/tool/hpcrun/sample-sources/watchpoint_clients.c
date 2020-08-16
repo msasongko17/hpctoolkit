@@ -252,7 +252,7 @@ __thread uint64_t prev_event_count = 0;
 #define WP_REDSPY_EVENT_NAME "WP_REDSPY"
 #define WP_LOADSPY_EVENT_NAME "WP_LOADSPY"
 #define WP_REUSE_EVENT_NAME "WP_REUSE"
-#define WP_MT_REUSE_EVENT_NAME "WP_MT_REUSE"
+#define WP_REUSETRACKER_EVENT_NAME "WP_REUSETRACKER"
 #define WP_TEMPORAL_REUSE_EVENT_NAME "WP_TEMPORAL_REUSE"
 #define WP_SPATIAL_REUSE_EVENT_NAME "WP_SPATIAL_REUSE"
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
@@ -269,7 +269,7 @@ typedef enum WP_CLIENT_ID{
   WP_REDSPY,
   WP_LOADSPY,
   WP_REUSE,
-  WP_MT_REUSE,
+  WP_REUSETRACKER,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -360,6 +360,8 @@ __thread long samefunc=0;
 __thread long unknwfunc=0;
 __thread long ipSame=0;
 __thread long ipDiff=0;
+
+int event_type = 0;
 
 /* private tool function
  *****************************************************************************/
@@ -515,7 +517,7 @@ static WPTriggerActionType DeadStoreWPCallback(WatchPointInfo_t *wpi, int startO
 static WPTriggerActionType RedStoreWPCallback(WatchPointInfo_t *wpi, int startOffseti, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TemporalReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
-static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType SpatialReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType LoadLoadWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -601,9 +603,9 @@ static WpClientConfig_t wpClientConfig[] = {
   },
   /**** Multithreaded Reuse ***/
   {
-    .id = WP_MT_REUSE,
-    .name = WP_MT_REUSE_EVENT_NAME,
-    .wpCallback = MtReuseWPCallback,
+    .id = WP_REUSETRACKER,
+    .name = WP_REUSETRACKER_EVENT_NAME,
+    .wpCallback = ReuseTrackerWPCallback,
     .preWPAction = DISABLE_WP,
     .configOverrideCallback = ReuseWPConfigOverride
   },
@@ -833,7 +835,7 @@ static void ClientTermination(){
 	hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
 	hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
       }   break;
-    case WP_MT_REUSE:
+    case WP_REUSETRACKER:
       {
 #ifdef REUSE_HISTO
 	//sample_count++;
@@ -853,7 +855,7 @@ static void ClientTermination(){
 	fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
 	fprintf(stderr, "wp_active: %ld\n", wp_active);
 
-	//fprintf(stderr, "in WP_MT_REUSE\n");
+	//fprintf(stderr, "in WP_REUSETRACKER\n");
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
@@ -1138,6 +1140,8 @@ METHOD_FN(process_event_list, int lush_metrics)
 
   PopulateBlackListAddresses();
 
+  event_type = theWPConfig->id;
+
   switch (theWPConfig->id) {
     case WP_DEADSPY:
       measured_metric_id = hpcrun_new_metric();
@@ -1334,7 +1338,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
       }
       break;
-    case WP_MT_REUSE:
+    case WP_REUSETRACKER:
       {
 	//reuse_profile_type = REUSE_TEMPORAL;
 #ifdef REUSE_HISTO
@@ -1517,7 +1521,7 @@ METHOD_FN(display_events)
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
-  printf("%s\n", WP_MT_REUSE_EVENT_NAME);
+  printf("%s\n", WP_REUSETRACKER_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_TEMPORAL_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
@@ -2105,14 +2109,14 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 }
 
 /*
-   static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+   static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
    trap_count++;
    return ALREADY_DISABLED;
    }*/
 
 
-static WPTriggerActionType MtReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in MtReuseWPCallback\n");
+static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+  //fprintf(stderr, "in ReuseTrackerWPCallback\n");
   trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
@@ -3730,7 +3734,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 		   }
 		   break;
-    case WP_MT_REUSE: {
+    case WP_REUSETRACKER: {
 			sample_count++;
 			//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
@@ -3756,7 +3760,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			  .isBackTrace = false,
 			};
 #ifdef REUSE_HISTO
-			//fprintf(stderr, "WP_MT_REUSE in OnSample\n");
+			//fprintf(stderr, "WP_REUSETRACKER in OnSample\n");
 			sd.wpLength = 1;
 #else
 			sd.wpLength = GetFloorWPLength(accessLen);
@@ -4678,13 +4682,13 @@ void dump_comdetective_matrices() {
     dump_waw_as_matrix();
     dump_waw_as_core_matrix();
   }
-  if(theWPConfig->id == WP_MT_REUSE) {
+  /*if(theWPConfig->id == WP_REUSETRACKER) {
     dump_as_matrix();
     dump_as_core_matrix();
     dump_invalidation_matrix();
     dump_invalidation_core_matrix();
 
-  }
+  }*/
 }
 
 
