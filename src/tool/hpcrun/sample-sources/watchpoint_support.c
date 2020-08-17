@@ -645,7 +645,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 			// Deliver the signal to this thread
 			struct f_owner_ex fown_ex;
 			fown_ex.type = F_OWNER_TID;
-			fown_ex.pid  = syscall(__NR_gettid); //threadDataTable.hashTable[tid].os_tid; //gettid();
+			fown_ex.pid  = threadDataTable.hashTable[tid].os_tid; //gettid();
 			int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
 			if (ret == -1){
 				EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
@@ -1377,13 +1377,17 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					retVal = DISABLE_WP; // disable if unable to collect any info.
 					wp_dropped++;
 				} else {*/
-					tData.numActiveWatchpointTriggers++;
-					//retVal = tData.fptr(wpi, 0, wpt.accessLength, NULL /*&wpt*/);
+					/*tData.numActiveWatchpointTriggers++;
+					if(me == TD_GET(core_profile_trace_data.id)) {
+						wpt.trapped_tid = me;
+						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+					}*/
+					retVal = ALREADY_DISABLED;
 				//}
 
 				switch (retVal) {
 					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
-						       assert(wpi->isActive == false);
+						       //assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
 					       }

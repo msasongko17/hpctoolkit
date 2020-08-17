@@ -140,6 +140,7 @@ typedef struct WatchPointTrigger{
 	FloatType floatType;
 	AccessType accessType;
 	int accessLength; // access length
+	int trapped_tid;
 } WatchPointTrigger_t;
 
 // Data structure that is maintained per WP armed
