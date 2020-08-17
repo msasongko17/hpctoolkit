@@ -3892,6 +3892,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				}
 			}
 
+			//SubscribeWatchpointShared(&sd, OVERWRITE, false, me, location);
+
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
 		      }

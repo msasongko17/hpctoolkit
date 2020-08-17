@@ -746,7 +746,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		// If it was not active, enable it.
 		if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
 			//fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
-			//CreateWatchPointShared(wpi, sampleData, tid, true);
+			CreateWatchPointShared(wpi, sampleData, tid, true);
 			return true;
 		}
 	}
@@ -755,7 +755,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		DisArm(wpi);
 	}
 	//fprintf(stderr, "CreateWatchPointShared is entered without modify\n");
-	//CreateWatchPointShared(wpi, sampleData, tid, false);
+	CreateWatchPointShared(wpi, sampleData, tid, false);
 	return true;
 }
 // Per thread initialization
@@ -1335,7 +1335,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 	if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 				location = i;
 				//theCounter = threadDataTable.hashTable[me].counter;
-				//fprintf(stderr, "location is found in %d\n", location);
+				fprintf(stderr, "trap due to access in thread %d is handled by thread %d WP location is found in %d\n", me, TD_GET(core_profile_trace_data.id), location);
                                	break;
 			}
 		}
@@ -1378,7 +1378,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					wp_dropped++;
 				} else {*/
 					tData.numActiveWatchpointTriggers++;
-					retVal = tData.fptr(wpi, 0, wpt.accessLength, NULL /*&wpt*/);
+					//retVal = tData.fptr(wpi, 0, wpt.accessLength, NULL /*&wpt*/);
 				//}
 
 				switch (retVal) {
