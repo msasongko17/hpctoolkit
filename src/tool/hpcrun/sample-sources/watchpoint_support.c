@@ -110,6 +110,8 @@
 WPConfig_t wpConfig;
 
 extern int event_type;
+int global_thread_count;
+int dynamic_global_thread_count;
 
 //const WatchPointInfo_t dummyWPInfo = {.sample = {}, .startTime =0, .fileHandle= -1, .isActive= false, .mmapBuffer=0};
 //const struct DUMMY_WATCHPOINT dummyWP[MAX_WP_SLOTS];
@@ -744,7 +746,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		// If it was not active, enable it.
 		if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
 			//fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
-			CreateWatchPointShared(wpi, sampleData, tid, true);
+			//CreateWatchPointShared(wpi, sampleData, tid, true);
 			return true;
 		}
 	}
@@ -752,12 +754,15 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 	if(wpi->fileHandle != -1) {
 		DisArm(wpi);
 	}
-	CreateWatchPointShared(wpi, sampleData, tid, false);
+	//fprintf(stderr, "CreateWatchPointShared is entered without modify\n");
+	//CreateWatchPointShared(wpi, sampleData, tid, false);
 	return true;
 }
 // Per thread initialization
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
+	global_thread_count++;
+	dynamic_global_thread_count++;
 	tData.ss.ss_sp = malloc(ALT_STACK_SZ);
 	if (tData.ss.ss_sp == NULL){
 		EMSG("Failed to malloc ALT_STACK_SZ");
@@ -812,7 +817,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
 void WatchpointThreadTerminate(){
 	int me = TD_GET(core_profile_trace_data.id);
-	//dynamic_global_thread_count--;
+	dynamic_global_thread_count--;
 	ThreadData_t threadData;
 	if(event_type == WP_REUSETRACKER) {
 
@@ -1621,7 +1626,7 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                 		if(captureValue) {
                         		CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
                 		}
-                		//fprintf(stderr, "arming another thread %d to profile L3 by thread %d\n", me, TD_GET(core_profile_trace_data.id));
+                		//fprintf(stderr, "Thread %d is arming thread %d in location %d\n", TD_GET(core_profile_trace_data.id), me, location);
                 		if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
                         		//LOG to hpcrun log
                         		EMSG("ArmWatchPoint failed for address %p", sampleData->va);

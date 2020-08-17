@@ -178,6 +178,9 @@ int reuse_distance_num_events = 0;
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
 
+extern int global_thread_count;
+extern int dynamic_global_thread_count;
+
 #ifdef REUSE_HISTO
 bool reuse_output_trace = false;
 double reuse_bin_start = 0;
@@ -310,6 +313,7 @@ __thread uint64_t prev_timestamp = 0;
 
 __thread int64_t lastTime = 0;
 __thread int64_t storeLastTime = 0;
+__thread int64_t storeOlderTime = 0;
 __thread uint64_t writtenBytes = 0;
 __thread uint64_t loadedBytes = 0;
 __thread uint64_t usedBytes = 0;
@@ -3740,8 +3744,16 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
 			//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 			int64_t storeCurTime = 0;
-			if(accessType == STORE || accessType == LOAD_AND_STORE)
-			  storeCurTime = curTime;
+			if(accessType == STORE || accessType == LOAD_AND_STORE) {
+			  	storeCurTime = curTime;
+				storeOlderTime = storeLastTime;
+				storeLastTime = storeCurTime;
+			}
+			 /*if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+                              fprintf(stderr, "MEM_UOPS_RETIRED:ALL_STORES\n");
+                         else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
+                              fprintf(stderr, "MEM_UOPS_RETIRED:ALL_LOADS\n");*/
+
 #ifdef REUSE_HISTO
 #else
 			if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
@@ -3750,7 +3762,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			accessedIns += metricThreshold;
 			SampleData_t sd= {
 			  .node = node,
-			  .type=WP_RW,  //jqswang: Setting it to WP_READ causes segment fault
+			  //.type=WP_RW,  //jqswang: Setting it to WP_READ causes segment fault
 			  .accessType=accessType,
 			  //.wpLength = accessLen, // set later
 			  .accessLength= accessLen,
@@ -3843,97 +3855,43 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			// update bulletin board here
 			//int item_not_found_flag = 0;
 			int me = TD_GET(core_profile_trace_data.id);
-			int my_core = sched_getcpu(); 
-			uint64_t eventDiff = pmu_counter-prev_event_count;
-			uint64_t timeDiff = curTime-lastTime;
+			//int my_core = sched_getcpu(); 
+			//uint64_t eventDiff = pmu_counter-prev_event_count;
+			//uint64_t timeDiff = curTime-lastTime;
 			int item_not_found_flag = 0;
 			// detect communication here
 			// before 
 			//ReuseBBEntry_t prev_access = getEntryFromReuseBulletinBoard(ALIGN_TO_CACHE_LINE((size_t)(data_addr)), &item_not_found_flag);
-#ifdef REUSE_HISTO
-			ReuseBBEntry_t prev_access;
-			ReadBulletinBoardTransactionally(&prev_access, data_addr, &item_not_found_flag);
-			if(item_not_found_flag == 0) {
-			  //fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time): %ld\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid, (curTime - storeLastTime) - (curTime - prev_access.time));
-			  if((me != prev_access.tid) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
-			    //fprintf(stderr, "fulfilled condition\n");
-			    //fprintf(stderr, "sampled cache line: %lx in thread %d, entry from Bulletin Board: %lx from thread %d, (curTime - storeLastTime) - (curTime - prev_access.time) = %\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
-			    //fprintf(stderr, "currently sampled address: %lx, currently sampling thread: %d, address at entry: %lx, thread at entry: %d\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)), me, prev_access.cacheLineBaseAddress, prev_access.tid);
-			    inter_thread_invalidation_count += metricThreshold;
-			    int max_thread_num = prev_access.tid;
-			    if(max_thread_num < me)
-			    {
-			      max_thread_num = me;
-			    }
-			    if(as_matrix_size < max_thread_num)
-			    {
-			      as_matrix_size =  max_thread_num;
-			    }
-			    //fprintf(stderr, "communication is detected by %0.2lf between threads %d and %d in OnSample\n", (double) metricThreshold, prev_access.tid, me);
-			    as_matrix[prev_access.tid][me] += (double) metricThreshold;
-			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
-			      //fprintf(stderr, "a thread invalidation is detected in thread %d due to access in thread %d\n", prev_access.tid, me);
-			      invalidation_matrix[prev_access.tid][me] += (double) metricThreshold;
-			    } /* else {
-				 fprintf(stderr, "there is an inter-thread communication, but no invalidation\n");
-				 }*/
-			    //fprintf(stderr, "inter_thread_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
-			  }
-			  if((my_core != prev_access.core_id) && ((curTime - prev_access.time) <= (curTime - storeLastTime))) {
-			    inter_core_invalidation_count += metricThreshold;
-			    int max_core_num = prev_access.core_id;
-			    if(max_core_num < my_core)
-			    {
-			      max_core_num = my_core;
-			    }
-			    if(as_core_matrix_size < max_core_num)
-			    {
-			      as_core_matrix_size =  max_core_num;
-			    }
-			    as_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-			    //fprintf(stderr, "there are %0.2lf inter-core communications\n", (double) metricThreshold);
-			    if(accessType == STORE || accessType == LOAD_AND_STORE) {
-			      //fprintf(stderr, "a core invalidation is detected in core %d due to access in core %d\n", prev_access.core_id, my_core);
-			      invalidation_core_matrix[prev_access.core_id][my_core] += (double) metricThreshold;
-			    } /*else {
-				fprintf(stderr, "there is an inter-core communication, but no invalidation\n");
-				}*/
-			    //fprintf(stderr, "inter_core_invalidation_count is incremented by %ld in OnSample\n", metricThreshold);
-			  }
-			}
-			// after
-			if(accessType == STORE || accessType == LOAD_AND_STORE) {
-			  ReuseBBEntry_t curr_access= {
-			    .time=curTime,  //jqswang: Setting it to WP_READ causes segment fault
-			    .tid=me,
-			    .core_id=my_core,
-			    .accessType=accessType,
-			    .address=data_addr,
-			    .cacheLineBaseAddress=ALIGN_TO_CACHE_LINE((size_t)(data_addr)),
-			    .accessLen=accessLen,
-			    .node=node,
-			    .eventCountBetweenSamples=eventDiff,	
-			    .timeBetweenSamples=timeDiff,
-			  };
-			  //fprintf(stderr, "sampled cache line: %lx in thread %d\n", curr_access.cacheLineBaseAddress, curr_access.tid);
-			  //fprintf(stderr, "pretty print before insertion of cache line %lx to Bulletin Board\n", curr_access.cacheLineBaseAddress); 
-			  //prettyPrintReuseHash();
-			  reuseHashInsert(curr_access);
-			  storeLastTime = storeCurTime;
-			  //fprintf(stderr, "pretty print after insertion to Bulletin Board\n");
-			  //prettyPrintReuseHash();
-			}
-			sd.eventCountBetweenSamples=eventDiff;
-			sd.timeBetweenSamples=timeDiff;
 			sd.sampleTime=curTime;
-			sd.prevStoreAccess = storeLastTime;
-			sd.expirationPeriod=(curTime - lastTime);
-			prev_event_count = pmu_counter;
 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
-			wp_arming_count++;
-			SubscribeWatchpoint(&sd, OVERWRITE, false );
-#endif
+			//SubscribeWatchpoint(&sd, OVERWRITE, false );
+
+			int cur_global_thread_count = global_thread_count;
+                        int indices[cur_global_thread_count];
+                        for (int i = 0; i < cur_global_thread_count; i++) {
+                                indices[i] = i;
+                        }
+                        //fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+                        int wp_index = cur_global_thread_count;
+                        while (wp_index) {
+                                int index = rdtsc() % wp_index;
+                                wp_index--;
+                                int swap = indices[index];
+                                indices[index] = indices[wp_index];
+                                indices[wp_index] = swap;
+                        }	
+			int location = 0;
+			if(location != -1) {
+				for(int i = 0; i < cur_global_thread_count; i++) {
+					if(indices[i] == me)
+						sd.type = WP_RW;
+					else
+						sd.type = WP_WRITE;
+					SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
+				}
+			}
+
 			//fprintf(stderr, "here6\n");
 			lastTime = curTime;
 		      }
