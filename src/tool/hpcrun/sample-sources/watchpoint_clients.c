@@ -2152,8 +2152,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 
   if(globalReuseWPs.table[wt->location].active) {
-  uint64_t inc = numDiffSamples;
+  double inc_scale = dynamic_global_thread_count / (double) used_wp_count;
+  uint64_t inc = numDiffSamples * inc_scale;
 
+  //fprintf(stderr, "inc: %ld, numDiffSamples: %ld, inc_scale: %0.2lf, dynamic_global_thread_count: %d, used_wp_count: %d\n", inc, numDiffSamples, inc_scale, dynamic_global_thread_count, used_wp_count);
   uint64_t trapTime = rdtsc();
   uint64_t rd = 0;
   int me = TD_GET(core_profile_trace_data.id);
