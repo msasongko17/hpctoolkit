@@ -68,10 +68,10 @@
 //extern int init_adamant;
 
 #define REUSE_HISTO 1
-#define MAX_WP_SLOTS (5)
+//#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
 #define ADDRESSES_OVERLAP(addr1, len1, addr2, len2) (((addr1)+(len1) > (addr2)) && ((addr2)+(len2) > (addr1) ))
-#define CACHE_LINE_SIZE (64)
+//#define CACHE_LINE_SIZE (64)
 //#define ALT_STACK_SZ (4 * SIGSTKSZ)
 #define ALT_STACK_SZ ((1L<<20) > 4 * SIGSTKSZ? (1L<<20): 4* SIGSTKSZ)
 
@@ -163,6 +163,11 @@ typedef struct threadDataTableStruct{
 } ThreadDataTable_t;
 
 ThreadDataTable_t threadDataTable;
+
+int globalWPIsUsers[MAX_WP_SLOTS];
+uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
+
+globalReuseTable_t globalReuseWPs;
 
 typedef struct FdData {
 	int fd;
@@ -421,10 +426,18 @@ __attribute__((constructor))
 
 	
 	for(int i = 0; i < 503; i++) {
-		for(int j = 0; j < MAX_WP_SLOTS; j++)
-			threadDataTable.hashTable[i].counter[j] = 0;
+		for(int j = 0; j < MAX_WP_SLOTS; j++) {
+			threadDataTable.hashTable[i].counter[j] = 0;	
+		}
 		threadDataTable.hashTable[i].os_tid = -1;
         }
+	for(int i = 0; i < MAX_WP_SLOTS; i++) {
+		globalWPIsUsers[i] = -1;
+		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+		globalReuseWPs.table[i].time = -1;
+		globalReuseWPs.table[i].active = false;
+		globalReuseWPs.table[i].counter = 0;	
+	}
 
 }
 
@@ -872,7 +885,21 @@ void WatchpointThreadTerminate(){
 #endif
 }
 
-
+bool ArmWatchPointProb(int * location, uint64_t sampleTime) {
+	double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[*location]);
+        double randValue;
+        drand48_r(&tData.randBuffer, &randValue);
+        if(randValue <= probabilityToReplace) { 
+                numWatchpointArmingAttempt[*location]++;
+		fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
+		globalReuseWPs.table[*location].active = true;
+		globalReuseWPs.table[*location].time = sampleTime; 
+		return true;
+        }
+	fprintf(stderr, "watchpoint is not armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location], *location, TD_GET(core_profile_trace_data.id));
+        numWatchpointArmingAttempt[*location]++;
+	return false;
+}
 
 // Finds a victim slot to set a new WP
 static VictimType GetVictim(int * location, ReplacementPolicy policy){
@@ -1335,7 +1362,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 	if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 				location = i;
 				//theCounter = threadDataTable.hashTable[me].counter;
-				fprintf(stderr, "trap due to access in thread %d is handled by thread %d WP location is found in %d\n", me, TD_GET(core_profile_trace_data.id), location);
+				fprintf(stderr, "trap due to access in thread %d armed by %d is handled by thread %d WP location is found in %d\n", me, threadDataTable.hashTable[me].watchPointArray[i].sample.first_accessing_tid, TD_GET(core_profile_trace_data.id), location);
                                	break;
 			}
 		}
@@ -1390,7 +1417,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						       //assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-					       }
+							if(threadDataTable.hashTable[me].watchPointArray[location].sample.first_accessing_tid == me) {
+								numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
+								fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+							}
+				       }
 					       break;
 					default: // Retain the state
 						break;

@@ -168,6 +168,7 @@ extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overw
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
+extern bool ArmWatchPointProb(int * location, uint64_t sampleTime);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);
 extern double ProportionOfWatchpointAmongOthersSharingTheSameContext(WatchPointInfo_t *wpi);
@@ -192,5 +193,21 @@ static inline  uint64_t rdtsc(){
 	__asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
 	return ((uint64_t)hi << 32) | lo;
 }
+
+#define MAX_WP_SLOTS (5)
+#define CACHE_LINE_SIZE (64)
+
+typedef struct globalReuseEntry{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t time;
+  int tid;
+  bool active;
+  char dummy[CACHE_LINE_SZ];
+} globalReuseEntry_t;
+
+typedef struct globalReuseTable{
+  struct globalReuseEntry table[MAX_WP_SLOTS];
+  //struct SharedData * hashTable;
+} globalReuseTable_t;
 
 #endif //__WP_SUPPORT__

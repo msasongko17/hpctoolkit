@@ -148,6 +148,13 @@
 #endif
 #include "reuse.h"
 
+#define WAIT_THRESHOLD 10
+int used_wp_count = 0;
+
+//int wp_user_list[MAX_WP_SLOTS];
+
+extern int globalWPIsUsers[MAX_WP_SLOTS];
+
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
 int load_metric_id = -1;
@@ -191,6 +198,8 @@ int reuse_bin_size = 0;
 #else
 #endif
 
+extern WPConfig_t wpConfig;
+
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
 ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
@@ -217,6 +226,8 @@ extern __thread uint64_t wp_count1;
 extern __thread uint64_t wp_count2;
 extern __thread uint64_t wp_dropped;
 extern __thread uint64_t wp_active;
+
+extern globalReuseTable_t globalReuseWPs;
 
 void SetupWatermarkMetric(int metricId){
   if (curWatermarkId == NUM_WATERMARK_METRICS) {
@@ -3749,6 +3760,33 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 		   break;
     case WP_REUSETRACKER: {
 			sample_count++;
+
+			int me = TD_GET(core_profile_trace_data.id);
+			if((sample_count == WAIT_THRESHOLD) && (me == 0)) {
+				if(used_wp_count == 0) {
+					int cur_global_thread_count = global_thread_count;
+                                	int indices[cur_global_thread_count];
+                                	for (int i = 0; i < cur_global_thread_count; i++) {
+                                        	indices[i] = i;
+                                	}
+                               		int wp_index = cur_global_thread_count;
+                                	while (wp_index) {
+                                        	int index = rdtsc() % wp_index;
+                                        	wp_index--;
+                                        	int swap = indices[index];
+                                        	indices[index] = indices[wp_index];
+                                        	indices[wp_index] = swap;
+                                	}
+					for(int i = 0; i < MIN(cur_global_thread_count, wpConfig.maxWP); i++) {
+						globalWPIsUsers[i] = indices[i];
+						globalReuseWPs.table[i].tid = indices[i];
+						used_wp_count++;
+					}
+				}
+				for(int i = 0; i < used_wp_count; i++) {
+					fprintf(stderr, "globalWPIsUsers[%d]: %d\n", i, globalWPIsUsers[i]);
+				}
+			}
 			//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
 			//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
@@ -3778,6 +3816,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			  .sampledMetricId=sampledMetricId,
 			  .isSamplePointAccurate = isSamplePointAccurate,
 			  .preWPAction=theWPConfig->preWPAction,
+			  .first_accessing_tid =me,
 			  .isBackTrace = false,
 			};
 #ifdef REUSE_HISTO
@@ -3863,7 +3902,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			}
 			// update bulletin board here
 			//int item_not_found_flag = 0;
-			int me = TD_GET(core_profile_trace_data.id);
 			//int my_core = sched_getcpu(); 
 			//uint64_t eventDiff = pmu_counter-prev_event_count;
 			//uint64_t timeDiff = curTime-lastTime;
@@ -3876,18 +3914,16 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			//fprintf(stderr, "sampled address: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(data_addr)));
 			//SubscribeWatchpoint(&sd, OVERWRITE, false );
 	
-			int location = -1;	
-			if((me == 0) || (me == 1) || (me == 2) || (me == 3)) {
-			
-			if(me == 0)
-				location = 0;
-			else if(me == 1)
-				location = 1;
-			else if(me == 2)
-                                location = 2;
-			else if(me == 3)
-                                location = 3;
-			if((location != -1) && ((me == 0) || (me == 3))) {
+			int location = -1;
+
+			for(int j = 0; j < used_wp_count; j++) {
+				if(me == globalWPIsUsers[j]) {
+					location = j;
+					break;
+				}
+			}
+			//fprintf(stderr, "location: %d, thread: %d\n", location, me);
+			if((location != -1) && ArmWatchPointProb(&location, curTime)) {
 
 				int cur_global_thread_count = global_thread_count;
                         	int indices[cur_global_thread_count];
@@ -3911,7 +3947,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						sd.type = WP_WRITE;
 					SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
 				}
-			}
 			}
 
 			//SubscribeWatchpointShared(&sd, OVERWRITE, false, me, location);
