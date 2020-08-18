@@ -891,12 +891,12 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime) {
         drand48_r(&tData.randBuffer, &randValue);
         if(randValue <= probabilityToReplace) { 
                 numWatchpointArmingAttempt[*location]++;
-		fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
+		//fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
 		globalReuseWPs.table[*location].active = true;
 		globalReuseWPs.table[*location].time = sampleTime; 
 		return true;
         }
-	fprintf(stderr, "watchpoint is not armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location], *location, TD_GET(core_profile_trace_data.id));
+	//fprintf(stderr, "watchpoint is not armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location], *location, TD_GET(core_profile_trace_data.id));
         numWatchpointArmingAttempt[*location]++;
 	return false;
 }
@@ -1362,7 +1362,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                 	if(threadDataTable.hashTable[me].watchPointArray[i].isActive && (info->si_fd == threadDataTable.hashTable[me].watchPointArray[i].fileHandle)) {
 				location = i;
 				//theCounter = threadDataTable.hashTable[me].counter;
-				fprintf(stderr, "trap due to access in thread %d armed by %d is handled by thread %d WP location is found in %d\n", me, threadDataTable.hashTable[me].watchPointArray[i].sample.first_accessing_tid, TD_GET(core_profile_trace_data.id), location);
+				//fprintf(stderr, "trap due to access in thread %d armed by %d is handled by thread %d WP location is found in %d\n", me, threadDataTable.hashTable[me].watchPointArray[i].sample.first_accessing_tid, TD_GET(core_profile_trace_data.id), location);
                                	break;
 			}
 		}
@@ -1389,7 +1389,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					case DISABLE_WP:
 					//fprintf(stderr, "in DISABLE_WP\n");
 					DisableWatchpointWrapper(wpi);
-					fprintf(stderr, "location %d is opened by trap\n", location);	
+					//fprintf(stderr, "location %d is opened by trap\n", location);	
 					break;
 				default:
 					//fprintf(stderr, "aborted here\n");
@@ -1409,7 +1409,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						wpt.trapped_tid = me;
 						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}*/
-					retVal = ALREADY_DISABLED;
+				if(globalReuseWPs.table[location].tid == me) {
+					wpt.location = location;
+					tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+				}
+				retVal = ALREADY_DISABLED;
 				//}
 
 				switch (retVal) {
@@ -1417,9 +1421,19 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						       //assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+							uint64_t theCounter = globalReuseWPs.table[location].counter;
+							if((theCounter & 1) == 0) {
+								if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+									if(globalReuseWPs.table[location].active) {
+										globalReuseWPs.table[location].active = false;
+										//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
+									}
+									globalReuseWPs.table[location].counter++;
+								}
+							}
 							if(threadDataTable.hashTable[me].watchPointArray[location].sample.first_accessing_tid == me) {
 								numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
-								fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+								//fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
 							}
 				       }
 					       break;
@@ -1512,7 +1526,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					 //reset to tData.samplePostFull
 					 tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
 					 //tData.numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-					 fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
+					 //fprintf(stderr, "tData.samplePostFull is reset in DISABLE_WP in thread %d\n", TD_GET(core_profile_trace_data.id));
 				 }
 				 break;
 		case DISABLE_ALL_WP: {
