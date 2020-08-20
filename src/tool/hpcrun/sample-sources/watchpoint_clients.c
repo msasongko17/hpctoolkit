@@ -1125,8 +1125,8 @@ static inline void SetUpTrueSharingMetrics(){
   hpcrun_set_metric_info_and_period(true_wr_metric_id, "TRUE_WR_CONFLICT", MetricFlags_ValFmt_Int, 1, metric_property_none);
 }
 
-int l3_size;
-int locality_vector[4][40];
+int locality_vector[4][50];
+int thread_to_l3_mapping[503];
 int l3_count = 0;
 
 int reading_locality_vector()
@@ -1135,7 +1135,7 @@ int reading_locality_vector()
 
         char *string = getenv("HPCRUN_THREAD_LOCALITY_MAPPING");
 
-        l3_size = 0;
+        int l3_size = 1;
 
         if(string != NULL) {
                 while (1) {
@@ -1144,8 +1144,9 @@ int reading_locality_vector()
 
                         /* Skip whitespace by hand, to detect the end.  */
 			if (*string == '#') {
+				locality_vector[l3_count][0] = l3_size-1;
 				l3_count++;
-				l3_size = 0;
+				l3_size = 1;
 			}
                         while ((*string == ',') || (*string == '#')) string++;
                         if (*string == 0)
@@ -1161,6 +1162,7 @@ int reading_locality_vector()
                                 printf ("Overflow\n");
                         else {
                                 locality_vector[l3_count][l3_size++] = next;
+				thread_to_l3_mapping[next] = l3_count;
                                 //printf("%d ", next);
                         }
                         /* Advance past it.  */
@@ -1168,6 +1170,7 @@ int reading_locality_vector()
                 }
                 //printf("\n");
         }
+	locality_vector[l3_count][0] = l3_size-1;
 	l3_count++;
 	for(int i = 0; i < 4; i++) {
 		for(int j = 0; j < 40; j++) {
@@ -3953,6 +3956,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 indices[wp_index] = swap;
                                         }
 					fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3\n");
+
+					int affinity_l3 = thread_to_l3_mapping[me];
+
+					fprintf(stderr, "thread %d is in the same L3 with: ", me);
+					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+						fprintf(stderr, "%d ", locality_vector[affinity_l3][i+1]);
+					}
+					fprintf(stderr, "\n");
+
 				//}
 
 				
