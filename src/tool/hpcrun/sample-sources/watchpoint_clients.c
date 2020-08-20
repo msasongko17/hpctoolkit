@@ -204,6 +204,7 @@ AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
 ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
+bool profiling_l3 = false;
 //#endif
 
 #define NUM_WATERMARK_METRICS (4)
@@ -1124,6 +1125,59 @@ static inline void SetUpTrueSharingMetrics(){
   hpcrun_set_metric_info_and_period(true_wr_metric_id, "TRUE_WR_CONFLICT", MetricFlags_ValFmt_Int, 1, metric_property_none);
 }
 
+int l3_size;
+int locality_vector[4][40];
+int l3_count = 0;
+
+int reading_locality_vector()
+{
+        int sum = 0;
+
+        char *string = getenv("HPCRUN_THREAD_LOCALITY_MAPPING");
+
+        l3_size = 0;
+
+        if(string != NULL) {
+                while (1) {
+                        char *tail;
+                        int next;
+
+                        /* Skip whitespace by hand, to detect the end.  */
+			if (*string == '#') {
+				l3_count++;
+				l3_size = 0;
+			}
+                        while ((*string == ',') || (*string == '#')) string++;
+                        if (*string == 0)
+                                break;
+
+                        /* There is more nonwhitespace,  */
+                        /* so it ought to be another number.  */
+                        errno = 0;
+                        /* Parse it.  */
+                        next = strtol (string, &tail, 0);
+                        /* Add it in, if not overflow.  */
+                        if (errno)
+                                printf ("Overflow\n");
+                        else {
+                                locality_vector[l3_count][l3_size++] = next;
+                                //printf("%d ", next);
+                        }
+                        /* Advance past it.  */
+                        string = tail;
+                }
+                //printf("\n");
+        }
+	l3_count++;
+	for(int i = 0; i < 4; i++) {
+		for(int j = 0; j < 40; j++) {
+			fprintf(stderr, "%d ", locality_vector[i][j]);
+		}
+		fprintf(stderr, "\n");
+	}
+	return 0;
+}
+
   static void
 METHOD_FN(process_event_list, int lush_metrics)
 {
@@ -1410,6 +1464,24 @@ METHOD_FN(process_event_list, int lush_metrics)
 	      //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
 	    }
 	  }
+
+	  char * profileL3String = getenv("HPCRUN_PROFILE_L3");
+	  if(profileL3String){
+		  if(0 == strcasecmp(profileL3String, "1")) {
+			  profiling_l3 = true;
+		  } if (0 == strcasecmp(profileL3String, "true")) {
+			  profiling_l3 = true;
+		  } else {
+			  // default;
+                          profiling_l3 = false;
+		  }
+	  } else {
+		  // default;
+		  profiling_l3 = false;
+	  }
+
+	  //until here
+	  reading_locality_vector();	
 
 	}
 #else
@@ -3792,6 +3864,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			//fprintf(stderr, "here4\n");
 			// Read the reuse distance event counters
 			// We assume the reading event is load, store or both.
+			if(!profiling_l3) {
 			uint64_t pmu_counter = 0;
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 			  uint64_t val[3];
@@ -3853,6 +3926,57 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				}
 			}
 
+			} else {
+				// l3 cache profiling starts from here
+				if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
+					int location = -1;
+                                //if(GetVictimL3(&location, curTime) && (dynamic_global_thread_count > 1)) {
+
+                                        sd.L1Sample = false;
+                                        for(int j=0; j < 3; j++) {
+                                                sd.reuseDistance[0][j] = 0;
+                                        }
+                                        //fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
+
+                                        int cur_global_thread_count = global_thread_count;
+                                        int indices[cur_global_thread_count];
+                                        for (int i = 0; i < cur_global_thread_count; i++) {
+                                                indices[i] = i;
+                                        }
+                                        //fprintf(stderr, "in thread %d, before indices[0]: %d, indices[1]: %d, indices[2]: %d, indices[3]: %d\n", TD_GET(core_profile_trace_data.id), indices[0], indices[1], indices[2], indices[3]);
+                                        int wp_index = cur_global_thread_count;
+                                        while (wp_index) {
+                                                int index = rdtsc() % wp_index;
+                                                wp_index--;
+                                                int swap = indices[index];
+                                                indices[index] = indices[wp_index];
+                                                indices[wp_index] = swap;
+                                        }
+					fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3\n");
+				//}
+
+				
+					/*for(int i = 0; i < cur_global_thread_count; i++) {
+                                                uint64_t val[3] = { 0 };
+                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, indices[i]);
+                                                for(int j=0; j < 3; j++) {
+                                                        sd.reuseDistance[0][j] += val[j];
+                                                }
+                                        }
+                                        //fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d, total access to L3 so far: %ld in thread %d\n", location, l3_reuse_distance_event, sd.reuseDistance[0][0], me);
+
+                                        sd.first_accessing_tid = me;
+                                        sd.sampleTime=curTime;
+                                        //sd.loadCount = load_count;
+                                        //sd.storeCount = store_count;
+                                        for(int i = 0; i < cur_global_thread_count; i++) {
+                                                //if(indices[i] != me)
+                                                SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], false, location);
+                                        }*/	
+				}
+				// l3 cache profiling ends here
+
+			}
 			//SubscribeWatchpointShared(&sd, OVERWRITE, false, me, location);
 
 			//fprintf(stderr, "here6\n");

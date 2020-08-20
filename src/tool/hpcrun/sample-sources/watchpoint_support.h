@@ -112,6 +112,7 @@ typedef struct SampleData{
 	WPTriggerActionType preWPAction;
 	bool isSamplePointAccurate;
 	bool isBackTrace;
+	bool L1Sample;
 	ReuseType reuseType;
 	uint64_t eventCountBetweenSamples;
 	uint64_t timeBetweenSamples;
