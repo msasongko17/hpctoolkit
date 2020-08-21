@@ -1127,7 +1127,10 @@ static inline void SetUpTrueSharingMetrics(){
 }
 
 int locality_vector[4][50];
+int l2_locality_vector[503][10];
 int thread_to_l3_mapping[503];
+int thread_to_l2_mapping[503];
+int l2_count = 0;
 int l3_count = 0;
 
 int reading_locality_vector()
@@ -1137,6 +1140,7 @@ int reading_locality_vector()
         char *string = getenv("HPCRUN_THREAD_LOCALITY_MAPPING");
 
         int l3_size = 1;
+	int l2_size = 1;
 
         if(string != NULL) {
                 while (1) {
@@ -1146,10 +1150,18 @@ int reading_locality_vector()
                         /* Skip whitespace by hand, to detect the end.  */
 			if (*string == '#') {
 				locality_vector[l3_count][0] = l3_size-1;
+				l2_locality_vector[l2_count][0] = l2_size-1;
 				l3_count++;
+				l2_count++;
 				l3_size = 1;
+				l2_size = 1;
 			}
-                        while ((*string == ',') || (*string == '#')) string++;
+			if (*string == '%') {
+                                l2_locality_vector[l2_count][0] = l2_size-1;
+                                l2_count++;
+                                l2_size = 1;
+                        }
+                        while ((*string == ',') || (*string == '#') || (*string == '%')) string++;
                         if (*string == 0)
                                 break;
 
@@ -1164,6 +1176,8 @@ int reading_locality_vector()
                         else {
                                 locality_vector[l3_count][l3_size++] = next;
 				thread_to_l3_mapping[next] = l3_count;
+				l2_locality_vector[l2_count][l2_size++] = next;
+                                thread_to_l2_mapping[next] = l2_count;
                                 //printf("%d ", next);
                         }
                         /* Advance past it.  */
@@ -1172,13 +1186,23 @@ int reading_locality_vector()
                 //printf("\n");
         }
 	locality_vector[l3_count][0] = l3_size-1;
+	l2_locality_vector[l2_count][0] = l2_size-1;
 	l3_count++;
+	l2_count++;
+	fprintf(stderr, "l3 affinity:\n");
 	for(int i = 0; i < 4; i++) {
 		for(int j = 0; j < 40; j++) {
 			fprintf(stderr, "%d ", locality_vector[i][j]);
 		}
 		fprintf(stderr, "\n");
 	}
+	fprintf(stderr, "l2 affinity:\n");
+        for(int i = 0; i < 20; i++) {
+                for(int j = 0; j < 10; j++) {
+                        fprintf(stderr, "%d ", l2_locality_vector[i][j]);
+                }
+                fprintf(stderr, "\n");
+        }
 	return 0;
 }
 
@@ -3870,6 +3894,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			// We assume the reading event is load, store or both.
 			if(!profiling_l3) {
 			uint64_t pmu_counter = 0;
+			sd.L1Sample = true;
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
 			  uint64_t val[3];
 			  //fprintf(stderr, "before assert\n");
@@ -3956,19 +3981,19 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 indices[index] = indices[wp_index];
                                                 indices[wp_index] = swap;
                                         }*/
-					fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3 in thread %d\n", me);
+					//fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3 in thread %d\n", me);
 
 					int affinity_l3 = thread_to_l3_mapping[me];
 
-					fprintf(stderr, "thread %d is in the same L3 with: ", me);
+					/*fprintf(stderr, "thread %d is in the same L3 with: ", me);
 					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
 						fprintf(stderr, "%d ", locality_vector[affinity_l3][i+1]);
 					}
-					fprintf(stderr, "\n");
+					fprintf(stderr, "\n");*/
 
 					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
                                                 uint64_t val[3] = { 0 };
-                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
+                                                //linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
                                                 for(int j=0; j < 3; j++) {
                                                         sd.reuseDistance[0][j] += val[j];
                                                 }
@@ -3986,11 +4011,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         		//fprintf(stderr, "location: %d, thread: %d\n", location, me);
                         		if((location != -1) && ArmWatchPointProb(&location, curTime)) {
 
+					int affinity_l2 = thread_to_l2_mapping[me];	
 					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
-						if(locality_vector[affinity_l3][i+1] != me) {
+						bool same_l2 = false;
+						for(int j = 0; j < l2_locality_vector[affinity_l2][0]; j++) {
+							if(l2_locality_vector[affinity_l2][j+1] == locality_vector[affinity_l3][i+1])
+								same_l2 = true;
+						}
+						if(!same_l2 || locality_vector[affinity_l3][i+1] == me) {
 							sd.type = WP_RW;
 							fprintf(stderr, "thread %d is being armed by thread %d\n", locality_vector[affinity_l3][i+1], me);
-                                        		SubscribeWatchpointShared(&sd, OVERWRITE, false, locality_vector[affinity_l3][i+1], location);
+                                        		//SubscribeWatchpointShared(&sd, OVERWRITE, false, locality_vector[affinity_l3][i+1], location);
 						}
                                 	}
 					}
