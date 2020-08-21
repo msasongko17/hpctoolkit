@@ -148,7 +148,7 @@
 #endif
 #include "reuse.h"
 
-#define WAIT_THRESHOLD 10
+#define WAIT_THRESHOLD 2
 int used_wp_count = 0;
 
 //int wp_user_list[MAX_WP_SLOTS];
@@ -181,6 +181,7 @@ int reuse_store_buffer_metric_id = -1; // store the last time we get an availabl
 
 int *reuse_distance_events = NULL;
 int reuse_distance_num_events = 0;
+int l3_reuse_distance_event = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
@@ -2206,7 +2207,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
 
 
 static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-  //fprintf(stderr, "in ReuseTrackerWPCallback\n");
+  fprintf(stderr, "in ReuseTrackerWPCallback\n");
   trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
@@ -3768,7 +3769,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			}
 			//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
-			//fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
+			fprintf(stderr, "sample type: %s in thread %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id));	
 			int64_t storeCurTime = 0;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
 			  	storeCurTime = curTime;
@@ -3932,7 +3933,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			} else {
 				// l3 cache profiling starts from here
 				if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) {
-					int location = -1;
+					//int location = -1;
                                 //if(GetVictimL3(&location, curTime) && (dynamic_global_thread_count > 1)) {
 
                                         sd.L1Sample = false;
@@ -3940,7 +3941,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 sd.reuseDistance[0][j] = 0;
                                         }
                                         //fprintf(stderr, "location %d is available, and l3_reuse_distance_event: %d\n", location, l3_reuse_distance_event);
-
+					/*
                                         int cur_global_thread_count = global_thread_count;
                                         int indices[cur_global_thread_count];
                                         for (int i = 0; i < cur_global_thread_count; i++) {
@@ -3954,8 +3955,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 int swap = indices[index];
                                                 indices[index] = indices[wp_index];
                                                 indices[wp_index] = swap;
-                                        }
-					fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3\n");
+                                        }*/
+					fprintf(stderr, "MEM_LOAD_UOPS_RETIRED.L2_MISS sample is taken to profile L3 in thread %d\n", me);
 
 					int affinity_l3 = thread_to_l3_mapping[me];
 
@@ -3964,6 +3965,35 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						fprintf(stderr, "%d ", locality_vector[affinity_l3][i+1]);
 					}
 					fprintf(stderr, "\n");
+
+					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+                                                uint64_t val[3] = { 0 };
+                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
+                                                for(int j=0; j < 3; j++) {
+                                                        sd.reuseDistance[0][j] += val[j];
+                                                }
+						fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
+                                        }
+
+					int location = -1;
+
+                        		for(int j = 0; j < used_wp_count; j++) {
+                                		if(me == globalWPIsUsers[j]) {
+                                        		location = j;
+                                        		break;
+                                		}
+                        		}
+                        		//fprintf(stderr, "location: %d, thread: %d\n", location, me);
+                        		if((location != -1) && ArmWatchPointProb(&location, curTime)) {
+
+					for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+						if(locality_vector[affinity_l3][i+1] != me) {
+							sd.type = WP_RW;
+							fprintf(stderr, "thread %d is being armed by thread %d\n", locality_vector[affinity_l3][i+1], me);
+                                        		SubscribeWatchpointShared(&sd, OVERWRITE, false, locality_vector[affinity_l3][i+1], location);
+						}
+                                	}
+					}
 
 				//}
 
