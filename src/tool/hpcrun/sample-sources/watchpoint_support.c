@@ -169,6 +169,8 @@ uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
 globalReuseTable_t globalReuseWPs;
 
+globalReuseTable_t globalL3ReuseWPs[4];
+
 typedef struct FdData {
 	int fd;
 	int tid;
@@ -758,7 +760,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		// Does not matter whether it was active or not.
 		// If it was not active, enable it.
 		if((wpi->fileHandle != -1) && (sampleData->first_accessing_tid == wpi->sample.first_accessing_tid)) {
-			//fprintf(stderr, "CreateWatchPointShared is entered with modify\n");
+			fprintf(stderr, "CreateWatchPointShared is entered with modify by thread %d in thread %d\n", TD_GET(core_profile_trace_data.id), tid);
 			CreateWatchPointShared(wpi, sampleData, tid, true);
 			return true;
 		}
@@ -768,6 +770,7 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 		DisArm(wpi);
 	}
 	//fprintf(stderr, "CreateWatchPointShared is entered without modify\n");
+	fprintf(stderr, "CreateWatchPointShared is entered with modify by thread %d in thread %d without modify\n", TD_GET(core_profile_trace_data.id), tid);
 	CreateWatchPointShared(wpi, sampleData, tid, false);
 	return true;
 }
