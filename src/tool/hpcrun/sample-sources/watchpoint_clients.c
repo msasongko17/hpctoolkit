@@ -154,6 +154,7 @@ int used_wp_count = 0;
 //int wp_user_list[MAX_WP_SLOTS];
 #define SAMPLES_POST_FULL_RESET_VAL (1)
 extern int globalWPIsUsers[MAX_WP_SLOTS];
+extern int L3GlobalWPIsUsers[MAX_WP_SLOTS];
 
 int red_metric_id = -1;
 int redApprox_metric_id = -1;
@@ -3875,7 +3876,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                           load_count++;
                         }*/
 
-			if(((sample_count % WAIT_THRESHOLD) == 0) && (me == 0)) {
+			/*if((WAIT_THRESHOLD == sample_count) && (me == 0)) {
 				fprintf(stderr, "threads are selected here\n");
 				if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
 					int cur_global_thread_count = global_thread_count;
@@ -3900,7 +3901,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				for(int i = 0; i < used_wp_count; i++) {
 					fprintf(stderr, "globalWPIsUsers[%d]: %d\n", i, globalWPIsUsers[i]);
 				}
-			}
+			}*/
 			//fprintf(stderr, "sample %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "WP_REUSE in OnSample\n");
 
@@ -4005,6 +4006,34 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			// Read the reuse distance event counters
 			// We assume the reading event is load, store or both.
 			if(!profiling_l3) {
+
+			if((WAIT_THRESHOLD == sample_count) && (me == 0)) {
+                                fprintf(stderr, "threads are selected here\n");
+                                if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
+                                        int cur_global_thread_count = global_thread_count;
+                                        int indices[cur_global_thread_count];
+                                        for (int i = 0; i < cur_global_thread_count; i++) {
+                                                indices[i] = i;
+                                        }
+                                        int wp_index = cur_global_thread_count;
+                                        while (wp_index) {
+                                                int index = rdtsc() % wp_index;
+                                                wp_index--;
+                                                int swap = indices[index];
+                                                indices[index] = indices[wp_index];
+                                                indices[wp_index] = swap;
+                                        }
+                                        for(int i = 0; i < MIN(cur_global_thread_count, wpConfig.maxWP); i++) {
+                                                globalWPIsUsers[i] = indices[i];
+                                                globalReuseWPs.table[i].tid = indices[i];
+                                                used_wp_count++;
+                                        }
+                                }
+                                for(int i = 0; i < used_wp_count; i++) {
+                                        fprintf(stderr, "globalWPIsUsers[%d]: %d\n", i, globalWPIsUsers[i]);
+                                }
+                        }		
+
 			uint64_t pmu_counter = 0;
 			sd.L1Sample = true;
 			for (int i=0; i < MIN(2, reuse_distance_num_events); i++){

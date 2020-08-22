@@ -165,6 +165,8 @@ typedef struct threadDataTableStruct{
 ThreadDataTable_t threadDataTable;
 
 int globalWPIsUsers[MAX_WP_SLOTS];
+int L3GlobalWPIsUsers[4][MAX_WP_SLOTS];
+
 uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
 globalReuseTable_t globalReuseWPs;
