@@ -1412,9 +1412,15 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						wpt.trapped_tid = me;
 						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}*/
-				if(globalReuseWPs.table[location].tid == me) {
+				if(wpi->sample.L1Sample) {
+					if(globalReuseWPs.table[location].tid == me) {
+						wpt.location = location;
+						tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+					}
+				} else {
+					//fprintf(stderr, "not profiling L1\n");
 					wpt.location = location;
-					tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+                                        tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 				}
 				retVal = ALREADY_DISABLED;
 				//}
@@ -1424,6 +1430,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						       //assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
 							threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+							if(wpi->sample.L1Sample) {
 							uint64_t theCounter = globalReuseWPs.table[location].counter;
 							if((theCounter & 1) == 0) {
 								if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
@@ -1437,6 +1444,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 							if(threadDataTable.hashTable[me].watchPointArray[location].sample.first_accessing_tid == me) {
 								numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
 								//fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+							}
 							}
 				       }
 					       break;

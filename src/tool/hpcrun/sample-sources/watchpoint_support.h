@@ -203,6 +203,8 @@ typedef struct globalReuseEntry{
   uint64_t time;
   int tid;
   bool active;
+  uint64_t rd;
+  uint64_t inc;
   char dummy[CACHE_LINE_SZ];
 } globalReuseEntry_t;
 
