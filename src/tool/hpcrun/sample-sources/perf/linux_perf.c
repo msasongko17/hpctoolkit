@@ -162,6 +162,8 @@
 #define PATH_KERNEL_KPTR_RESTICT    "/proc/sys/kernel/kptr_restrict"
 #define PATH_KERNEL_PERF_PARANOID   "/proc/sys/kernel/perf_event_paranoid"
 
+extern int global_thread_count;
+extern int dynamic_global_thread_count;
 
 //******************************************************************************
 // type declarations
@@ -922,6 +924,9 @@ METHOD_FN(gen_event_set, int lush_metrics)
 	event_thread_board[TD_GET(core_profile_trace_data.id)] =  event_thread;
 	fprintf(stderr, "event_thread array is initialized in thread %d\n", TD_GET(core_profile_trace_data.id));
 
+	global_thread_count++;
+	dynamic_global_thread_count++;
+
 	TMSG(LINUX_PERF, "gen_event_set OK");
 }
 
@@ -1102,7 +1107,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 		// overflow event
 		//assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
 		int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
-		fprintf(stderr, "original counter value %ld\n", scaled_val);
+		//fprintf(stderr, "original counter value %ld\n", scaled_val);
 		if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
 				|| scaled_val < 0){
 			//jqswang: TODO: it does not filter out all the invalid values

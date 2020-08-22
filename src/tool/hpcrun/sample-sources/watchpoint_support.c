@@ -777,8 +777,8 @@ static bool ArmWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleDat
 // Per thread initialization
 
 void WatchpointThreadInit(WatchPointUpCall_t func){
-	global_thread_count++;
-	dynamic_global_thread_count++;
+	//global_thread_count++;
+	//dynamic_global_thread_count++;
 	tData.ss.ss_sp = malloc(ALT_STACK_SZ);
 	if (tData.ss.ss_sp == NULL){
 		EMSG("Failed to malloc ALT_STACK_SZ");
