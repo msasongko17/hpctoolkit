@@ -118,6 +118,7 @@ typedef struct SampleData{
 	uint64_t timeBetweenSamples;
 	uint64_t reuseDistance[2][3];
 	uint64_t sampleTime;
+	int L3Id;
 } SampleData_t;
 
 typedef struct WatchPointInfo{

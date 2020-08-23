@@ -1417,12 +1417,12 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 				if(wpi->sample.L1Sample) {
 					if(globalReuseWPs.table[location].tid == me) {
 						wpt.location = location;
-						tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}
 				} else {
 					//fprintf(stderr, "not profiling L1\n");
 					wpt.location = location;
-                                        tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+                                        retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 				}
 				retVal = ALREADY_DISABLED;
 				//}
