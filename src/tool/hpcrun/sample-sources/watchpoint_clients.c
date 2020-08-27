@@ -235,6 +235,7 @@ extern __thread uint64_t wp_dropped;
 extern __thread uint64_t wp_active;
 
 extern globalReuseTable_t globalReuseWPs;
+extern globalReuseTable_t globalStoreReuseWPs;
 
 void SetupWatermarkMetric(int metricId){
   if (curWatermarkId == NUM_WATERMARK_METRICS) {
@@ -2320,6 +2321,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 	  //fprintf(stderr, "reuse in thread %d has been invalidated\n", TD_GET(core_profile_trace_data.id));
   }
   } else {
+	  if(wpi->sample.L3LoadUse) {
 	  if(globalReuseWPs.table[wt->location].tid != me) {
 		  // before
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
@@ -2407,11 +2409,122 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 		}*/
                 		//else
                         		//globalReuseWPs.table[wt->location].inc = inc;
-				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;	
 				globalReuseWPs.table[wt->location].counter++;
 				break;
 			}
 			}
+		}
+	  }
+	  } else if (wpi->sample.L3StoreUse == false) {
+		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
+                if((theCounter & 1) == 0) {
+                if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+                        if(globalReuseWPs.table[wt->location].active) {
+				// before
+				int cur_global_thread_count = global_thread_count;
+
+                                        int affinity_l2 = thread_to_l2_mapping[me];
+
+                                        int indices[cur_global_thread_count];
+                                        for (int i = 0; i < cur_global_thread_count; i++) {
+                                                indices[i] = i;
+                                        }
+                                        int wp_index = cur_global_thread_count;
+                                        while (wp_index) {
+                                                int index = rdtsc() % wp_index;
+                                                wp_index--;
+                                                int swap = indices[index];
+                                                indices[index] = indices[wp_index];
+                                                indices[wp_index] = swap;
+                                        }
+
+					globalStoreReuseWPs.table[wt->location].active = true;
+
+					wpi->sample.L3StoreUse = true;
+
+					int affinity_l3 = thread_to_l3_mapping[me];
+                                        wpi->sample.L3Id = affinity_l3;
+					for(int j=0; j < 3; j++) {
+						wpi->sample.reuseDistance[0][j] = 0;
+					}
+
+                                        for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+                                                uint64_t val[3] = { 0 };
+                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
+                                                for(int j=0; j < 3; j++) {
+                                                        wpi->sample.reuseDistance[0][j] += val[j];
+                                                }
+                                                fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld while handling first store trap\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
+                                        }
+
+                                        for(int i = 0; i < cur_global_thread_count /*locality_vector[affinity_l3][0]*/; i++) {
+                                                //fprintf(stderr, "thread %d is checked to be armed by thread %d\n", indices[i], me);
+                                                bool same_l2 = false;
+                                                for(int j = 0; j < l2_locality_vector[affinity_l2][0]; j++) {
+                                                        if(l2_locality_vector[affinity_l2][j+1] == indices[i]) {
+                                                                same_l2 = true;
+                                                                break;
+                                                        }
+                                                }
+                                                if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
+                                                        //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
+                                                        SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
+                                                }
+                                        }
+				// after
+		  		fprintf(stderr, "first store trap is handled\n");
+				globalReuseWPs.table[wt->location].active = false;
+                                	//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
+                        }	
+                        globalReuseWPs.table[wt->location].counter++;
+                }
+                }
+	  } else if(wpi->sample.L3StoreUse) {
+		uint64_t theCounter = globalStoreReuseWPs.table[wt->location].counter;
+                if((theCounter & 1) == 0) {
+                if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+                        if(globalStoreReuseWPs.table[wt->location].active) {	
+
+				int affinity_l3 = thread_to_l3_mapping[me];
+
+                                if(wpi->sample.L3Id == affinity_l3) {
+                                uint64_t rd = 0;
+                                uint64_t val[3];
+                                for(int i=0; i < 3; i++) {
+                                        val[i] = 0;
+                                }
+                                        
+
+                                for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+                                        uint64_t val1[3] = { 0 };
+                                        linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, locality_vector[affinity_l3][i+1]);
+                                        for(int j=0; j < 3; j++) {
+                                                val[j] += val1[j];
+                                        }
+                                }
+
+                                for(int i=0; i < 3; i++) {
+                                        if(val[i] >= wpi->sample.reuseDistance[0][i]) {
+                                                val[i] -= wpi->sample.reuseDistance[0][i];
+                                        } else {
+                                                globalReuseWPs.table[wt->location].counter++;
+                                                return ALREADY_DISABLED;
+                                        }
+                                }
+                                rd += val[0];
+				ReuseAddDistance(rd, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+                                //fprintf(stderr, "recording reuse distance %ld in a thread %d armed by thread %d with increment %ld\n", rd, me, wpi->sample.first_accessing_tid, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);       
+                                } else {
+                                        //fprintf(stderr, "invalidation in L3 level is detected in a thread %d armed by thread %d\n", me, wpi->sample.first_accessing_tid);   
+                                }
+                                numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+
+				fprintf(stderr, "second store trap is handled\n");
+				globalStoreReuseWPs.table[wt->location].active = false;
+			}
+			globalStoreReuseWPs.table[wt->location].counter++;
+		}
 		}
 	  }
   }
@@ -4087,7 +4200,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			} else {
 
-					if((((sample_count - 1) % WAIT_THRESHOLD) == 0)  && (me == 0)) {
+					if(((sample_count % WAIT_THRESHOLD) == 0)  && (me == 0)) {
                                 		//fprintf(stderr, "threads are selected here\n");
                                 		if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                         		int cur_global_thread_count = global_thread_count;
@@ -4134,9 +4247,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         		//fprintf(stderr, "location: %d, thread: %d\n", location, me);
                         		if((location != -1) && ArmWatchPointProb(&location, curTime)) {
 
-					if (/*strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0*/ (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_L3_HIT_RETIRED.XSNP_MISS",38) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_L3_HIT_RETIRED.XSNP_HITM",38) == 0)) {
+					if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) /*(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L3_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_L3_HIT_RETIRED.XSNP_MISS",38) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_L3_HIT_RETIRED.XSNP_HITM",38) == 0)*/ || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
 
-					sd.L2LoadMiss = true;	
+					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
+						fprintf(stderr, "store sample is handled\n");
+						sd.L3StoreUse = false;
+						sd.type = WP_WRITE;
+					} else {
+						fprintf(stderr, "non store sample is handled, sample_count: %d\n", sample_count);
+						sd.L3LoadUse = true;
+						sd.type = WP_RW;
+					}	
 					int affinity_l3 = thread_to_l3_mapping[me];
 					sd.L3Id = affinity_l3; 
 
@@ -4178,12 +4299,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							}
 						}
 						if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
-							sd.type = WP_RW;
 							//fprintf(stderr, "thread %d is being armed by thread %d\n", indices[i], me);
                                         		SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
 						}
                                 	}
-					} else if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
 					}
 				}	
 				}

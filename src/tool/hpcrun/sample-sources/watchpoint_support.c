@@ -170,6 +170,7 @@ int L3GlobalWPIsUsers[4][MAX_WP_SLOTS];
 uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
 globalReuseTable_t globalReuseWPs;
+globalReuseTable_t globalStoreReuseWPs;
 
 globalReuseTable_t globalL3ReuseWPs[4];
 
@@ -441,6 +442,8 @@ __attribute__((constructor))
 		globalReuseWPs.table[i].time = -1;
 		globalReuseWPs.table[i].active = false;
 		globalReuseWPs.table[i].counter = 0;	
+		globalStoreReuseWPs.table[i].active = false;
+		globalStoreReuseWPs.table[i].counter = 0;
 	}
 
 }

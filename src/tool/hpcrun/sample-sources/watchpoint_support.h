@@ -113,8 +113,8 @@ typedef struct SampleData{
 	bool isSamplePointAccurate;
 	bool isBackTrace;
 	bool L1Sample;
-	bool L2LoadMiss;
-	bool L2StoreMiss;
+	bool L3LoadUse;
+	bool L3StoreUse;
 	ReuseType reuseType;
 	uint64_t eventCountBetweenSamples;
 	uint64_t timeBetweenSamples;
