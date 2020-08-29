@@ -2469,7 +2469,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                 }
                                                 if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
-                                                        SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
+                                                        if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
+								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse while handling first store trap\n", indices[i], me);
+                                                        	wpi->sample.type = WP_RW;
+							}
+                                                        else {
+								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation while handling first store trap\n", indices[i], me);
+                                                        	wpi->sample.type = WP_WRITE; 
+							}
+							SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
                                                 }
                                         }
 				// after
@@ -4190,10 +4198,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         	}	
 
 				for(int i = 0; i < cur_global_thread_count; i++) {
-					if(indices[i] == me)
+					if(indices[i] == me) {
 						sd.type = WP_RW;
-					else
+					} else {
 						sd.type = WP_WRITE;
+					}
 					SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
 				}
 			}
@@ -4252,11 +4261,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
 						fprintf(stderr, "store sample is handled\n");
 						sd.L3StoreUse = false;
-						sd.type = WP_WRITE;
+						sd.type = WP_RW;
 					} else {
 						fprintf(stderr, "non store sample is handled, sample_count: %d\n", sample_count);
 						sd.L3LoadUse = true;
-						sd.type = WP_RW;
+						//sd.type = WP_RW;
 					}	
 					int affinity_l3 = thread_to_l3_mapping[me];
 					sd.L3Id = affinity_l3; 
@@ -4299,6 +4308,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							}
 						}
 						if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
+
+							if(sd.L3LoadUse == true) {
+								if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
+									//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
+									sd.type = WP_RW;
+								} else {
+									//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
+									sd.type = WP_WRITE;
+								}
+							}
+
 							//fprintf(stderr, "thread %d is being armed by thread %d\n", indices[i], me);
                                         		SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
 						}
