@@ -1681,8 +1681,18 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
 	if(ValidateWPData(sampleData) == false) {
 		return false;
 	}
-	//if(profile_l1) {
-	if(threadDataTable.hashTable[me].os_tid != -1) {
+	if(sampleData->L3StoreUse && (TD_GET(core_profile_trace_data.id) == me)) {
+		if(captureValue) {
+			CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
+		}
+                //fprintf(stderr, "Thread %d is arming thread %d in location %d\n", TD_GET(core_profile_trace_data.id), me, location);
+                if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
+                	//LOG to hpcrun log
+                	EMSG("ArmWatchPoint failed for address %p", sampleData->va);
+			return false;
+		}
+		return true;
+	} else if(threadDataTable.hashTable[me].os_tid != -1) {
 		uint64_t theCounter = threadDataTable.hashTable[me].counter[location];
 
                 if((theCounter & 1) == 0) {
@@ -1703,7 +1713,6 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
                         }
                 }	
 	}
-	//}
 	return false;
 }
 

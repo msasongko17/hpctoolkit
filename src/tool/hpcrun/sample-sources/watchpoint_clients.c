@@ -2252,9 +2252,9 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   //fprintf(stderr, "trapped cache line: %lx\n", ALIGN_TO_CACHE_LINE((size_t)(wt->va)));
   //ALIGN_TO_CACHE_LINE((size_t)(data_addr))
 
-  uint64_t numDiffSamples;
+  uint64_t numDiffSamples = 0;
 
-  if(wpi->sample.L1Sample || (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid)) {
+  if(wpi->sample.L1Sample || (wpi->sample.L3LoadUse && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid)) || (wpi->sample.L3StoreUse && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid))) {
   	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
   	//fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
   	//Increment of reuse distance with distance rd is the number of samples 
@@ -2387,12 +2387,24 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				else
 					store_load_ratio = 100.0;
 				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
-				ReuseAddDistance(rd_with_store, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+				//ReuseAddDistance(rd_with_store, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+
+				if(globalReuseWPs.table[wt->location].inc > 0) {
+                                        fprintf(stderr, "recording reuse distance %ld in a different thread with increment %ld\n", rd_with_store, globalReuseWPs.table[wt->location].inc);
+                                        //L3ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
+                                        //ReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+					ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
+                                        numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+                                } else
+                                        globalReuseWPs.table[wt->location].rd = rd_with_store;
+
 				fprintf(stderr, "recording reuse distance with load use: %ld calibrated into %ld in a thread %d armed by thread %d with increment %ld load_count: %d store_count: %d store_load_ratio: %0.2lf", rd, rd_with_store, me, wpi->sample.first_accessing_tid, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, load_count, store_count, store_load_ratio);	
 				} else {
 					//fprintf(stderr, "invalidation in L3 level is detected in a thread %d armed by thread %d\n", me, wpi->sample.first_accessing_tid);
+					if(globalReuseWPs.table[wt->location].inc > 0)
+						numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				}
-				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				globalReuseWPs.table[wt->location].active = false;
 				//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
 			}
@@ -2408,14 +2420,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				uint64_t inc = numDiffSamples;
                 		//int load_difference = load_count - wpi->sample.loadCount;
                 		//int store_difference = store_count - wpi->sample.storeCount;
-                		/*if(globalReuseWPs.table[wt->location].rd > 0) {
+                		if(globalReuseWPs.table[wt->location].rd > 0) {
                         		fprintf(stderr, "recording reuse distance %ld in the same thread with increment %ld\n", globalReuseWPs.table[wt->location].rd, inc);
                         		//L3ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
 					ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
-					//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-                		}*/
-                		//else
-                        		//globalReuseWPs.table[wt->location].inc = inc;
+					numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+                		} else if(globalReuseWPs.table[wt->location].active == true)
+                        		globalReuseWPs.table[wt->location].inc = inc;
+				else
+					numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;	
 				globalReuseWPs.table[wt->location].counter++;
 				break;
@@ -2448,6 +2461,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
 					globalStoreReuseWPs.table[wt->location].active = true;
 					globalStoreReuseWPs.table[wt->location].time = globalReuseWPs.table[wt->location].time;
+					globalStoreReuseWPs.table[wt->location].tid = me;					
 
 					wpi->sample.L3StoreUse = true;
 
@@ -2475,7 +2489,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                                 break;
                                                         }
                                                 }
-                                                if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
+                                                if(!same_l2 || (me == indices[i])) {
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
                                                         if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse while handling first store trap\n", indices[i], me);
@@ -2485,6 +2499,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation while handling first store trap\n", indices[i], me);
                                                         	wpi->sample.type = WP_WRITE; 
 							}
+
+							if(me == indices[i])
+								fprintf(stderr, "thread %d is arming a WP in itself on store use\n");
+
 							SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
                                                 }
                                         }
@@ -2497,6 +2515,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 }
                 }
 	  } else if(wpi->sample.L3StoreUse) {
+		if(globalReuseWPs.table[wt->location].tid != me) {
 		uint64_t theCounter = globalStoreReuseWPs.table[wt->location].counter;
                 if((theCounter & 1) == 0) {
                 if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
@@ -2538,13 +2557,24 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                         store_load_ratio = 100.0;
                                 uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
 
-				ReuseAddDistance(rd_with_store, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+				if(globalStoreReuseWPs.table[wt->location].inc > 0) {
+                                        fprintf(stderr, "recording reuse distance %ld in a different thread with increment %ld on store use\n", rd_with_store, globalStoreReuseWPs.table[wt->location].inc);
+                                        //L3ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
+                                        //ReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+                                        ReuseAddDistance(rd_with_store, globalStoreReuseWPs.table[wt->location].inc);
+                                        numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+                                } else
+                                        globalStoreReuseWPs.table[wt->location].rd = rd_with_store;
+
+				//ReuseAddDistance(rd_with_store, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
 				fprintf(stderr, "recording reuse distance with store use: %ld calibrated into %ld in a thread %d armed by thread %d with increment %ld load_count: %d store_count: %d store_load_ratio: %0.2lf with time: %ld\n", rd, rd_with_store, me, wpi->sample.first_accessing_tid, hpcrun_id2metric(wpi->sample.sampledMetricId)->period, load_count, store_count, store_load_ratio, globalStoreReuseWPs.table[wt->location].time);
                                 //fprintf(stderr, "recording reuse distance %ld in a thread %d armed by thread %d with increment %ld\n", rd, me, wpi->sample.first_accessing_tid, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);       
                                 } else {
                                         fprintf(stderr, "invalidation in L3 level is detected in a thread %d armed by thread %d with time: %ld\n", me, wpi->sample.first_accessing_tid, globalStoreReuseWPs.table[wt->location].time);   
+					if(globalReuseWPs.table[wt->location].inc > 0)
+                                                numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;	
                                 }
-                                numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+                                //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 
 				fprintf(stderr, "second store trap is handled with time: %ld\n", globalStoreReuseWPs.table[wt->location].time);
 				globalStoreReuseWPs.table[wt->location].active = false;
@@ -2552,6 +2582,33 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			globalStoreReuseWPs.table[wt->location].counter++;
 		}
 		}
+	  } else {
+
+		while(1) {
+                        uint64_t theCounter = globalStoreReuseWPs.table[wt->location].counter;
+                        if((theCounter & 1) == 0) {
+                        if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+                                uint64_t inc = numDiffSamples;
+				fprintf(stderr, "handling trap in the same thread on store use\n");
+                                //int load_difference = load_count - wpi->sample.loadCount;
+                                //int store_difference = store_count - wpi->sample.storeCount;
+                                if(globalStoreReuseWPs.table[wt->location].rd > 0) {
+                                        fprintf(stderr, "recording reuse distance %ld in the same thread with increment %ld on store use\n", globalStoreReuseWPs.table[wt->location].rd, inc);
+                                        //L3ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+                                        ReuseAddDistance(globalStoreReuseWPs.table[wt->location].rd, inc);
+                                        numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+                                } else if(globalStoreReuseWPs.table[wt->location].active == true)
+                                        globalStoreReuseWPs.table[wt->location].inc = inc;
+				else
+					numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;	
+                                //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;       
+                                globalStoreReuseWPs.table[wt->location].counter++;
+                                break;
+                        }
+                        }
+                }
+
+	  }
 	  }
   }
 #ifdef REUSE_HISTO
@@ -4077,6 +4134,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			  .preWPAction=theWPConfig->preWPAction,
 			  .first_accessing_tid =me,
 			  .isBackTrace = false,
+			  .L3StoreUse = false
 			};
 #ifdef REUSE_HISTO
 			//fprintf(stderr, "WP_REUSETRACKER in OnSample\n");
@@ -4355,7 +4413,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 								break;
 							}
 						}
-						if(!same_l2 /*|| locality_vector[affinity_l3][i+1] == me*/) {
+						if(!same_l2 || (me == indices[i])) {
 
 							if(sd.L3LoadUse == true) {
 								if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
