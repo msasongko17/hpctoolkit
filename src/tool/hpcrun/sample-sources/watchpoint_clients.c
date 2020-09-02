@@ -1812,6 +1812,7 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   return (uint64_t) (diffWithPeriod.r * proportion);
 }
 
+
 static void UpdateFoundMetrics(cct_node_t * ctxtNode, cct_node_t * oldNode, void * joinNode, int foundMetric, int foundMetricInc){
   // insert a special node
   cct_node_t *node = hpcrun_insert_special_node(oldNode, joinNode);
@@ -4178,7 +4179,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			// We assume the reading event is load, store or both.
 			if(!profiling_l3) {
 
-			if((WAIT_THRESHOLD == sample_count) && (me == 0)) {
+			/*if((WAIT_THRESHOLD == sample_count) && (me == 0)) {
                                 //fprintf(stderr, "threads are selected here\n");
                                 if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                         int cur_global_thread_count = global_thread_count;
@@ -4199,11 +4200,37 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 globalReuseWPs.table[i].tid = indices[i];
                                                 used_wp_count++;
                                         }
-                                }
-                                /*for(int i = 0; i < used_wp_count; i++) {
-                                        fprintf(stderr, "globalWPIsUsers[%d]: %d\n", i, globalWPIsUsers[i]);
-                                }*/
-                        }		
+                                } 
+                        }*/
+
+			if(WAIT_THRESHOLD == sample_count) {
+                                //fprintf(stderr, "threads are selected here\n");
+                                if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
+                                       uint64_t theCounter = globalReuseWPs.counter;
+                                       if(__sync_bool_compare_and_swap(&globalReuseWPs.counter, theCounter, theCounter+1)) {
+                                		// before
+						int location = -1;
+						for(int j = 0; j < wpConfig.maxWP; j++) {
+                                			if(me == globalWPIsUsers[j]) {
+                                        			location = j;
+                                        			break;
+                                			}
+                        			}
+						if (location == -1) {
+							for(int j = 0; j < wpConfig.maxWP; j++) {
+                                                        	if(globalWPIsUsers[j] == -1) {
+                                                                	globalWPIsUsers[j] = me;
+									globalReuseWPs.table[j].tid = me;
+									used_wp_count++;
+                                                                	break;
+                                                        	}
+                                                	}
+						}
+						// after       	
+                                        	globalReuseWPs.counter++;
+                                	} 
+                                }  
+                        }			
 
 			/*
 			uint64_t pmu_counter = 0;

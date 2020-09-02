@@ -445,6 +445,7 @@ __attribute__((constructor))
 		globalStoreReuseWPs.table[i].active = false;
 		globalStoreReuseWPs.table[i].counter = 0;
 	}
+	globalReuseWPs.counter = 0;
 
 }
 

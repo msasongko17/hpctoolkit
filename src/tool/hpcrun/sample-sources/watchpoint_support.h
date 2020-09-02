@@ -212,6 +212,7 @@ typedef struct globalReuseEntry{
 } globalReuseEntry_t;
 
 typedef struct globalReuseTable{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
   struct globalReuseEntry table[MAX_WP_SLOTS];
   //struct SharedData * hashTable;
 } globalReuseTable_t;
