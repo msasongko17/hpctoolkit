@@ -4207,6 +4207,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 //fprintf(stderr, "threads are selected here\n");
                                 if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                        uint64_t theCounter = globalReuseWPs.counter;
+				       if((theCounter & 1) == 0) {
                                        if(__sync_bool_compare_and_swap(&globalReuseWPs.counter, theCounter, theCounter+1)) {
                                 		// before
 						int location = -1;
@@ -4219,16 +4220,20 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						if (location == -1) {
 							for(int j = 0; j < wpConfig.maxWP; j++) {
                                                         	if(globalWPIsUsers[j] == -1) {
+									used_wp_count++;
+									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
                                                                 	globalWPIsUsers[j] = me;
 									globalReuseWPs.table[j].tid = me;
-									used_wp_count++;
+									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
+									//used_wp_count++;
                                                                 	break;
                                                         	}
                                                 	}
 						}
 						// after       	
                                         	globalReuseWPs.counter++;
-                                	} 
+                                	}
+				        } 
                                 }  
                         //}			
 
@@ -4315,6 +4320,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 					if ((accessType == LOAD_AND_STORE) || (accessType == LOAD)) {
                                 		uint64_t theCounter = sample_count_counter;
+						if((theCounter & 1) == 0) {
                                 		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
                                         		if((load_count + store_count) < 100) {
                                                 		load_count++;
@@ -4326,10 +4332,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         		}
                                         		sample_count_counter++;
                                 		}
+						}
                         		}
 
                         		if (accessType == STORE) {
                                 		uint64_t theCounter = sample_count_counter;
+						if((theCounter & 1) == 0) {
                                 		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
                                         		if((load_count + store_count) < 100) {
                                                 		store_count++;
@@ -4341,6 +4349,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         		}
                                         		sample_count_counter++;
                                 		}
+						}
                         		}	
 
 					if(((sample_count % WAIT_THRESHOLD) == 0)  && (me == 0)) {

@@ -67,6 +67,12 @@
 
 //extern int init_adamant;
 
+#define CHANGE_THRESHOLD 100
+
+__thread int wait_threshold = 0;
+extern __thread sample_count;
+extern int used_wp_count;
+
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
@@ -374,6 +380,7 @@ __attribute__((constructor))
 			wpConfig.maxWP = custom_wp_size;
 		else
 			wpConfig.maxWP = i;
+		fprintf(stderr, "wpConfig.maxWP: %d\n", wpConfig.maxWP);
 		//fprintf(stderr, "custom_wp_size is %d\n", custom_wp_size);
 
 		// Should we get the floating point type in an access?
@@ -842,6 +849,33 @@ void WatchpointThreadTerminate(){
 	dynamic_global_thread_count--;
 	ThreadData_t threadData;
 	if(event_type == WP_REUSETRACKER) {
+
+		// before
+		int location = -1;
+                for(int j = 0; j < wpConfig.maxWP; j++) {
+                	if(me == globalWPIsUsers[j]) {
+                		location = j;
+                         	break;
+                	}
+               	}
+		if(location != -1) {
+		while(1) {
+		uint64_t theCounter = globalReuseWPs.counter;
+		if((theCounter & 1) == 0) {
+			if(__sync_bool_compare_and_swap(&globalReuseWPs.counter, theCounter, theCounter+1)) {
+				              
+				globalWPIsUsers[location] = -1;
+				globalReuseWPs.table[location].tid = -1;
+				used_wp_count--;
+				//fprintf(stderr, "WP number %d is released by thread %d\n", location, me);
+                           	// after        
+                                globalReuseWPs.counter++;
+				break;
+			}
+		}
+		}
+		}
+		// after
 
 		threadDataTable.hashTable[me].os_tid = -1;
 		threadData = threadDataTable.hashTable[me];
@@ -1441,6 +1475,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 							if((theCounter & 1) == 0) {
 								if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
 									if(globalReuseWPs.table[location].active) {
+										if (sample_count > wait_threshold) {
+											globalWPIsUsers[location] = -1;
+											globalReuseWPs.table[location].tid = -1;
+											wait_threshold = sample_count + CHANGE_THRESHOLD;
+										        used_wp_count--;
+											//fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold);	
+										}	
 										globalReuseWPs.table[location].active = false;
 										//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
 									}
