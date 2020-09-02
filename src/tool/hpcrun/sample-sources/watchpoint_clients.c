@@ -2254,7 +2254,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
   uint64_t numDiffSamples = 0;
 
-  if(wpi->sample.L1Sample || (wpi->sample.L3LoadUse && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid)) || (wpi->sample.L3StoreUse && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid))) {
+  if(wpi->sample.L1Sample || ((wpi->sample.L3LoadUse || wpi->sample.L3StoreUse) && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid))) {
   	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
   	//fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
   	//Increment of reuse distance with distance rd is the number of samples 
@@ -2363,7 +2363,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                         			return ALREADY_DISABLED;
                 			}
          			}
-				rd += val[0];
+				rd = val[0];
 				// after
 				/*double load_store_ratio = (double) (load_count + store_count) / (double) load_count;
                 		if(load_store_ratio <= 0)
@@ -2548,7 +2548,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                 return ALREADY_DISABLED;
                                         }
                                 }
-                                rd += val[0];
+                                rd = val[0];
 
 				double store_load_ratio;
                                 if(load_count > 1)
@@ -4075,36 +4075,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				fprintf(stderr, "MEM_LOAD_UOPS_L3_HIT_RETIRED.XSNP_HITM sample is detected\n");	
 			else if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
 				fprintf(stderr, "MEM_UOPS_RETIRED:ALL_STORES sample is detected\n");*/
-
-			if (/*strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0*/ (accessType == LOAD_AND_STORE) || (accessType == LOAD)) {
-				uint64_t theCounter = sample_count_counter;
-				if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
-					if((load_count + store_count) < 100) {
-						load_count++;
-					} else {
-						if(load_count < 100)
-							load_count++;
-						if(store_count > 0)
-							store_count--;
-					}
-					sample_count_counter++;
-				}
-			}
-
-			if (/*strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0*/ (accessType == STORE)) {
-				uint64_t theCounter = sample_count_counter;
-                                if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
-					if((load_count + store_count) < 100) {
-                                        	store_count++;
-                                	} else {
-						if(store_count < 100)
-                                        		store_count++;
-						if(load_count > 0)
-                                        		load_count--;
-                                	}
-					sample_count_counter++;
-                                }
-                        }
+	
 
 			sample_count++;
 			int me = TD_GET(core_profile_trace_data.id);
@@ -4315,6 +4286,36 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			} else {
 
+					if ((accessType == LOAD_AND_STORE) || (accessType == LOAD)) {
+                                		uint64_t theCounter = sample_count_counter;
+                                		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
+                                        		if((load_count + store_count) < 100) {
+                                                		load_count++;
+                                        		} else {
+                                                		if(load_count < 100)
+                                                        		load_count++;
+                                                		if(store_count > 0)
+                                                        		store_count--;
+                                        		}
+                                        		sample_count_counter++;
+                                		}
+                        		}
+
+                        		if (accessType == STORE) {
+                                		uint64_t theCounter = sample_count_counter;
+                                		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
+                                        		if((load_count + store_count) < 100) {
+                                                		store_count++;
+                                        		} else {
+                                                		if(store_count < 100)
+                                                        		store_count++;
+                                                		if(load_count > 0)
+                                                        		load_count--;
+                                        		}
+                                        		sample_count_counter++;
+                                		}
+                        		}	
+
 					if(((sample_count % WAIT_THRESHOLD) == 0)  && (me == 0)) {
                                 		//fprintf(stderr, "threads are selected here\n");
                                 		if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
@@ -4367,7 +4368,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
 						//fprintf(stderr, "store sample is handled\n");
 						sd.L3StoreUse = false;
-						sd.type = WP_RW;
+						sd.type = WP_WRITE;
 					} else {
 						//fprintf(stderr, "non store sample is handled, sample_count: %d\n", sample_count);
 						sd.L3LoadUse = true;
