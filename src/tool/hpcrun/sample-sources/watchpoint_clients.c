@@ -4203,7 +4203,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 } 
                         }*/
 
-			if(WAIT_THRESHOLD == sample_count) {
+			//if(WAIT_THRESHOLD == sample_count) {
                                 //fprintf(stderr, "threads are selected here\n");
                                 if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                        uint64_t theCounter = globalReuseWPs.counter;
@@ -4230,7 +4230,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         	globalReuseWPs.counter++;
                                 	} 
                                 }  
-                        }			
+                        //}			
 
 			/*
 			uint64_t pmu_counter = 0;
