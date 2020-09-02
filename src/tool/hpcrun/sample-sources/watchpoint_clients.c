@@ -2315,7 +2315,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     //fprintf(stderr, "at this point 111\n");
     //fprintf(stderr, "at this point 112\n");
       //if(wt->trapped_tid == me) {
-      //fprintf(stderr, "reuse distance is %ld due to absence in thread %d\n", rd, me);
+      //fprintf(stderr, "reuse distance is %ld in thread %d\n", rd, me);
       ReuseAddDistance(rd, inc);
       //} 
   } else {
