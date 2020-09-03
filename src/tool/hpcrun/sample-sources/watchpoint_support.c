@@ -1453,7 +1453,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}*/
 				if(wpi->sample.L1Sample) {
-					if(globalReuseWPs.table[location].tid == me) {
+					if((globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me)) {
+						//fprintf(stderr, "profiling L1\n");
 						wpt.location = location;
 						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}
