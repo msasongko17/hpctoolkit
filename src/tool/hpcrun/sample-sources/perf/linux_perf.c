@@ -1062,7 +1062,8 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 		}
 		//fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
 		//fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
-		val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		val[0] = current->num_overflows * sample_period + scaled_val;
 		//fprintf(stderr, "val[0]: %ld\n", val[0]);
 		current->prev_num_overflows = current->num_overflows;
 		val[1] = 0;
