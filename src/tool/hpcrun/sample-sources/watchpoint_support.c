@@ -67,7 +67,7 @@
 
 //extern int init_adamant;
 
-#define CHANGE_THRESHOLD 100
+//#define CHANGE_THRESHOLD 100
 
 __thread int wait_threshold = 0;
 extern __thread sample_count;
