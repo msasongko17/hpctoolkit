@@ -266,6 +266,7 @@ static inline void DisableWatchpoint(WatchPointInfo_t *wpi) {
 static void * MAPWPMBuffer(int fd){
 	void * buf = mmap(0, 2 * wpConfig.pgsz, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (buf == MAP_FAILED) {
+		fprintf(stderr, "Failed to mmap : %s\n", strerror(errno));
 		EMSG("Failed to mmap : %s\n", strerror(errno));
 		monitor_real_abort();
 	}
@@ -654,6 +655,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 	if(modify) {
 		assert(wpi->fileHandle != -1);
 		assert(wpi->mmapBuffer != 0);
+		//fprintf(stderr, "this region is reached\n");
 		CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
 	} else 
 #endif
@@ -687,6 +689,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 			// insert to perf_fd - tid table here
 			// mmap the file if lbr is enabled
 			if(wpConfig.isLBREnabled) {
+				//fprintf(stderr, "mmapBuffer is initialized\n");
 				wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
 			}
 
@@ -1116,13 +1119,15 @@ static void ConsumeAllRingBufferData(void  *mbuf) {
 
 
 static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
-	//    fprintf(stderr, "in ReadMampBuffer\n");
+	fprintf(stderr, "in ReadMampBuffer\n");
 	struct perf_event_mmap_page *hdr = (struct perf_event_mmap_page *)mbuf;
-	//fprintf(stderr, "in ReadMampBuffer 6\n");
+	fprintf(stderr, "in ReadMampBuffer 6\n");
 	void *data;
 	unsigned long tail;
 	size_t avail_sz, m, c;
 	size_t pgmsk = wpConfig.pgsz - 1;
+	if(hdr == NULL)
+		return -1;
 	/*
 	 * data points to beginning of buffer payload
 	 */
@@ -1131,7 +1136,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	/*
 	 * position of tail within the buffer payload
 	 */
-	//fprintf(stderr, "in ReadMampBuffer 7\n");
+	fprintf(stderr, "in ReadMampBuffer 7\n");
 	tail = hdr->data_tail & pgmsk;
 
 	/*
@@ -1139,7 +1144,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	 *
 	 * data_head, data_tail never wrap around
 	 */
-	//fprintf(stderr, "in ReadMampBuffer 5\n");
+	fprintf(stderr, "in ReadMampBuffer 5\n");
 	avail_sz = hdr->data_head - hdr->data_tail;
 	if (sz > avail_sz) {
 		printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
@@ -1168,17 +1173,17 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	 */
 	m = c < sz ? c : sz;
 
-	//fprintf(stderr, "in ReadMampBuffer 4\n"); 
+	fprintf(stderr, "in ReadMampBuffer 4\n"); 
 	/* copy beginning */
 	memcpy(buf, data + tail, m);
 
 	/*
 	 * copy wrapped around leftover
 	 */
-	//fprintf(stderr, "in ReadMampBuffer 3\n");
+	fprintf(stderr, "in ReadMampBuffer 3\n");
 	if (sz > m)
 		memcpy(buf + m, data, sz - m);
-	//fprintf(stderr, "in ReadMampBuffer 2\n");
+	fprintf(stderr, "in ReadMampBuffer 2\n");
 	hdr->data_tail += sz;
 
 	return 0;
@@ -1367,6 +1372,152 @@ ErrExit:
 	return false;
 }
 
+static bool CollectWatchPointTriggerInfoShared(WatchPointInfo_t  * wpi, WatchPointTrigger_t *wpt, void * context, int me){
+	//struct perf_event_mmap_page * b = wpi->mmapBuffer;
+	struct perf_event_header hdr;
+	//fprintf(stderr, "in CollectWatchPointTriggerInfoShared in thread %d\n", me);
+	if (wpi->mmapBuffer == 0)
+		goto ErrExit2;
+	if (ReadMampBuffer(wpi->mmapBuffer, &hdr, sizeof(struct perf_event_header)) < 0) {
+		EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
+		//fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
+		//monitor_real_abort();
+		goto ErrExit2;
+	}
+	//fprintf(stderr, "in CollectWatchPointTriggerInfo 1\n");
+	switch(hdr.type) {
+		case PERF_RECORD_SAMPLE:
+			assert (hdr.type & PERF_SAMPLE_IP);
+			void *  contextIP = hpcrun_context_pc(context);
+			void *  preciseIP = (void *)-1;
+			void *  patchedIP = (void *)-1;
+			void *  reliableIP = (void *)-1;
+			void *  addr = (void *)-1;
+			if (hdr.type & PERF_SAMPLE_IP){
+				if (ReadMampBuffer(wpi->mmapBuffer, &preciseIP, sizeof(uint64_t)) < 0) {
+					EMSG("Failed to ReadMampBuffer: %s\n", strerror(errno));
+					//fprintf(stderr, "error: Failed to ReadMampBuffer: %s\n", strerror(errno));
+					//monitor_real_abort();
+					goto ErrExit2;
+				}
+
+				if(! (hdr.misc & PERF_RECORD_MISC_EXACT_IP)){
+					//EMSG("PERF_SAMPLE_IP imprecise\n");
+					threadDataTable.hashTable[me].numWatchpointImpreciseIP ++;
+					if(wpConfig.dontFixIP == false) {
+						patchedIP = GetPatchedIPShared(contextIP, me);
+						if(!IsPCSane(contextIP, patchedIP)) {
+							//EMSG("get_previous_instruction  failed \n");
+							threadDataTable.hashTable[me].numInsaneIP ++;
+							goto ErrExit;
+						}
+						reliableIP = patchedIP;
+					} else {
+						// Fake as requested by Xu for reuse clients
+						reliableIP = contextIP-1;
+					}
+					//EMSG("PERF_SAMPLE_IP imprecise: %p patched to %p in WP handler\n", tmpIP, patchedIP);
+				} else {
+#if 0 // Precise PC can be far away in jump/call instructions.
+					// Ensure the "precise" PC is within one instruction from context pc
+					if(!IsPCSane(contextIP, preciseIP)) {
+						tData.numInsaneIP ++;
+						//EMSG("get_previous_instruction failed \n");
+						goto ErrExit;
+					}
+#endif
+					reliableIP = preciseIP;
+					//if(! ((ip <= tmpIP) && (tmpIP-ip < 20))) ConsumeAllRingBufferData(wpi->mmapBuffer);
+					//assert( (ip <= tmpIP) && (tmpIP-ip < 20));
+				}
+			} else {
+				// Should happen only for wpConfig.isLBREnabled==false
+				assert(wpConfig.isLBREnabled==false);
+				// Fall back to old scheme of disassembling and capturing the info
+				if(wpConfig.dontFixIP == false) {
+					fprintf(stderr, "wpConfig.dontFixIP is false\n");
+					patchedIP = GetPatchedIPShared(contextIP, me);
+					if(!IsPCSane(contextIP, patchedIP)) {
+						threadDataTable.hashTable[me].numInsaneIP ++;
+						//EMSG("PERF_SAMPLE_IP imprecise: %p failed to patch in  WP handler, WP dropped\n", tmpIP);
+						goto ErrExit;
+					}
+					reliableIP = patchedIP;
+				}else {
+					fprintf(stderr, "wpConfig.dontFixIP is true\n");
+					// Fake as requested by Xu for reuse clients
+					reliableIP = contextIP-1;
+				}
+			}
+
+			wpt->pc = reliableIP;
+
+			if(wpConfig.dontDisassembleWPAddress == false){
+				//fprintf(stderr, "wpConfig.dontDisassembleWPAddress is false\n");
+				FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
+				if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
+					//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
+					goto ErrExit;
+				}
+				if (wpt->accessLength == 0) {
+					//EMSG("WP triggered 0 access length! at pc=%p\n", wpt->pc);
+					goto ErrExit;
+				}
+
+
+				void * patchedAddr = (void *)-1;
+				// Stack affecting addresses will be off by 8
+				// Some instructions affect the address computing register: mov    (%rax),%eax
+				// Hence, if the addresses do NOT overlap, merely use the Sample address!
+				if(false == ADDRESSES_OVERLAP(addr, wpt->accessLength, wpi->va, wpi->sample.wpLength)) {
+					if ((wpt->accessLength == sizeof(void *)) && (wpt->accessLength == wpi->sample.wpLength) &&  (((addr - wpi->va) == sizeof(void *)) || ((wpi->va - addr) == sizeof(void *))))
+						threadDataTable.hashTable[me].numWatchpointImpreciseAddress8ByteLength ++;
+					else
+						threadDataTable.hashTable[me].numWatchpointImpreciseAddressArbitraryLength ++;
+
+
+					threadDataTable.hashTable[me].numWatchpointImpreciseAddressArbitraryLength ++;
+					patchedAddr = wpi->va;
+				} else {
+					patchedAddr = addr;
+				}
+				wpt->va = patchedAddr;
+			} else {
+				wpt->va = (void *)-1;
+			}
+			wpt->ctxt = context;
+			// We must cleanup the mmap buffer if there is any data left
+			ConsumeAllRingBufferData(wpi->mmapBuffer);
+			return true;
+		case PERF_RECORD_EXIT:
+			EMSG("PERF_RECORD_EXIT sample type %d sz=%d\n", hdr.type, hdr.size);
+			//SkipBuffer(wpi->mmapBuffer , hdr.size - sizeof(hdr));
+			goto ErrExit;
+		case PERF_RECORD_LOST:
+			EMSG("PERF_RECORD_LOST sample type %d sz=%d\n", hdr.type, hdr.size);
+			//SkipBuffer(wpi->mmapBuffer , hdr.size - sizeof(hdr));
+			goto ErrExit;
+		case PERF_RECORD_THROTTLE:
+			EMSG("PERF_RECORD_THROTTLE sample type %d sz=%d\n", hdr.type, hdr.size);
+			//SkipBuffer(wpi->mmapBuffer , hdr.size - sizeof(hdr));
+			goto ErrExit;
+		case PERF_RECORD_UNTHROTTLE:
+			EMSG("PERF_RECORD_UNTHROTTLE sample type %d sz=%d\n", hdr.type, hdr.size);
+			//SkipBuffer(wpi->mmapBuffer , hdr.size - sizeof(hdr));
+			goto ErrExit;
+		default:
+			EMSG("unknown sample type %d sz=%d\n", hdr.type, hdr.size);
+			//SkipBuffer(wpi->mmapBuffer , hdr.size - sizeof(hdr));
+			goto ErrExit;
+	}
+
+ErrExit:
+	// We must cleanup the mmap buffer if there is any data left
+	ConsumeAllRingBufferData(wpi->mmapBuffer);
+ErrExit2:
+	return false;
+}
+
 void DisableWatchpointWrapper(WatchPointInfo_t *wpi){
 	if(wpConfig.isWPModifyEnabled) {
 		DisableWatchpoint(wpi);
@@ -1452,17 +1603,35 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 						wpt.trapped_tid = me;
 						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
 					}*/
-				if(wpi->sample.L1Sample) {
-					if((globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me)) {
-						//fprintf(stderr, "profiling L1\n");
-						wpt.location = location;
-						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+				//if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
+        				//tData.numWatchpointDropped++;
+        				//retVal = DISABLE_WP; // disable if unable to collect any info.
+    				//} else {	
+					if(wpi->sample.L1Sample) {
+						if((globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me)) {
+							//fprintf(stderr, "profiling L1\n");
+							if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
+                                        		tData.numWatchpointDropped++;
+                                        		retVal = DISABLE_WP; // disable if unable to collect any info.
+                                			} else {
+							wpt.location = location;
+							retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+							}
+						}
+					} else {
+						//fprintf(stderr, "not profiling L1\n");
+						//wpt.location = location;
+                                        	//retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+
+						if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
+                                                        tData.numWatchpointDropped++;
+                                                        retVal = DISABLE_WP; // disable if unable to collect any info.
+                                                } else {
+                                                        wpt.location = location;
+                                                        retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+                                                }
 					}
-				} else {
-					//fprintf(stderr, "not profiling L1\n");
-					wpt.location = location;
-                                        retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
-				}
+				//}
 				retVal = ALREADY_DISABLED;
 				//}
 

@@ -1085,7 +1085,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 
 
 	if (event_thread == NULL) {
-                fprintf(stderr, "problem here 2\n");
+                fprintf(stderr, "problem here 2 in thread %d\n", tid);
                 return -1; // something wrong here
         }
 
