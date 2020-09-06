@@ -2252,6 +2252,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
   uint64_t numDiffSamples = 0;
 
+  int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+  bool source_code_line_attribution = false;
+  uint64_t attributed_rd = 0;
+  uint64_t attributed_inc = 0;
+  uint64_t time_distance;
   if(wpi->sample.L1Sample || ((wpi->sample.L3LoadUse || wpi->sample.L3StoreUse) && (TD_GET(core_profile_trace_data.id) == globalReuseWPs.table[wt->location].tid))) {
   	double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
   	numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
@@ -2292,15 +2298,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     //fprintf(stderr, "after assert %d\n", i);
     rd += val[i][0];
   }
-  //}
   // Report a reuse
   // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
 
-  	int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
-
   	//fprintf(stderr, "before time_distance\n");
-  	uint64_t time_distance = rdtsc() - wpi->startTime;
-      	ReuseAddDistance(rd, inc); 
+  	time_distance = rdtsc() - wpi->startTime;
+      	ReuseAddDistance(rd, inc);
+        attributed_rd = rd;
+	attributed_inc = inc;	
+	source_code_line_attribution = true;
   } else {
   }
   } else {
@@ -2350,7 +2356,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                         //L3ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
                                         //ReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
 					ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
+					source_code_line_attribution = true;
                                         numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					attributed_rd = rd_with_store;
+					attributed_inc = globalReuseWPs.table[wt->location].inc;
+					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
 					if (sample_count > wait_threshold) {
                                         	globalWPIsUsers[wt->location] = -1;
@@ -2394,6 +2404,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                         		//L3ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
 					ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
 					numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					source_code_line_attribution = true;
+					attributed_rd = globalReuseWPs.table[wt->location].rd;
+					globalReuseWPs.table[wt->location].inc = inc;
+					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
 					if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
@@ -2543,6 +2557,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				if(globalStoreReuseWPs.table[wt->location].inc > 0) { 
                                         ReuseAddDistance(rd_with_store, globalStoreReuseWPs.table[wt->location].inc);
                                         numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					source_code_line_attribution = true;
+					attributed_rd = rd_with_store;
+					attributed_inc = globalStoreReuseWPs.table[wt->location].inc;
+					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
 					if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
@@ -2582,6 +2600,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                         //L3ReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
                                         ReuseAddDistance(globalStoreReuseWPs.table[wt->location].rd, inc);
                                         numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					source_code_line_attribution = true;
+					attributed_rd = globalStoreReuseWPs.table[wt->location].rd;
+					attributed_inc = inc;
+					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
 					if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
@@ -2612,10 +2634,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 	  }
 	  }
   }
-#ifdef REUSE_HISTO
-#else
+//#ifdef REUSE_HISTO
+//#else
 
   //fprintf(stderr, "this region is executed\n");
+  if (source_code_line_attribution) {
   cct_node_t *reusePairNode;
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
@@ -2637,21 +2660,21 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
       reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
     }
   }
-  cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
+  cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (attributed_rd) });
   //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
   cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
-  reuseTemporal += inc;
+  reuseTemporal += attributed_inc;
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
-    cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = attributed_inc});
     //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
   } else {
-    cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = attributed_inc});
     //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
-#endif
+  }
   return ALREADY_DISABLED;
 }
 
