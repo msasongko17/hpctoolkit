@@ -1119,9 +1119,9 @@ static void ConsumeAllRingBufferData(void  *mbuf) {
 
 
 static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
-	fprintf(stderr, "in ReadMampBuffer\n");
+	//fprintf(stderr, "in ReadMampBuffer\n");
 	struct perf_event_mmap_page *hdr = (struct perf_event_mmap_page *)mbuf;
-	fprintf(stderr, "in ReadMampBuffer 6\n");
+	//fprintf(stderr, "in ReadMampBuffer 6\n");
 	void *data;
 	unsigned long tail;
 	size_t avail_sz, m, c;
@@ -1136,7 +1136,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	/*
 	 * position of tail within the buffer payload
 	 */
-	fprintf(stderr, "in ReadMampBuffer 7\n");
+	//fprintf(stderr, "in ReadMampBuffer 7\n");
 	tail = hdr->data_tail & pgmsk;
 
 	/*
@@ -1144,7 +1144,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	 *
 	 * data_head, data_tail never wrap around
 	 */
-	fprintf(stderr, "in ReadMampBuffer 5\n");
+	//fprintf(stderr, "in ReadMampBuffer 5\n");
 	avail_sz = hdr->data_head - hdr->data_tail;
 	if (sz > avail_sz) {
 		printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
@@ -1173,17 +1173,17 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	 */
 	m = c < sz ? c : sz;
 
-	fprintf(stderr, "in ReadMampBuffer 4\n"); 
+	//fprintf(stderr, "in ReadMampBuffer 4\n"); 
 	/* copy beginning */
 	memcpy(buf, data + tail, m);
 
 	/*
 	 * copy wrapped around leftover
 	 */
-	fprintf(stderr, "in ReadMampBuffer 3\n");
+	//fprintf(stderr, "in ReadMampBuffer 3\n");
 	if (sz > m)
 		memcpy(buf + m, data, sz - m);
-	fprintf(stderr, "in ReadMampBuffer 2\n");
+	//fprintf(stderr, "in ReadMampBuffer 2\n");
 	hdr->data_tail += sz;
 
 	return 0;
@@ -1233,6 +1233,22 @@ static inline void *  GetPatchedIP(void *  contextIP) {
 	}
 	get_previous_instruction(contextIP, &patchedIP, excludeList, numExcludes);
 	return patchedIP;
+}
+
+static inline void *  GetPatchedIPShared(void *  contextIP, int me) {
+        //fprintf(stderr, "in GetPatchedIPShared\n");
+        ThreadData_t threadData = threadDataTable.hashTable[me];
+        void * patchedIP;
+        void * excludeList[MAX_WP_SLOTS] = {0};
+        int numExcludes = 0;
+        for(int idx = 0; idx < wpConfig.maxWP; idx++){
+                if(threadData.watchPointArray[idx].isActive) {
+                        excludeList[numExcludes]=threadData.watchPointArray[idx].va;
+                        numExcludes++;
+                }
+        }
+        get_previous_instruction(contextIP, &patchedIP, excludeList, numExcludes);
+        return patchedIP;
 }
 
 // Gather all useful data when a WP triggers
@@ -1607,6 +1623,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         				//tData.numWatchpointDropped++;
         				//retVal = DISABLE_WP; // disable if unable to collect any info.
     				//} else {	
+					/*
 					if(wpi->sample.L1Sample) {
 						if((globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me)) {
 							//fprintf(stderr, "profiling L1\n");
@@ -1630,12 +1647,46 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                                         wpt.location = location;
                                                         retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
                                                 }
+					}*/
+
+					if(!(wpi->sample.L1Sample) || (wpi->sample.L1Sample && (globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me))) {
+
+						if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
+                                                        tData.numWatchpointDropped++;
+                                                        retVal = DISABLE_WP; // disable if unable to collect any info.
+                                                } else {
+                                                        wpt.location = location;
+                                                        retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+                                                }
 					}
 				//}
-				retVal = ALREADY_DISABLED;
+				//retVal = ALREADY_DISABLED;
 				//}
 
 				switch (retVal) {
+					case DISABLE_WP: {
+            					if(wpi->isActive){
+                					DisableWatchpointWrapper(wpi);
+            					}
+            					// Reset per WP probability
+            					//wpi->samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+						tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
+						threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+						if(wpi->sample.L1Sample) { 
+                                                        uint64_t theCounter = globalReuseWPs.table[location].counter;
+                                                        if((theCounter & 1) == 0) {
+                                                                if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
+									globalReuseWPs.table[location].active = false;
+								}
+							}
+							if(threadDataTable.hashTable[me].watchPointArray[location].sample.first_accessing_tid == me) {
+                                                                numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
+                                                                //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+                                                        }
+						}
+        				}
+        				break;
+
 					case ALREADY_DISABLED: { // Already disabled, perhaps in pre-WP action
 						       //assert(wpi->isActive == false);
 						       tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
