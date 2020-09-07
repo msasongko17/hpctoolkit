@@ -1658,6 +1658,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                                         wpt.location = location;
                                                         retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
                                                 }
+					} else if(wpi->sample.L1Sample) {
+						retVal = ALREADY_DISABLED;
 					}
 				//}
 				//retVal = ALREADY_DISABLED;
