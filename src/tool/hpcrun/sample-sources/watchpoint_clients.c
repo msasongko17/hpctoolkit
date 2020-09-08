@@ -139,6 +139,7 @@
 #endif
 #include "matrix.h"
 #include "myposix.h"
+#include "mymapping.h"
 #define REUSE_HISTO 1
 
 //#define MULTITHREAD_REUSE_HISTO 1
@@ -2317,7 +2318,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
 			if(globalReuseWPs.table[wt->location].active) {
 
-				int affinity_l3 = thread_to_l3_mapping[me];
+				int my_core = sched_getcpu();
+				int affinity_l3 = thread_to_l3_mapping[my_core];
 
 				if(wpi->sample.L3Id == affinity_l3) {
 				uint64_t rd = 0;
@@ -2326,12 +2328,16 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                         val[i] = 0;
                                 }
 
-                        	for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+				int cur_global_thread_count = global_thread_count;
+                        	for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
                                 	uint64_t val1[3] = { 0 };
-                                 	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, locality_vector[affinity_l3][i+1]);
-                                 	for(int j=0; j < 3; j++) {
-                                    		val[j] += val1[j];
-                                    	}
+					int core_id = mapping_vector[i % mapping_size];
+					if(thread_to_l3_mapping[core_id] == affinity_l3) {
+                                 		linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i /*locality_vector[affinity_l3][i+1]*/);
+                                 		for(int j=0; j < 3; j++) {
+                                    			val[j] += val1[j];
+                                    		}
+					}
                                 }
 	
 	 			for(int i=0; i < 3; i++) {
@@ -2441,7 +2447,9 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				// before
 				int cur_global_thread_count = global_thread_count;
 
-                                        int affinity_l2 = thread_to_l2_mapping[me];
+				int my_core = sched_getcpu();
+
+                                        int affinity_l2 = thread_to_l2_mapping[my_core];
 
                                         int indices[cur_global_thread_count];
                                         for (int i = 0; i < cur_global_thread_count; i++) {
@@ -2462,18 +2470,22 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
 					wpi->sample.L3StoreUse = true;
 
-					int affinity_l3 = thread_to_l3_mapping[me];
+					int affinity_l3 = thread_to_l3_mapping[my_core];
                                         wpi->sample.L3Id = affinity_l3;
 					for(int j=0; j < 3; j++) {
 						wpi->sample.reuseDistance[0][j] = 0;
 					}
 
-                                        for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+					//int cur_global_thread_count = global_thread_count;
+                                        for(int i = 0; i < cur_global_thread_count /*locality_vector[affinity_l3][0]*/; i++) {
                                                 uint64_t val[3] = { 0 };
-                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
-                                                for(int j=0; j < 3; j++) {
-                                                        wpi->sample.reuseDistance[0][j] += val[j];
-                                                }
+						int core_id = mapping_vector[i % mapping_size];
+						if(thread_to_l3_mapping[core_id] == affinity_l3) {
+                                                	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i/*locality_vector[affinity_l3][i+1]*/);
+                                                	for(int j=0; j < 3; j++) {
+                                                        	wpi->sample.reuseDistance[0][j] += val[j];
+                                                	}
+						}
                                                 //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld while handling first store trap with sample time: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0], globalStoreReuseWPs.table[wt->location].time);
                                         }
 
@@ -2488,7 +2500,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                 }
                                                 if(!same_l2 || (me == indices[i])) {
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
-                                                        if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
+                                                        int core_id = mapping_vector[indices[i] % mapping_size];
+							if(thread_to_l3_mapping[core_id] == affinity_l3) {
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse while handling first store trap\n", indices[i], me);
                                                         	wpi->sample.type = WP_RW;
 							}
@@ -2518,7 +2531,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
                         if(globalStoreReuseWPs.table[wt->location].active) {	
 
-				int affinity_l3 = thread_to_l3_mapping[me];
+				int my_core = sched_getcpu();
+				int affinity_l3 = thread_to_l3_mapping[my_core];
 
                                 if(wpi->sample.L3Id == affinity_l3) {
                                 uint64_t rd = 0;
@@ -2528,12 +2542,16 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                 }
                                         
 
-                                for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+				int cur_global_thread_count = global_thread_count;
+                                for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
                                         uint64_t val1[3] = { 0 };
-                                        linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, locality_vector[affinity_l3][i+1]);
-                                        for(int j=0; j < 3; j++) {
-                                                val[j] += val1[j];
-                                        }
+					int core_id = mapping_vector[i % mapping_size];
+					if(thread_to_l3_mapping[core_id] == affinity_l3) {
+                                        	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i);
+                                        	for(int j=0; j < 3; j++) {
+                                                	val[j] += val1[j];
+                                        	}
+					}
 					//fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld while handling second store trap with sample time: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val1[0], globalStoreReuseWPs.table[wt->location].time);
                                 }
 
@@ -4093,7 +4111,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			sample_count++;
 			int me = TD_GET(core_profile_trace_data.id);
-	
+
+			int my_core = sched_getcpu();	
+			//fprintf(stderr, "thread %d is sampled in core %d\n", me, sched_getcpu());
 			//fprintf(stderr, "sample type: %s in thread %d, sample_count: %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
 			int64_t storeCurTime = 0;
 			if(accessType == STORE || accessType == LOAD_AND_STORE) {
@@ -4393,21 +4413,23 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						sd.L3LoadUse = true;
 						//sd.type = WP_RW;
 					}	
-					int affinity_l3 = thread_to_l3_mapping[me];
+					int affinity_l3 = thread_to_l3_mapping[my_core];
 					sd.L3Id = affinity_l3; 
 
-                                        for(int i = 0; i < locality_vector[affinity_l3][0]; i++) {
+					int cur_global_thread_count = global_thread_count;
+                                        for(int i = 0; i < cur_global_thread_count; i++) {
                                                 uint64_t val[3] = { 0 };
-                                                linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, locality_vector[affinity_l3][i+1]);
-                                                for(int j=0; j < 3; j++) {
-                                                        sd.reuseDistance[0][j] += val[j];
-                                                }
+						int core_id = mapping_vector[i % mapping_size];
+						if(thread_to_l3_mapping[core_id] == affinity_l3) {
+                                                	linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i/*locality_vector[affinity_l3][i+1]*/);
+                                                	for(int j=0; j < 3; j++) {
+                                                        	sd.reuseDistance[0][j] += val[j];
+                                                	}
+						}
                                                 //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
                                         }
 
-					int cur_global_thread_count = global_thread_count;
-
-					int affinity_l2 = thread_to_l2_mapping[me];	
+					int affinity_l2 = thread_to_l2_mapping[my_core];	
 
                                 	int indices[cur_global_thread_count];
                                 	for (int i = 0; i < cur_global_thread_count; i++) {
@@ -4436,7 +4458,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						if(!same_l2 || (me == indices[i])) {
 
 							if(sd.L3LoadUse == true) {
-								if(thread_to_l3_mapping[indices[i]] == affinity_l3) {
+								int core_id = mapping_vector[indices[i] % mapping_size];
+								if(thread_to_l3_mapping[core_id] == affinity_l3) {
 									//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
 									sd.type = WP_RW;
 								} else {

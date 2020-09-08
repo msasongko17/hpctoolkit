@@ -295,8 +295,10 @@ perf_init()
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
 	//printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
-	if(mapping_size > 0)
+	if(mapping_size > 0) {
+		fprintf(stderr, "thread %d is mapped to core %d\n", TD_GET(core_profile_trace_data.id), mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
+	}
 	et->num_overflows = 0;
 	et->prev_num_overflows = 0;
 	et->event = event;
