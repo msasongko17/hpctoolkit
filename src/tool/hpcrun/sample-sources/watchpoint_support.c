@@ -1147,7 +1147,7 @@ static int ReadMampBuffer(void  *mbuf, void *buf, size_t sz) {
 	//fprintf(stderr, "in ReadMampBuffer 5\n");
 	avail_sz = hdr->data_head - hdr->data_tail;
 	if (sz > avail_sz) {
-		printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
+		//printf("\n sz > avail_sz: sz = %lu, avail_sz = %lu\n", sz, avail_sz);
 		rmb();
 		return -1;
 	}
