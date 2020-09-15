@@ -4239,6 +4239,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
                                                                 	globalWPIsUsers[j] = me;
 									globalReuseWPs.table[j].tid = me;
+									wait_threshold = sample_count + CHANGE_THRESHOLD;
 									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
 									//used_wp_count++;
                                                                 	break;
