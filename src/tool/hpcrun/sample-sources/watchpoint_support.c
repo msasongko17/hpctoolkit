@@ -1607,47 +1607,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 					threadDataTable.hashTable[me].counter[location]++;
 					monitor_real_abort();
 					break;
-				}
-
-				/*if( (false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me))) {
-					tData.numWatchpointDropped++;
-					retVal = DISABLE_WP; // disable if unable to collect any info.
-					wp_dropped++;
-				} else {*/
-					/*tData.numActiveWatchpointTriggers++;
-					if(me == TD_GET(core_profile_trace_data.id)) {
-						wpt.trapped_tid = me;
-						retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
-					}*/
-				//if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
-        				//tData.numWatchpointDropped++;
-        				//retVal = DISABLE_WP; // disable if unable to collect any info.
-    				//} else {	
-					/*
-					if(wpi->sample.L1Sample) {
-						if((globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me)) {
-							//fprintf(stderr, "profiling L1\n");
-							if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
-                                        		tData.numWatchpointDropped++;
-                                        		retVal = DISABLE_WP; // disable if unable to collect any info.
-                                			} else {
-							wpt.location = location;
-							retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
-							}
-						}
-					} else {
-						//fprintf(stderr, "not profiling L1\n");
-						//wpt.location = location;
-                                        	//retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
-
-						if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
-                                                        tData.numWatchpointDropped++;
-                                                        retVal = DISABLE_WP; // disable if unable to collect any info.
-                                                } else {
-                                                        wpt.location = location;
-                                                        retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
-                                                }
-					}*/
+				}	
 
 					if(!(wpi->sample.L1Sample) || (wpi->sample.L1Sample && (globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me))) {
 

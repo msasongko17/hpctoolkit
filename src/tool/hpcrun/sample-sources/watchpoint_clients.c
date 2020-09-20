@@ -2383,12 +2383,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					if(globalReuseWPs.table[wt->location].inc > 0) {
 						numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 						// lock can be released here 
-						if (sample_count > wait_threshold) {
+						/*if (sample_count > wait_threshold) {
                                                 	globalWPIsUsers[wt->location] = -1;
                                                 	globalReuseWPs.table[wt->location].tid = -1;
                                                 	wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 	used_wp_count--;                                                                           
-                                        	}
+                                        	}*/
 					}
 				}
 				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
@@ -2417,12 +2417,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					globalReuseWPs.table[wt->location].inc = inc;
 					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
-					if (sample_count > wait_threshold) {
+					/*if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
                                                 globalReuseWPs.table[wt->location].tid = -1;
                                                 wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 used_wp_count--;                                                                           
-                                        }
+                                        }*/
                 		} else if(globalReuseWPs.table[wt->location].active == true)
                         		globalReuseWPs.table[wt->location].inc = inc;
 				else {
@@ -2588,12 +2588,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					attributed_inc = globalStoreReuseWPs.table[wt->location].inc;
 					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
-					if (sample_count > wait_threshold) {
+					/*if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
                                                 globalReuseWPs.table[wt->location].tid = -1;
                                                 wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 used_wp_count--;                                                                           
-                                        }
+                                        }*/
                                 } else
                                         globalStoreReuseWPs.table[wt->location].rd = rd_with_store;
                                 } else {
@@ -2601,12 +2601,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					if(globalReuseWPs.table[wt->location].inc > 0) {
                                                 numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;	
 						// lock can be released here
-						if (sample_count > wait_threshold) {
+						/*if (sample_count > wait_threshold) {
                                                 	globalWPIsUsers[wt->location] = -1;
                                                 	globalReuseWPs.table[wt->location].tid = -1;
                                                 	wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 	used_wp_count--;                                                                           
-                                        	}
+                                        	}*/
 					}
                                 }
 				globalStoreReuseWPs.table[wt->location].active = false;
@@ -2631,24 +2631,24 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					attributed_inc = inc;
 					time_distance = rdtsc() - wpi->startTime;
 					// lock can be released here
-					if (sample_count > wait_threshold) {
+					/*if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
                                                 globalReuseWPs.table[wt->location].tid = -1;
                                                 wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 used_wp_count--;                                                                           
-                                        }
+                                        }*/
                                 } else if(globalStoreReuseWPs.table[wt->location].active == true) {
                                         globalStoreReuseWPs.table[wt->location].inc = inc;
 				}
 				else {
 					numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 					// lock can be released here
-					if (sample_count > wait_threshold) {
+					/*if (sample_count > wait_threshold) {
                                                 globalWPIsUsers[wt->location] = -1;
                                                 globalReuseWPs.table[wt->location].tid = -1;
                                                 wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                 used_wp_count--;                                                                           
-                                        }
+                                        }*/
 				}	
                                 //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;       
                                 globalStoreReuseWPs.table[wt->location].counter++;
@@ -4356,6 +4356,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                                         	//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
                                                                         	globalWPIsUsers[j] = me;
                                                                         	globalReuseWPs.table[j].tid = me;
+										wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                                         	//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
                                                                         	//used_wp_count++;
                                                                         	break;
@@ -4382,6 +4383,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         		break;
                                 		}
                         		}
+
+					if ((location != -1) && (sample_count > wait_threshold)) {
+                                                globalWPIsUsers[location] = -1;
+                                                globalReuseWPs.table[location].tid = -1;
+                                                wait_threshold = sample_count + CHANGE_THRESHOLD;
+                                                used_wp_count--;                                                                           
+                                        }
+
                         		//fprintf(stderr, "location: %d, thread: %d\n", location, me);
                         		if((location != -1) && ArmWatchPointProb(&location, curTime)) {
 
@@ -4392,7 +4401,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						sd.L3StoreUse = false;
 						sd.type = WP_WRITE;
 					} else {
-						//fprintf(stderr, "non store sample is handled, sample_count: %d\n", sample_count);
+						//fprintf(stderr, "l2 miss sample is handled, sample_count: %d\n", sample_count);
 						sd.L3LoadUse = true;
 						//sd.type = WP_RW;
 					}	
@@ -4401,6 +4410,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					sd.L3Id = affinity_l3; 
 
 					int cur_global_thread_count = global_thread_count;
+					if(sd.L3LoadUse) {
                                         for(int i = 0; i < cur_global_thread_count; i++) {
                                                 uint64_t val[3] = { 0 };
 						int core_id = mapping_vector[i % mapping_size];
@@ -4413,6 +4423,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						}
                                                 //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
                                         }
+					}
 
 					int affinity_l2 = thread_to_l2_mapping[my_core];	
 
