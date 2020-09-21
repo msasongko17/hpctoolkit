@@ -2281,7 +2281,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   uint64_t val[2][3];
 
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-    assert(linux_perf_read_event_counter( reuse_distance_events[i], val[i]) >= 0);
+    assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val[i], false) >= 0);
 
     for(int j=0; j < 3; j++){
       if (val[i][j] >= wpi->sample.reuseDistance[i][j]){
@@ -4246,7 +4246,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         	sd.L1Sample = true;
                         	for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
                           		uint64_t val[3];
-                          		assert(linux_perf_read_event_counter( reuse_distance_events[i], val) >= 0);
+                          		assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val, true) >= 0);
                           		memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);
                           		pmu_counter += val[0];
                         	}	
