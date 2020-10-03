@@ -2284,8 +2284,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   uint64_t val[2][3];
 
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
-    assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val[i]) >= 0);
-    if((val[i][1] < wpi->sample.reuseDistance[i][1]) && (val[i][1] < 500) && ((trapTime - last_sample_timestamp) > (last_sample_timestamp - prev_sample_timestamp)/10)) {
+    assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val[i], false) >= 0);
+    if((val[i][1] < wpi->sample.reuseDistance[i][1]) && (val[i][1] < 300) && ((trapTime - last_sample_timestamp) > 5*(last_sample_timestamp - prev_sample_timestamp)/10)) {
 	    val[i][0] = val[i][0] + hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "calibration happens\n");
     }
@@ -4086,6 +4086,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     case WP_REUSETRACKER: {	
 	
 
+
+
 			sample_count++;
 			int me = TD_GET(core_profile_trace_data.id);
 
@@ -4188,6 +4190,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			// Read the reuse distance event counters
 			// We assume the reading event is load, store or both.
 			if(!profiling_l3) {
+
+
+				int sType = -1;
+
+                            	if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+                              		sType = ALL_STORE;
+                            	else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
+                              		sType = ALL_LOAD;
                                 //fprintf(stderr, "threads are selected here\n");
 				prev_sample_timestamp = last_sample_timestamp;
 				last_sample_timestamp = curTime;
@@ -4257,7 +4267,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         	sd.L1Sample = true;
                         	for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
                           		uint64_t val[3];
-                          		assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val) >= 0);
+					if(((sType == ALL_LOAD) && (i == 0)) || ((sType == ALL_STORE) && (i == 1)))
+                          			assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val, true) >= 0);
+					else
+						assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val, false) >= 0);
 					//fprintf(stderr, "val[0] in sample %d: %ld\n", i, val[0]);
 					//val[1] = 0;
                           		memcpy(sd.reuseDistance[i], val, sizeof(uint64_t)*3);

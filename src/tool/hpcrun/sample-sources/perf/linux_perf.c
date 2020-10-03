@@ -1074,7 +1074,7 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 	}
 }
 
-int linux_perf_read_event_counter_l1(int event_index, uint64_t *val){
+int linux_perf_read_event_counter_l1(int event_index, uint64_t *val, bool use){
         //fprintf(stderr, "this function is executed\n");
         sample_source_t *self = &obj_name();
         event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
@@ -1103,7 +1103,7 @@ int linux_perf_read_event_counter_l1(int event_index, uint64_t *val){
                         hpcrun_stats_num_corrected_reuse_distance_inc(1);
                         scaled_val = 0;
                 }
-		val[0] = current->num_overflows * sample_period + scaled_val;
+		val[0] = (scaled_val > (9 * sample_period / 10) && use) ? current->num_overflows * sample_period : current->num_overflows * sample_period + scaled_val;
                 //fprintf(stderr, "val[0]: %ld\n", val[0]);
                 current->prev_num_overflows = current->num_overflows;
                 val[1] = scaled_val;
