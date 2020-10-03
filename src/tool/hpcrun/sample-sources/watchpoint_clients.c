@@ -2285,10 +2285,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
   for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
     assert(linux_perf_read_event_counter_l1( reuse_distance_events[i], val[i], false) >= 0);
-    if((val[i][1] < wpi->sample.reuseDistance[i][1]) && (val[i][1] < 300) && ((trapTime - last_sample_timestamp) > 5*(last_sample_timestamp - prev_sample_timestamp)/10)) {
+    /*if((val[i][1] < wpi->sample.reuseDistance[i][1]) && (val[i][1] < 300) && ((trapTime - last_sample_timestamp) > 7*(last_sample_timestamp - prev_sample_timestamp)/10)) {
 	    val[i][0] = val[i][0] + hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 	    //fprintf(stderr, "calibration happens\n");
-    }
+    }*/
    val[i][1] = 0; 
    wpi->sample.reuseDistance[i][1] = 0;
 
@@ -2297,13 +2297,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
         val[i][j] -= wpi->sample.reuseDistance[i][j];
       }
       else { //Something wrong happens here and the record is not reliable. Drop it!
-        val[i][j] += hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
+        /*val[i][j] += hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
         if (val[i][j] >= wpi->sample.reuseDistance[i][j]) {
                 val[i][j] -= wpi->sample.reuseDistance[i][j];
         }
-        else {
+        else {*/
                 return ALREADY_DISABLED;
-        }
+        //}
       }
     }
   }
