@@ -448,9 +448,13 @@ __attribute__((constructor))
 		globalWPIsUsers[i] = -1;
 		numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
 		globalReuseWPs.table[i].time = -1;
+		globalReuseWPs.table[i].trap_just_happened = false;
 		globalReuseWPs.table[i].active = false;
-		globalReuseWPs.table[i].counter = 0;	
+		globalReuseWPs.table[i].counter = 0;
+		globalReuseWPs.table[i].node_id = -1;
+		globalReuseWPs.table[i].sampleCountInNode = 0;	
 		globalStoreReuseWPs.table[i].active = false;
+		globalStoreReuseWPs.table[i].trap_just_happened = false;
 		globalStoreReuseWPs.table[i].counter = 0;
 	}
 	globalReuseWPs.counter = 0;

@@ -206,8 +206,10 @@ typedef struct globalReuseEntry{
   uint64_t time;
   int tid;
   bool active;
+  bool trap_just_happened;
   uint64_t rd;
-  uint64_t inc;
+  int node_id;
+  uint64_t sampleCountInNode;
   char dummy[CACHE_LINE_SZ];
 } globalReuseEntry_t;
 
