@@ -1626,6 +1626,9 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                                 }
 					} else if(wpi->sample.L1Sample) {
 						retVal = ALREADY_DISABLED;
+						/*if(globalReuseWPs.table[location].active) {
+							fprintf(stderr, "trap is detected\n");
+						}*/
 					}
 				//}
 				//retVal = ALREADY_DISABLED;
@@ -1673,14 +1676,15 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 											wait_threshold = sample_count + CHANGE_THRESHOLD;
 										        used_wp_count--;
 											//fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold);	
-										}*/	
+										}*/
+										numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
 										globalReuseWPs.table[location].active = false;
 										//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
 									}
 									globalReuseWPs.table[location].counter++;
 								}
 							}
-							if(globalReuseWPs.table[location].tid == me) {
+							/*if(globalReuseWPs.table[location].tid == me) {
 								if (sample_count > wait_threshold) {
                                                                 	globalWPIsUsers[location] = -1;
                                                                 	globalReuseWPs.table[location].tid = -1;
@@ -1693,7 +1697,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                                             	}
 								numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
 								//fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
-							}
+							}*/
 							}
 				       }
 					       break;

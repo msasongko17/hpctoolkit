@@ -4222,21 +4222,21 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							for(int j = 0; j < wpConfig.maxWP; j++) {
                                                         	if(globalWPIsUsers[j] == -1) {
 									used_wp_count++;
-									fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
+									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
                                                                 	globalWPIsUsers[j] = me;
 									globalReuseWPs.table[j].tid = me;
 									wait_threshold = sample_count + CHANGE_THRESHOLD;
 
 									// before
-									/*if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
+									if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
                                                              		{
                                                                         	uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-										fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
+										//fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
                                                                         	if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
-                                                                               		fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
+                                                                               		//fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
                                                                                 	UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
                                                                            	}
-                                                               		}*/
+                                                               		}
 									// after
 									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
 									//used_wp_count++;
@@ -4261,6 +4261,30 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					break;
 				}
 			}
+
+			/*if(globalReuseWPs.table[location].tid == me) {
+                        	if (sample_count > wait_threshold) {
+                         		globalWPIsUsers[location] = -1;
+                               		globalReuseWPs.table[location].tid = -1;
+                                       	//uint64_t sampleCountDiff = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+                                 	//globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+                                  	//fprintf(stderr, "residueSampleCountInPrevThread is assigned with %ld in thread %d\n", sampleCountDiff, me);
+                                 	//wait_threshold = sample_count + CHANGE_THRESHOLD;
+                                	used_wp_count--;
+                         		//fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold); 
+                      		}
+                           	numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;     
+                          	//fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+                    	}*/
+			if ((location != -1) && (sample_count > wait_threshold)) {
+                       		globalWPIsUsers[location] = -1;
+                        	globalReuseWPs.table[location].tid = -1; 
+                            	globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+				//fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
+                          	used_wp_count--;                                                                     
+                  	}
+	
+
 			//fprintf(stderr, "location: %d, thread: %d\n", location, me);
 			if((location != -1) && ArmWatchPointProb(&location, curTime)) {
 
