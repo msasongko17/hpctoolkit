@@ -194,6 +194,8 @@ typedef struct fdDataTableStruct{
 
 FdDataTable_t fdDataTable = {.counter = 0};
 
+//extern uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetricId, double proportion);
+
 int fdDataInsert(int fd, pid_t os_tid, int tid) {
 	int idx = fd % 503;
 	//printf("fd: %d is inserted to index: %d\n", fd, idx);
@@ -1682,7 +1684,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 								if (sample_count > wait_threshold) {
                                                                 	globalWPIsUsers[location] = -1;
                                                                 	globalReuseWPs.table[location].tid = -1;
-                                                               		//wait_threshold = sample_count + CHANGE_THRESHOLD;
+									//uint64_t sampleCountDiff = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+									//globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+                                                               		//fprintf(stderr, "residueSampleCountInPrevThread is assigned with %ld in thread %d\n", sampleCountDiff, me);
+									//wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                                 	used_wp_count--;
                                                                                         //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold); 
                                                             	}

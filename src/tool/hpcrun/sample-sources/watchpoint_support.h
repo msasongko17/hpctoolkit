@@ -190,6 +190,7 @@ extern void IPCAllSharingWPConfigOverride(void*);
 extern void RedSpyWPConfigOverride(void *v);
 extern void LoadSpyWPConfigOverride(void *v);
 extern bool WatchpointClientActive();
+//extern inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int pebsMetricId, double proportion);
 extern void DisableWatchpointWrapper(WatchPointInfo_t *wpi);
 
 static inline  uint64_t rdtsc(){
@@ -207,9 +208,10 @@ typedef struct globalReuseEntry{
   int tid;
   bool active;
   bool trap_just_happened;
-  uint64_t rd;
+  //uint64_t rd;
   int node_id;
   uint64_t sampleCountInNode;
+  uint64_t residueSampleCountInPrevThread;
   char dummy[CACHE_LINE_SZ];
 } globalReuseEntry_t;
 

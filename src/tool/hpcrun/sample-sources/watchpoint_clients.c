@@ -846,7 +846,7 @@ static void ClientTermination(){
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
-	  fprintf(stderr, "the bin info is dumped\n");
+	  //fprintf(stderr, "the bin info is dumped\n");
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
 	  WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
@@ -874,7 +874,7 @@ static void ClientTermination(){
       {
 #ifdef REUSE_HISTO
 	//sample_count++;
-	fprintf(stderr, "sample_count: %ld\n", sample_count);
+	/*fprintf(stderr, "sample_count: %ld\n", sample_count);
 	fprintf(stderr, "wp_arming_count: %ld\n", wp_arming_count);
 	fprintf(stderr, "trap_count: %ld\n", trap_count);
 	fprintf(stderr, "create_wp_count: %ld\n", create_wp_count);
@@ -888,13 +888,13 @@ static void ClientTermination(){
 	fprintf(stderr, "wp_count1: %ld\n", wp_count1);
 	fprintf(stderr, "wp_count2: %ld\n", wp_count2);
 	fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
-	fprintf(stderr, "wp_active: %ld\n", wp_active);
+	fprintf(stderr, "wp_active: %ld\n", wp_active);*/
 
 	//fprintf(stderr, "in WP_REUSETRACKER\n");
 	uint64_t val[3];
 	//fprintf(stderr, "FINAL_COUNTING:");
 	if (reuse_output_trace == false){ //dump the bin info
-	  fprintf(stderr, "the bin info is dumped\n");
+	  //fprintf(stderr, "the bin info is dumped\n");
 	  //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
 	  //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
 	  WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
@@ -905,8 +905,8 @@ static void ClientTermination(){
 	  }
 	}
 
-	fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
-	fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+	//fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+	//fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
 	WriteWitchTraceOutput("FINAL_COUNTING:");
 	for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
 	  assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
@@ -2450,6 +2450,22 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
                         if(globalReuseWPs.table[wt->location].active) {
 				// before
+                                uint64_t theCounter = sample_count_counter;
+                                if((theCounter & 1) == 0) {
+                                	if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
+                                     		if((load_count + store_count) < 100) {
+                                                	store_count++;
+                                           	} else {
+                                               		if(store_count < 100)
+                                                 		store_count++;
+                                             		if(load_count > 0)
+                                                          	load_count--;
+                                           	}
+                                          	sample_count_counter++;
+                                	}
+                       		}
+				//after
+
 				int cur_global_thread_count = global_thread_count;
 
 				int my_core = sched_getcpu();
@@ -4206,10 +4222,22 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							for(int j = 0; j < wpConfig.maxWP; j++) {
                                                         	if(globalWPIsUsers[j] == -1) {
 									used_wp_count++;
-									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
+									fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
                                                                 	globalWPIsUsers[j] = me;
 									globalReuseWPs.table[j].tid = me;
 									wait_threshold = sample_count + CHANGE_THRESHOLD;
+
+									// before
+									/*if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
+                                                             		{
+                                                                        	uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+										fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
+                                                                        	if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
+                                                                               		fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
+                                                                                	UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
+                                                                           	}
+                                                               		}*/
+									// after
 									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
 									//used_wp_count++;
                                                                 	break;
@@ -4295,7 +4323,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						}
                         		}
 
-                        		if (accessType == STORE) {
+                        		/*if (accessType == STORE) {
                                 		uint64_t theCounter = sample_count_counter;
 						if((theCounter & 1) == 0) {
                                 		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
@@ -4310,7 +4338,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         		sample_count_counter++;
                                 		}
 						}
-                        		}	
+                        		}*/	
 					
 					if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                        		uint64_t theCounter = globalReuseWPs.counter;
@@ -4333,6 +4361,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                                         	globalReuseWPs.table[j].tid = me;
 										wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                                         	//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
+										if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
+										{
+											uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+											if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
+												//fprintf(stderr, "sampleCountDiff is updated by %ld\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
+												UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
+											}
+										}
+
                                                                         	//used_wp_count++;
                                                                         	break;
                                                                 	}
@@ -4366,6 +4403,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						globalReuseWPs.table[location].sampleCountInNode = 0;
                                                 //wait_threshold = sample_count + CHANGE_THRESHOLD;
 						globalReuseWPs.table[location].trap_just_happened = false;
+						globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
                                                 used_wp_count--;                                                                           
                                         }
 
@@ -4376,10 +4414,16 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							globalReuseWPs.table[location].trap_just_happened = false;
 							if(globalReuseWPs.table[location].node_id == hpcrun_cct_persistent_id(node)) {
 								// here
-								//fprintf(stderr, "watermark metric is incremented by %ld\n", globalReuseWPs.table[location].sampleCountInNode);
+								//fprintf(stderr, "watermark metric is incremented by %ld in thread %d\n", globalReuseWPs.table[location].sampleCountInNode, me);
 								
-								if(GetWeightedMetricDiff(node, sampledMetricId, 1.0) >= globalReuseWPs.table[location].sampleCountInNode)
+								/*if(GetWeightedMetricDiff(node, sampledMetricId, 1.0) >= globalReuseWPs.table[location].sampleCountInNode)
+								{
+									fprintf(stderr, "watermark metric is incremented by %ld in thread %d\n", globalReuseWPs.table[location].sampleCountInNode, me);
 									UpdateWatermarkMetric(node, sampledMetricId, globalReuseWPs.table[location].sampleCountInNode);	
+								}*/
+								uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+								if(sampleCountDiff > 1)
+									UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - 1);
 							}
 						}
 					if(ArmWatchPointProb(&location, curTime)) {

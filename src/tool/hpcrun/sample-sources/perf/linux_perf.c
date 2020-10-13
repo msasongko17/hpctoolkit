@@ -924,7 +924,7 @@ METHOD_FN(gen_event_set, int lush_metrics)
 	}
 
 	event_thread_board[TD_GET(core_profile_trace_data.id)] =  event_thread;
-	fprintf(stderr, "event_thread array is initialized in thread %d\n", TD_GET(core_profile_trace_data.id));
+	//fprintf(stderr, "event_thread array is initialized in thread %d\n", TD_GET(core_profile_trace_data.id));
 
 	global_thread_count++;
 	dynamic_global_thread_count++;
