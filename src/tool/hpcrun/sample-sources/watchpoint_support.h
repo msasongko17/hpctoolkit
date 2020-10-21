@@ -155,6 +155,7 @@ typedef struct WPConfig {
 	bool isLBREnabled;
 	bool isWPModifyEnabled;
 	bool getFloatType;
+	bool cachelineInvalidation;
 	int signalDelivered;
 	size_t pgsz;
 	ReplacementPolicy replacementPolicy;

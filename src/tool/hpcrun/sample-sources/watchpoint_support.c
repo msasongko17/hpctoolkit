@@ -439,7 +439,21 @@ __attribute__((constructor))
 			wpConfig.dontDisassembleWPAddress = false;
 		}
 
-	
+		char * cachelineInvalidation = getenv("HPCRUN_WP_CACHELINE_INVALIDATION");
+                if(cachelineInvalidation){
+                        if(0 == strcasecmp(cachelineInvalidation, "1")) {
+                                wpConfig.cachelineInvalidation = true;
+                        } if (0 == strcasecmp(cachelineInvalidation, "true")) {
+                                wpConfig.cachelineInvalidation = true;
+                        } else {
+                                // default;
+                                wpConfig.cachelineInvalidation = false;
+                        }
+                } else {
+                        // default;
+                        wpConfig.cachelineInvalidation = false;
+                }
+
 	for(int i = 0; i < 503; i++) {
 		for(int j = 0; j < MAX_WP_SLOTS; j++) {
 			threadDataTable.hashTable[i].counter[j] = 0;	

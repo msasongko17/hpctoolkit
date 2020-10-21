@@ -2523,6 +2523,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                         }
                                                 }
                                                 if(!same_l2 /*|| (me == indices[i])*/) {
+
+							if(wpConfig.cachelineInvalidation) {
+                                                        	int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                                        	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                                        	wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
+                                                        	wpi->sample.wpLength = MAX_WP_LENGTH;
+                                                        	fprintf(stderr, "This region is executed\n");
+                                                	}
+
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
                                                         int core_id = mapping_vector[indices[i] % mapping_size];
 							if(thread_to_l3_mapping[core_id] == affinity_l3) {
@@ -4322,6 +4331,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					if(indices[i] == me) {
 						sd.type = WP_RW;
 					} else {
+						if(wpConfig.cachelineInvalidation) {
+							int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                          				int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                          				sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                          				sd.wpLength = MAX_WP_LENGTH;
+							//fprintf(stderr, "This region is executed\n");
+						}
 						sd.type = WP_WRITE;
 					}
 					SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
@@ -4516,6 +4532,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							}
 						}
 						if(!same_l2 /*|| (me == indices[i])*/) {
+
+							if(wpConfig.cachelineInvalidation) {
+                                                        	int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                                        	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                                        	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                                        	sd.wpLength = MAX_WP_LENGTH;
+                                                        	fprintf(stderr, "This region is executed\n");
+                                                	}
 
 							if(sd.L3LoadUse == true) {
 								if(thread_to_l3_mapping[core_id] == affinity_l3) {
