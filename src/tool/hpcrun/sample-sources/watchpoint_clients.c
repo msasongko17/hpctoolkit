@@ -2529,7 +2529,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                         	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                                                         	wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
                                                         	wpi->sample.wpLength = MAX_WP_LENGTH;
-                                                        	fprintf(stderr, "This region is executed\n");
+                                                        	//fprintf(stderr, "This region is executed\n");
                                                 	}
 
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
@@ -4327,8 +4327,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                           		pmu_counter += val[0];
                         	}	
 
+				void * original_va = sd.va;
+				int original_wpLength = sd.wpLength;
 				for(int i = 0; i < cur_global_thread_count; i++) {
 					if(indices[i] == me) {
+						if(wpConfig.cachelineInvalidation) {
+							sd.va = original_va;
+							sd.wpLength = original_wpLength;
+						}
 						sd.type = WP_RW;
 					} else {
 						if(wpConfig.cachelineInvalidation) {
@@ -4538,7 +4544,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                         	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                                                         	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
                                                         	sd.wpLength = MAX_WP_LENGTH;
-                                                        	fprintf(stderr, "This region is executed\n");
+                                                        	//fprintf(stderr, "This region is executed\n");
                                                 	}
 
 							if(sd.L3LoadUse == true) {
