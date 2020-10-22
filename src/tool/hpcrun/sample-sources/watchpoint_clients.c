@@ -211,7 +211,7 @@ extern WPConfig_t wpConfig;
 
 AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory access can be used to subscribe the watchpoint
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
-ReuseType reuse_profile_type = REUSE_TEMPORAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
+ReuseType reuse_profile_type = REUSE_SPATIAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
 bool profiling_l3 = false;
 //#endif
@@ -1215,7 +1215,7 @@ int reading_locality_vector()
 		fprintf(stderr, "\n");
 	}
 	fprintf(stderr, "l2 affinity:\n");
-        for(int i = 0; i < 20; i++) {
+        for(int i = 0; i < 40; i++) {
                 for(int j = 0; j < 10; j++) {
                         fprintf(stderr, "%d ", l2_locality_vector[i][j]);
                 }
@@ -1530,7 +1530,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	  reading_locality_vector();	
 
 	}
-#else
+//#else
 	{
 	  char * monitor_type_str = getenv("HPCRUN_WP_REUSE_PROFILE_TYPE");
 	  if(monitor_type_str){
@@ -2242,7 +2242,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   else { // REUSE_SPATIAL
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
-    fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
     if (reuse_concatenate_use_reuse){
       reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
     }else{
@@ -2273,6 +2273,30 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
    return ALREADY_DISABLED;
    }*/
 
+typedef struct FalseSharingLocs{
+  size_t va;
+  int wpLen;
+}FalseSharingLocs;
+
+// getting all false sharing memory regions
+static inline void GetAllFalseSharingLocations(size_t va, int accessLen, size_t baseAddr, int maxFSLength, int * wpSizes, int curWPSizeIdx, int totalWPSizes, FalseSharingLocs * fsl, int * numFSLocs){
+  int curWPSize = wpSizes[curWPSizeIdx];
+  for(int i = 0; i < maxFSLength/curWPSize; i ++) {
+    size_t curAddr = baseAddr + i * curWPSize;
+    int overlapLen = GET_OVERLAP_BYTES(curAddr, curWPSize, va, accessLen);
+    if(0 >= overlapLen) {
+      fsl[*numFSLocs].va = curAddr;
+      fsl[*numFSLocs].wpLen = curWPSize;
+      (*numFSLocs)++;
+    }else if (curWPSize != overlapLen) {
+      if(curWPSizeIdx+1 < totalWPSizes) {
+        GetAllFalseSharingLocations(va, accessLen, curAddr, curWPSize, wpSizes, curWPSizeIdx+1, totalWPSizes, fsl, numFSLocs);
+      }
+    } else {
+      // Nop
+    }
+  }
+}
 
 static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseTrackerWPCallback\n");
@@ -2542,6 +2566,35 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation while handling first store trap\n", indices[i], me);
                                                         	wpi->sample.type = WP_WRITE; 
 							}
+
+							// before
+							if(thread_to_l3_mapping[core_id] == affinity_l3) {
+                                                                        //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
+                                                        	if (reuse_profile_type == REUSE_SPATIAL){
+                                                                	int wpSizes[] = {8, 4, 2, 1};
+                                                                	FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
+                                                                	int numFSLocs = 0;
+                                                                	GetAllFalseSharingLocations((size_t)wpi->sample.va, wpi->sample.wpLength, ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                                                                        if (numFSLocs > 0) {
+                                                                                        //fprintf(stderr, "false sharing is searched\n");
+                                                                        	int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
+                                                                       		wpi->sample.va = (void *)falseSharingLocs[idx].va;
+										wpi->sample.wpLength = falseSharingLocs[idx].wpLen;
+                                                                        }
+                                                          	}
+                                                                wpi->sample.type = WP_RW;
+                                         		} else {
+								if(wpConfig.cachelineInvalidation) {
+                                                               		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                                                   	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                                                        wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
+                                                                        wpi->sample.wpLength = MAX_WP_LENGTH;
+                                                                                //fprintf(stderr, "This region is executed\n");
+                                                         	}
+                                                            	wpi->sample.type = WP_WRITE;
+							}
+							// after
+
 
 							/*if(me == indices[i])
 								fprintf(stderr, "thread %d is arming a WP in itself on store use\n");*/
@@ -3261,6 +3314,7 @@ int static inline GetFloorWPLengthAtAddress(void * address, int accessLen){
   }
 }
 
+/*
 typedef struct FalseSharingLocs{
   size_t va;
   int wpLen;
@@ -3284,7 +3338,7 @@ static inline void GetAllFalseSharingLocations(size_t va, int accessLen, size_t 
       // Nop
     }
   }
-}
+}*/
 
 #define PAGEMAP_ENTRY 8
 #define GET_BIT(X,Y) (X & ((uint64_t)1<<Y)) >> Y
@@ -4537,24 +4591,54 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 								break;
 							}
 						}
-						if(!same_l2 /*|| (me == indices[i])*/) {
-
-							if(wpConfig.cachelineInvalidation) {
-                                                        	int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
-                                                        	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
-                                                        	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
-                                                        	sd.wpLength = MAX_WP_LENGTH;
-                                                        	//fprintf(stderr, "This region is executed\n");
-                                                	}
+						if(!same_l2 /*|| (me == indices[i])*/) {	
 
 							if(sd.L3LoadUse == true) {
 								if(thread_to_l3_mapping[core_id] == affinity_l3) {
 									//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
+									if (reuse_profile_type == REUSE_SPATIAL){
+										int wpSizes[] = {8, 4, 2, 1};
+                            							FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
+                            							int numFSLocs = 0;
+                            							GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                            							if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
+                              								sd.va = data_addr;
+                              								sd.reuseType = REUSE_TEMPORAL;
+											sd.wpLength = 1;
+                              								//fprintf(stderr, "REUSE_TEMPORAL is activated\n");
+                            							} else {
+                              								//fprintf(stderr, "false sharing is searched\n");
+                              								int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
+                              								sd.va = (void *)falseSharingLocs[idx].va;
+											sd.wpLength = falseSharingLocs[idx].wpLen;
+                              								sd.reuseType = REUSE_SPATIAL;
+                            							}	
+									} else {
+
+										sd.reuseType = REUSE_TEMPORAL;
+										sd.va = data_addr;
+										sd.wpLength = 1;
+									}
 									sd.type = WP_RW;
 								} else {
 									//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
+									if(wpConfig.cachelineInvalidation) {
+                                                        			int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                                        			int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                                        			sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                                        			sd.wpLength = MAX_WP_LENGTH;
+                                                        			//fprintf(stderr, "This region is executed\n");
+                                                			}
 									sd.type = WP_WRITE;
 								}
+							} else {
+								if(wpConfig.cachelineInvalidation) {
+                                                               		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                                                	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                                                	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                                                	sd.wpLength = MAX_WP_LENGTH;
+                                                                                //fprintf(stderr, "This region is executed\n");
+                                                        	}
 							}
 
 							//fprintf(stderr, "thread %d mapped to core %d is being armed by thread %d mapped to core %d\n", indices[i], core_id, me, my_core);
