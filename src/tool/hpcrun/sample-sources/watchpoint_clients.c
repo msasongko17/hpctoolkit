@@ -932,7 +932,7 @@ static void ClientTermination(){
       hpcrun_stats_num_trueWWIns_inc(trueWWIns);
       hpcrun_stats_num_trueRWIns_inc(trueRWIns);
       hpcrun_stats_num_trueWRIns_inc(trueWRIns);
-      fprintf(stderr, "sample_count: %ld\n", sample_count);
+      //fprintf(stderr, "sample_count: %ld\n", sample_count);
 
     default:
       break;
@@ -1207,7 +1207,7 @@ int reading_locality_vector()
 	l2_locality_vector[l2_count][0] = l2_size-1;
 	l3_count++;
 	l2_count++;
-	fprintf(stderr, "l3 affinity:\n");
+	/*fprintf(stderr, "l3 affinity:\n");
 	for(int i = 0; i < 4; i++) {
 		for(int j = 0; j < 40; j++) {
 			fprintf(stderr, "%d ", locality_vector[i][j]);
@@ -1220,7 +1220,7 @@ int reading_locality_vector()
                         fprintf(stderr, "%d ", l2_locality_vector[i][j]);
                 }
                 fprintf(stderr, "\n");
-        }
+        }*/
 	return 0;
 }
 
@@ -1240,7 +1240,7 @@ METHOD_FN(process_event_list, int lush_metrics)
     if (hpcrun_ev_is(event, wpClientConfig[i].name)) {
       theWPConfig  = &wpClientConfig[i];
       if(theWPConfig->id == WP_COMDETECTIVE)
-	fprintf(stderr, "watchpoint client configuration is retrieved and the id is WP_COMDETECTIVE\n");
+	//fprintf(stderr, "watchpoint client configuration is retrieved and the id is WP_COMDETECTIVE\n");
       break;
     }
   }
@@ -1347,7 +1347,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	    //reuse_bin_start = 4000;
 	    reuse_bin_start = 82;
 	    reuse_bin_ratio = 2;
-	    fprintf(stderr, "default configuration is applied\n");
+	    //fprintf(stderr, "default configuration is applied\n");
 	  }
 	  if (reuse_output_trace == false){
 
@@ -2558,14 +2558,14 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
                                                         //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
                                                         int core_id = mapping_vector[indices[i] % mapping_size];
-							if(thread_to_l3_mapping[core_id] == affinity_l3) {
+							/*if(thread_to_l3_mapping[core_id] == affinity_l3) {
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse while handling first store trap\n", indices[i], me);
                                                         	wpi->sample.type = WP_RW;
 							}
                                                         else {
 								//fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation while handling first store trap\n", indices[i], me);
                                                         	wpi->sample.type = WP_WRITE; 
-							}
+							}*/
 
 							// before
 							if(thread_to_l3_mapping[core_id] == affinity_l3) {
@@ -2576,12 +2576,14 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                                 	int numFSLocs = 0;
                                                                 	GetAllFalseSharingLocations((size_t)wpi->sample.va, wpi->sample.wpLength, ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
                                                                         if (numFSLocs > 0) {
-                                                                                        //fprintf(stderr, "false sharing is searched\n");
+                                                                                //fprintf(stderr, "false sharing is searched by store use\n");
                                                                         	int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
                                                                        		wpi->sample.va = (void *)falseSharingLocs[idx].va;
 										wpi->sample.wpLength = falseSharingLocs[idx].wpLen;
                                                                         }
-                                                          	}
+                                                          	} else {
+									//fprintf(stderr, "store use tries to detect temporal reuse\n");
+								}
                                                                 wpi->sample.type = WP_RW;
                                          		} else {
 								if(wpConfig.cachelineInvalidation) {
@@ -2590,7 +2592,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                                         wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
                                                                         wpi->sample.wpLength = MAX_WP_LENGTH;
                                                                                 //fprintf(stderr, "This region is executed\n");
-                                                         	}
+									//fprintf(stderr, "store use tries to detect cacheline invalidation");
+                                                         	} else {
+									//fprintf(stderr, "store use tries to detect true sharing");
+								}
                                                             	wpi->sample.type = WP_WRITE;
 							}
 							// after
@@ -2892,7 +2897,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
 	int obj_id2 = get_object_id_by_address(wt->va);
 	// debugging starts
 	if((obj_id1 == obj_id2) && (obj_id1 == 998)) {
-	  fprintf(stderr, "false sharing is detected between threads %d and %d on address %ld and address %ld\n", index1, index2, wpi->sample.target_va, wt->va);
+	  //fprintf(stderr, "false sharing is detected between threads %d and %d on address %ld and address %ld\n", index1, index2, wpi->sample.target_va, wt->va);
 	  //sleep(4);
 	}
 	// debugging ends
@@ -3024,7 +3029,7 @@ static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int sta
 	int obj_id2 = get_object_id_by_address(wt->va);
 	// debugging starts
 	if((obj_id1 == obj_id2) && (obj_id1 == 998)) {
-	  fprintf(stderr, "false sharing is detected between threads %d and %d on address %ld and address %ld\n", index1, index2, wpi->sample.target_va, wt->va);
+	  //fprintf(stderr, "false sharing is detected between threads %d and %d on address %ld and address %ld\n", index1, index2, wpi->sample.target_va, wt->va);
 	  //sleep(4);
 	}
 	// debugging ends
@@ -4531,7 +4536,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						globalReuseWPs.table[location].sampleCountInNode = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
 						//UpdateWatermarkMetric(node, sampledMetricId, globalReuseWPs.table[location].sampleCountInNode);
 						//fprintf(stderr, "sampleCountInNode is %ld\n", globalReuseWPs.table[location].sampleCountInNode);
-					if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
+					if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
 
 					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
 						//fprintf(stderr, "store sample is handled\n");
@@ -4618,6 +4623,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 										sd.reuseType = REUSE_TEMPORAL;
 										sd.va = data_addr;
 										sd.wpLength = 1;
+										//fprintf(stderr, "sample tries to detect temporal reuse in L3\n");
 									}
 									sd.type = WP_RW;
 								} else {
@@ -4628,17 +4634,23 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                         			sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
                                                         			sd.wpLength = MAX_WP_LENGTH;
                                                         			//fprintf(stderr, "This region is executed\n");
-                                                			}
+										//fprintf(stderr, "sample tries to detect cache line invalidation\n");
+                                                			} else {
+										//fprintf(stderr, "sample tries to detect true sharing\n");
+									}
 									sd.type = WP_WRITE;
 								}
 							} else {
-								if(wpConfig.cachelineInvalidation) {
+								//if(wpConfig.cachelineInvalidation) {
                                                                		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
                                                                 	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                                                                 	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
                                                                 	sd.wpLength = MAX_WP_LENGTH;
-                                                                                //fprintf(stderr, "This region is executed\n");
-                                                        	}
+                                                                        //fprintf(stderr, "store sample is searching for use of any location in cache line\n");
+                                                        	/*} else {
+									fprintf(stderr, "store sample is searching for use of sampled address\n");
+								}*/
+
 							}
 
 							//fprintf(stderr, "thread %d mapped to core %d is being armed by thread %d mapped to core %d\n", indices[i], core_id, me, my_core);

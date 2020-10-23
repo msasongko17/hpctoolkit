@@ -847,9 +847,9 @@ METHOD_FN(process_event_list, int lush_metrics)
 			}
 
 #ifdef REUSE_HISTO
-                if (strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL)
+                if ((strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_LOAD_RETIRED") != NULL))
 #else
-                        if (strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+                        if ((strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_LOAD_RETIRED") != NULL)) //jqswang: TODO // && threshold == 0)
 #endif
                         {
                                 l3_reuse_distance_event = i;
