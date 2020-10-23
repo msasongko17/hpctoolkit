@@ -4349,7 +4349,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                         	globalReuseWPs.table[location].tid = -1; 
                             	globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
 				//fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
-                          	used_wp_count--;                                                                     
+                          	location = -1;
+				used_wp_count--;                                                                     
                   	}
 	
 
@@ -4509,6 +4510,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 //wait_threshold = sample_count + CHANGE_THRESHOLD;
 						globalReuseWPs.table[location].trap_just_happened = false;
 						globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+						location = -1;
                                                 used_wp_count--;                                                                           
                                         }
 
