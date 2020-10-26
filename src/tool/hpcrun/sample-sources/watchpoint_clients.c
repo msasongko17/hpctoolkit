@@ -4391,10 +4391,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				int original_wpLength = sd.wpLength;
 				for(int i = 0; i < cur_global_thread_count; i++) {
 					if(indices[i] == me) {
-						if(wpConfig.cachelineInvalidation) {
-							sd.va = original_va;
-							sd.wpLength = original_wpLength;
-						}
+						//if(wpConfig.cachelineInvalidation) {
+						sd.va = original_va;
+						sd.wpLength = original_wpLength;
+						//fprintf(stderr, "address: %lx, length: %ld\n", sd.va, sd.wpLength);
+						//}
 						sd.type = WP_RW;
 					} else {
 						if(wpConfig.cachelineInvalidation) {
