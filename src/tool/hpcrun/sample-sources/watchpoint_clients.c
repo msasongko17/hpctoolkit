@@ -4268,7 +4268,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             	else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
                               		sType = ALL_LOAD;
                                 //fprintf(stderr, "threads are selected here\n");
-				fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
+				//fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
 				prev_sample_timestamp = last_sample_timestamp;
 				last_sample_timestamp = curTime;
                                 if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
@@ -4349,7 +4349,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                        		globalWPIsUsers[location] = -1;
                         	globalReuseWPs.table[location].tid = -1; 
                             	globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-				fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
+				//fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
                           	location = -1;
 				used_wp_count--;                                                                     
                   	}
