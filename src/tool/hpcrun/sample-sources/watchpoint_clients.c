@@ -151,6 +151,7 @@
 
 #define WAIT_THRESHOLD 10
 int used_wp_count = 0;
+int max_used_wp_count = 0;
 extern __thread int wait_threshold;
 
 //int wp_user_list[MAX_WP_SLOTS];
@@ -188,6 +189,8 @@ int l3_reuse_distance_event = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
+
+long global_l2_miss_sampling_period;
 
 extern int global_thread_count;
 extern int dynamic_global_thread_count;
@@ -1833,7 +1836,7 @@ static void UpdateWatermarkMetric(cct_node_t * ctxtNode, int pebsMetricId, uint6
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
   //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   //diff.r = diff.r * proportion;
-  cct_metric_data_increment(catchUpMetricId, ctxtNode, (cct_metric_data_t){.r = metricInc});
+  cct_metric_data_increment(catchUpMetricId, ctxtNode, (cct_metric_data_t){.i = metricInc});
 }
 
 static inline uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetricId, double proportion){
@@ -2232,7 +2235,7 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
     cct_node_t *reuseNode = v.sample_node;
-    fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
     if (reuse_concatenate_use_reuse){
       reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
     }else{
@@ -2325,7 +2328,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
   if(wpi->sample.L1Sample) {
   if(globalReuseWPs.table[wt->location].active) {
-  double inc_scale = dynamic_global_thread_count / (double) used_wp_count;
+  double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
   uint64_t inc = numDiffSamples * inc_scale;
 
   uint64_t trapTime = rdtsc();
@@ -2419,22 +2422,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
 				double store_load_ratio;
 				if(load_count > 1)
-					store_load_ratio = (double) (load_count + store_count) / (double) load_count;
+					store_load_ratio = (double) (load_count * global_l2_miss_sampling_period + store_count * global_store_sampling_period) / (double) (load_count * global_l2_miss_sampling_period);
 				else
-					store_load_ratio = 100.0;
-				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
-
-				/*if(globalReuseWPs.table[wt->location].inc > 0) {
-                                        //fprintf(stderr, "recording reuse distance %ld in a different thread with increment %ld\n", rd_with_store, globalReuseWPs.table[wt->location].inc);
-                                        //L3ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
-                                        //ReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
-					ReuseAddDistance(rd_with_store, globalReuseWPs.table[wt->location].inc);
-					attributed_inc = globalReuseWPs.table[wt->location].inc;
-				} else {
-					//globalReuseWPs.table[wt->location].rd = rd_with_store;
-                                        ReuseAddDistance(rd_with_store, hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
-					attributed_inc = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
-				}*/
+					store_load_ratio = (store_count * global_store_sampling_period) / (global_l2_miss_sampling_period);
+				//fprintf(stderr, "load_count: %d, global_l2_miss_sampling_period: %ld, store_count: %d, global_store_sampling_period: %ld, store_load_ratio: %0.2lf\n", load_count, global_l2_miss_sampling_period, store_count, global_store_sampling_period, store_load_ratio);
+				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	
 
 				double inc_scale = dynamic_global_thread_count / (double) used_wp_count;
   				uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;			
@@ -2485,6 +2477,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                              		if(load_count > 0)
                                                           	load_count--;
                                            	}
+						//fprintf(stderr, "store use is detected, store_count: %d, load_count: %d\n", store_count, load_count);
                                           	sample_count_counter++;
                                 	}
                        		}
@@ -2658,15 +2651,18 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                 return ALREADY_DISABLED;
                                         }
                                 }
-                                rd = val[0];
+                                rd = val[0];	
+
 
 				double store_load_ratio;
                                 if(load_count > 1)
-                                        store_load_ratio = (double) (load_count + store_count) / (double) load_count;
+                                        store_load_ratio = (double) (load_count * global_l2_miss_sampling_period + store_count * global_store_sampling_period) / (double) (load_count * global_l2_miss_sampling_period);
                                 else
-                                        store_load_ratio = 100.0;
-                                uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	
+                                        store_load_ratio = (store_count * global_store_sampling_period) / (global_l2_miss_sampling_period);
+                                uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
 
+
+				//fprintf(stderr, "load_count: %d, global_l2_miss_sampling_period: %ld, store_count: %d, global_store_sampling_period: %ld, store_load_ratio: %0.2lf\n", load_count, global_l2_miss_sampling_period, store_count, global_store_sampling_period, store_load_ratio);
 				double inc_scale = dynamic_global_thread_count / (double) used_wp_count;
                                 uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
 
@@ -4272,6 +4268,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             	else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
                               		sType = ALL_LOAD;
                                 //fprintf(stderr, "threads are selected here\n");
+				fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
 				prev_sample_timestamp = last_sample_timestamp;
 				last_sample_timestamp = curTime;
                                 if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
@@ -4290,7 +4287,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							for(int j = 0; j < wpConfig.maxWP; j++) {
                                                         	if(globalWPIsUsers[j] == -1) {
 									used_wp_count++;
-									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d\n", me, j, used_wp_count);
+									if(max_used_wp_count < used_wp_count)
+										max_used_wp_count = used_wp_count;
+									//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d, max_used_wp_count: %d\n", me, j, used_wp_count, max_used_wp_count);
                                                                 	globalWPIsUsers[j] = me;
 									globalReuseWPs.table[j].tid = me;
 									wait_threshold = sample_count + CHANGE_THRESHOLD;
@@ -4301,10 +4300,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                                         	uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
 										//fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
                                                                         	if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
-                                                                               		//fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
+                                                                               		//fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d lala\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
                                                                                 	UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
-                                                                           	}
+                                                                           	//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
+										}
                                                                		}
+									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
 									// after
 									//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
 									//used_wp_count++;
@@ -4348,7 +4349,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                        		globalWPIsUsers[location] = -1;
                         	globalReuseWPs.table[location].tid = -1; 
                             	globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-				//fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
+				fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
                           	location = -1;
 				used_wp_count--;                                                                     
                   	}
@@ -4413,7 +4414,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			} else {
 
-					if ((accessType == LOAD_AND_STORE) || (accessType == LOAD)) {
+					if (/*(accessType == LOAD_AND_STORE) || (accessType == LOAD)*/ (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
                                 		uint64_t theCounter = sample_count_counter;
 						if((theCounter & 1) == 0) {
                                 		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
@@ -4425,6 +4426,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 		if(store_count > 0)
                                                         		store_count--;
                                         		}
+							//fprintf(stderr, "load use is detected, store_count: %d, load_count: %d\n", store_count, load_count);
+							
                                         		sample_count_counter++;
                                 		}
 						}
@@ -4472,7 +4475,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 										{
 											uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
 											if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
-												//fprintf(stderr, "sampleCountDiff is updated by %ld\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
+												fprintf(stderr, "sampleCountDiff is updated by %ld\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
 												UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
 											}
 										}
@@ -4511,6 +4514,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 //wait_threshold = sample_count + CHANGE_THRESHOLD;
 						globalReuseWPs.table[location].trap_just_happened = false;
 						globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+						
 						location = -1;
                                                 used_wp_count--;                                                                           
                                         }

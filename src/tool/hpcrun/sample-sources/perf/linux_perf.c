@@ -164,6 +164,7 @@
 
 extern int global_thread_count;
 extern int dynamic_global_thread_count;
+extern long global_l2_miss_sampling_period;
 
 //******************************************************************************
 // type declarations
@@ -792,6 +793,10 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 		if (strncmp (name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
 			global_load_sampling_period = threshold;
+
+		if ((strncmp (name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
+			global_l2_miss_sampling_period = threshold;
+		}
 
 		// ------------------------------------------------------------
 		// need a special case if we have our own customized  predefined  event
