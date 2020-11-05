@@ -271,6 +271,11 @@ typedef struct WPStats{
 
 __thread WPStats_t wpStats;
 __thread uint64_t prev_event_count = 0;
+uint64_t periodic_l2_load_miss_count = 0;
+uint64_t next_periodic_l2_load_miss_count = 0;
+uint64_t periodic_l2_store_miss_sample = 0;
+uint64_t next_periodic_l2_store_miss_sample = 0;
+uint64_t detected_l2_miss_counter = 0;
 
 /******************************************************************************
  * macros
@@ -2443,8 +2448,9 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				} else {*/
 					// before
 					//fprintf(stderr, "in load reuse, rd: %ld, global_l2_miss_count: %ld\n", rd, global_l2_miss_count);
-                                        store_load_ratio = (global_store_count * global_store_sampling_period + global_l2_miss_count) / global_l2_miss_count;
-                                        //fprintf(stderr, "global_store_count: %ld, global_store_sampling_period: %ld, global_l2_miss_count: %ld, store_load_ratio: %0.5lf\n", global_store_count, global_store_sampling_period, global_l2_miss_count, store_load_ratio);
+                                //store_load_ratio = (global_store_count * global_store_sampling_period + global_l2_miss_count) / global_l2_miss_count;
+                                store_load_ratio = ((global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period + (global_l2_miss_count - periodic_l2_load_miss_count)) / (global_l2_miss_count - periodic_l2_load_miss_count);
+				//fprintf(stderr, "in load reuse, rd: %ld, global_store_count in period: %ld, global_store_sampling_period: %ld, global_l2_miss_count in period: %ld, store_load_ratio: %0.5lf\n", rd, global_store_count - periodic_l2_store_miss_sample, global_store_sampling_period, global_l2_miss_count - periodic_l2_load_miss_count, store_load_ratio);
 					// after
 
 				//}
@@ -2484,6 +2490,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			}
 	  }*/
 	  } else if (wpi->sample.L3StoreUse == false) {
+		bool collect_periodic_l2_load_miss_count = false;
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
                 if((theCounter & 1) == 0) {
                 if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
@@ -2503,6 +2510,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 						if(wt->accessType == STORE) {
 							global_store_count++;
 							//fprintf(stderr, "in store use, global_store_count: %ld\n", global_store_count);
+						}
+						detected_l2_miss_counter++;
+						if((detected_l2_miss_counter % L2_MISS_RATIO_PERIOD) == 0) {
+							collect_periodic_l2_load_miss_count = true;
 						}
                                           	sample_count_counter++;
                                 	}
@@ -2554,6 +2565,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 						}
                                                 //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld while handling first store trap with sample time: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0], globalStoreReuseWPs.table[wt->location].time);
                                         }
+
+					if(collect_periodic_l2_load_miss_count) {
+						periodic_l2_load_miss_count = next_periodic_l2_load_miss_count;
+						next_periodic_l2_load_miss_count = wpi->sample.reuseDistance[0][0];
+						periodic_l2_store_miss_sample = next_periodic_l2_store_miss_sample;
+						next_periodic_l2_store_miss_sample = global_store_count;
+					}
 
 					void * original_va = wpi->sample.va;
 					int original_wpLength = wpi->sample.wpLength;
@@ -2706,8 +2724,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				} else {*/
 					//double estimated_l2_miss_ratio_per_sampling_period = ((double) rd) / (double) l2_miss_between_sample_trap;
                                         //fprintf(stderr, "in store reuse, rd: %ld, global_l2_miss_count: %ld\n", rd, global_l2_miss_count);
-					store_load_ratio = (global_store_count * global_store_sampling_period + global_l2_miss_count) / global_l2_miss_count;
-					//fprintf(stderr, "rd: %ld, global_store_count: %ld, global_store_sampling_period: %ld, global_l2_miss_count: %ld, store_load_ratio: %0.5lf\n", rd, global_store_count, global_store_sampling_period, global_l2_miss_count, store_load_ratio);
+					store_load_ratio = ((global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period + (global_l2_miss_count - periodic_l2_load_miss_count)) / (global_l2_miss_count - periodic_l2_load_miss_count);
+				//fprintf(stderr, "in store reuse, rd: %ld, global_store_count in period: %ld, global_store_sampling_period: %ld, global_l2_miss_count in period: %ld, store_load_ratio: %0.5lf\n", rd, global_store_count - periodic_l2_store_miss_sample, global_store_sampling_period, global_l2_miss_count - periodic_l2_load_miss_count, store_load_ratio);	
 				//}
 				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
 
@@ -4465,20 +4483,25 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			} else {
 
+					bool collect_periodic_l2_load_miss_count = false;
 					if (/*(accessType == LOAD_AND_STORE) || (accessType == LOAD)*/ (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
                                 		uint64_t theCounter = sample_count_counter;
 						if((theCounter & 1) == 0) {
                                 		if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
-                                        		if((load_count + store_count) < 100) {
+                                        		/*if((load_count + store_count) < 100) {
                                                 		load_count++;
                                         		} else {
                                                 		if(load_count < 100)
                                                         		load_count++;
                                                 		if(store_count > 0)
                                                         		store_count--;
-                                        		}
+                                        		}*/
 							//fprintf(stderr, "load use is detected, store_count: %d, load_count: %d\n", store_count, load_count);
 							
+							detected_l2_miss_counter++;	
+							if((detected_l2_miss_counter % L2_MISS_RATIO_PERIOD) == 0) {
+                                                        	collect_periodic_l2_load_miss_count = true;
+                                                	}
                                         		sample_count_counter++;
                                 		}
 						}
@@ -4611,6 +4634,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						}
                                                 //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
                                         }
+
+						if(collect_periodic_l2_load_miss_count) {
+                                                	periodic_l2_load_miss_count = next_periodic_l2_load_miss_count;
+                                                	next_periodic_l2_load_miss_count = sd.reuseDistance[0][0];
+                                                	periodic_l2_store_miss_sample = next_periodic_l2_store_miss_sample;
+                                                	next_periodic_l2_store_miss_sample = global_store_count;
+                                        	}
+
 					}
 
 					int affinity_l2 = thread_to_l2_mapping[my_core];	
