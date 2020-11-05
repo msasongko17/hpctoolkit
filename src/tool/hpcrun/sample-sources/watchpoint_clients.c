@@ -1837,7 +1837,7 @@ static void UpdateWatermarkMetric(cct_node_t * ctxtNode, int pebsMetricId, uint6
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
   //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   //diff.r = diff.r * proportion;
-  cct_metric_data_increment(catchUpMetricId, ctxtNode, (cct_metric_data_t){.i = metricInc});
+  cct_metric_data_increment(catchUpMetricId, ctxtNode, (cct_metric_data_t){.r = metricInc});
 }
 
 static inline uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetricId, double proportion){
@@ -2431,7 +2431,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 			}
          			}
 
-				rd = val[0];
+				if(val[0] > 0)
+					rd = val[0];
+				else
+					rd = 1;
 
 				double store_load_ratio;
 				/*if(load_count > 1) {
@@ -2688,7 +2691,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                 return ALREADY_DISABLED;
                                         }
                                 }
-                                rd = val[0];	
+                                
+				if(val[0] > 0)
+                                        rd = val[0];
+                                else
+                                        rd = 1;	
 
 
 				double store_load_ratio;
@@ -2700,10 +2707,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					//double estimated_l2_miss_ratio_per_sampling_period = ((double) rd) / (double) l2_miss_between_sample_trap;
                                         //fprintf(stderr, "in store reuse, rd: %ld, global_l2_miss_count: %ld\n", rd, global_l2_miss_count);
 					store_load_ratio = (global_store_count * global_store_sampling_period + global_l2_miss_count) / global_l2_miss_count;
-					//fprintf(stderr, "global_store_count: %ld, global_store_sampling_period: %ld, global_l2_miss_count: %ld, store_load_ratio: %0.5lf\n", global_store_count, global_store_sampling_period, global_l2_miss_count, store_load_ratio);
+					//fprintf(stderr, "rd: %ld, global_store_count: %ld, global_store_sampling_period: %ld, global_l2_miss_count: %ld, store_load_ratio: %0.5lf\n", rd, global_store_count, global_store_sampling_period, global_l2_miss_count, store_load_ratio);
 				//}
 				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);
 
+				//fprintf(stderr, "rd_with_store: %ld\n", rd_with_store);
 
 				//fprintf(stderr, "load_count: %d, global_l2_miss_sampling_period: %ld, store_count: %d, global_store_sampling_period: %ld, store_load_ratio: %0.2lf\n", load_count, global_l2_miss_sampling_period, store_count, global_store_sampling_period, store_load_ratio);
 				double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
@@ -4562,13 +4570,18 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 									UpdateWatermarkMetric(node, sampledMetricId, globalReuseWPs.table[location].sampleCountInNode);	
 								}*/
 								uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-								if(sampleCountDiff > 1)
+								if(sampleCountDiff > 1) {
 									UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - 1);
+									uint64_t sampleCountDiff2 = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+									//fprintf(stderr, "sampleCountDiff before update: %ld, after update: %ld\n", sampleCountDiff, sampleCountDiff2);
+
+								}
 							}
 						}
 					if(ArmWatchPointProb(&location, curTime)) {
 						globalReuseWPs.table[location].node_id = hpcrun_cct_persistent_id(node);
-						globalReuseWPs.table[location].sampleCountInNode = GetWeightedMetricDiff(node, sampledMetricId, 1.0);	
+						globalReuseWPs.table[location].sampleCountInNode = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+					//fprintf(stderr, "sampleCountInNode is %ld\n", globalReuseWPs.table[location].sampleCountInNode);	
 					if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
 
 					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
