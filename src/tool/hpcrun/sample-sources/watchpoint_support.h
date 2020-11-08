@@ -223,6 +223,6 @@ typedef struct globalReuseTable{
 } globalReuseTable_t;
 
 #define CHANGE_THRESHOLD 100
-#define L2_MISS_RATIO_PERIOD 100
+#define L2_MISS_RATIO_PERIOD 50
 
 #endif //__WP_SUPPORT__
