@@ -1157,6 +1157,8 @@ int locality_vector[4][50];
 int l2_locality_vector[503][10];
 int thread_to_l3_mapping[503];
 int thread_to_l2_mapping[503];
+int context_sample_count[256][13][2];
+int context_watermark_sample_count[256][13][2];
 int l2_count = 0;
 int l3_count = 0;
 
@@ -2459,6 +2461,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
 				double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
   				uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;			
+				// apply context increment here !!!
 				//fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 load miss\n", rd_with_store, inc);	
 				ReuseAddDistance(rd_with_store, inc);
                                 attributed_inc = inc;
