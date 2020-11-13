@@ -207,12 +207,14 @@ typedef struct globalReuseEntry{
   volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
   uint64_t time;
   int tid;
+  int sampledMetricId;
   bool active;
   bool trap_just_happened;
   //uint64_t rd;
   int node_id;
   uint64_t sampleCountInNode;
   uint64_t residueSampleCountInPrevThread;
+  int residueSampleCountInPrevOwner[2];
   char dummy[CACHE_LINE_SZ];
 } globalReuseEntry_t;
 
