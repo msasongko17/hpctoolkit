@@ -116,11 +116,10 @@ typedef struct SampleData{
 	bool L3LoadUse;
 	bool L3StoreUse;
 	ReuseType reuseType;
-	uint64_t eventCountBetweenSamples;
-	uint64_t timeBetweenSamples;
 	uint64_t reuseDistance[2][3];
 	uint64_t sampleTime;
 	int L3Id;
+	int L2Id;
 } SampleData_t;
 
 typedef struct WatchPointInfo{
@@ -209,6 +208,7 @@ typedef struct globalReuseEntry{
   int tid;
   int sampledMetricId;
   bool active;
+  bool first_coherence_miss;
   bool trap_just_happened;
   //uint64_t rd;
   int node_id;

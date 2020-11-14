@@ -189,6 +189,7 @@ int l3_reuse_distance_event = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
+uint64_t l3_coherence_miss_count = 0;
 
 long global_l2_miss_sampling_period;
 
@@ -916,6 +917,8 @@ static void ClientTermination(){
 
 	//fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
 	//fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+	WriteWitchTraceOutput("COHERENCE_MISS:");
+	WriteWitchTraceOutput(" %ld\n", l3_coherence_miss_count);
 	WriteWitchTraceOutput("FINAL_COUNTING:");
 	for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
 	  assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
@@ -2387,15 +2390,36 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   }
   } else {
 	  if(wpi->sample.L3LoadUse) {
-	  if(globalReuseWPs.table[wt->location].tid != me) {
+		  int my_core = sched_getcpu();
+		  int affinity_l2 = thread_to_l2_mapping[my_core];
+		  int affinity_l3 = thread_to_l3_mapping[my_core];
+		  //here
+		  double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+                  // begin here
+		 int node_id = globalReuseWPs.table[wt->location].node_id;
+                 int node_id_idx = node_id % 13;
+                 int owner_tid = globalReuseWPs.table[wt->location].tid;
+                 int metricId = globalReuseWPs.table[wt->location].sampledMetricId;
+                 int sample_type = 0;
+                 uint64_t trap_inc = 0;
+                 if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
+                 	sample_type = (metricId % 3) % 2;
+                        trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
+                        context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
+		}
+              	if(trap_inc == 0) {
+                 	trap_inc = 1;
+		}
+              	// end here
+                uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
+		  //after
+	  if(wpi->sample.L2Id != affinity_l2) {
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
 		if((theCounter & 1) == 0) {
 		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
 			if(globalReuseWPs.table[wt->location].active) {
 
 				globalReuseWPs.table[wt->location].trap_just_happened = true;
-				int my_core = sched_getcpu();
-				int affinity_l3 = thread_to_l3_mapping[my_core];
 
 				if(wpi->sample.L3Id == affinity_l3) {
 				uint64_t rd = 0;
@@ -2459,7 +2483,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				//fprintf(stderr, "load_count: %d, global_l2_miss_sampling_period: %ld, store_count: %d, global_store_sampling_period: %ld, store_load_ratio: %0.2lf\n", load_count, global_l2_miss_sampling_period, store_count, global_store_sampling_period, store_load_ratio);
 				uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	
 
-				double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+				/*double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
 				// begin here
 				int node_id = globalReuseWPs.table[wt->location].node_id;
 				int node_id_idx = node_id % 13;
@@ -2475,12 +2499,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			       	if(trap_inc == 0)
 			       		trap_inc = 1;       
 				// end here
-  				uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;	
+  				uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;*/	
 				
 				//uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;		
 				// apply context increment here !!!
 				//fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 load miss\n", rd_with_store, inc);	
 				ReuseAddDistance(rd_with_store, inc);
+				globalReuseWPs.table[wt->location].first_coherence_miss = false;
                                 attributed_inc = inc;
 				source_code_line_attribution = true;
 				attributed_rd = rd_with_store;
@@ -2490,25 +2515,31 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				globalReuseWPs.table[wt->location].active = false;
 				//fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
+			} else if ((wpi->sample.L3Id == affinity_l3) && (globalReuseWPs.table[wt->location].first_coherence_miss == true)) {
+					l3_coherence_miss_count += inc;
+					globalReuseWPs.table[wt->location].first_coherence_miss = false;
+					//fprintf(stderr, "coherence miss is detected by another thread in the same L3 due to reuse of load l2 miss\n");
 			}
 			globalReuseWPs.table[wt->location].counter++;
 		}
 		}
 		  // after
-	  } /*else if(wpi->sample.first_accessing_tid == me) {
+	  } else if((globalReuseWPs.table[wt->location].active == false) && (globalReuseWPs.table[wt->location].first_coherence_miss == true)) {
 			uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
 			if((theCounter & 1) == 0) {
                 	if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
-				uint64_t inc = numDiffSamples;
                 		//int load_difference = load_count - wpi->sample.loadCount;
                 		//int store_difference = store_count - wpi->sample.storeCount;	
-				if(globalReuseWPs.table[wt->location].active == true)
-                        		globalReuseWPs.table[wt->location].inc = inc;	
+				if(globalReuseWPs.table[wt->location].first_coherence_miss == true) {
+					l3_coherence_miss_count += inc;
+                        		globalReuseWPs.table[wt->location].first_coherence_miss = false;
+					//fprintf(stderr, "coherence miss is detected by the same thread in the same L3 due to reuse of load l2 miss\n");
+				}	
 				globalReuseWPs.table[wt->location].counter++;
 				//break;
 			}
 			}
-	  }*/
+	  }
 	  } else if (wpi->sample.L3StoreUse == false) {
 		bool collect_periodic_l2_load_miss_count = false;
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
@@ -2546,6 +2577,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
                                         int affinity_l2 = thread_to_l2_mapping[my_core];
 
+					wpi->sample.L2Id = affinity_l2;
+
                                         int indices[cur_global_thread_count];
                                         for (int i = 0; i < cur_global_thread_count; i++) {
                                                 indices[i] = i;
@@ -2560,6 +2593,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                         }
 
 					globalStoreReuseWPs.table[wt->location].active = true;
+					globalStoreReuseWPs.table[wt->location].first_coherence_miss = true;
 					globalStoreReuseWPs.table[wt->location].time = globalReuseWPs.table[wt->location].time;
 					globalStoreReuseWPs.table[wt->location].tid = me;					
 
@@ -2606,7 +2640,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                                                 break;
                                                         }
                                                 }
-                                                if(!same_l2 /*|| (me == indices[i])*/) {
+                                                //if(!same_l2) {
 
 							if(wpConfig.cachelineInvalidation) {
                                                         	int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
@@ -2666,7 +2700,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 							// after	
 
 							SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
-                                                }
+                                                //}
                                         }
 				// after
 		  		//fprintf(stderr, "first store trap is handled with time: %ld\n", globalStoreReuseWPs.table[wt->location].time);
@@ -2677,7 +2711,33 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 }
                 }
 	  } else if(wpi->sample.L3StoreUse) {
-		if(globalReuseWPs.table[wt->location].tid != me) {
+		  // before
+		int my_core = sched_getcpu();
+                int affinity_l2 = thread_to_l2_mapping[my_core];
+                int affinity_l3 = thread_to_l3_mapping[my_core];
+
+		// before
+		double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+                  // begin here
+                 int node_id = globalReuseWPs.table[wt->location].node_id;
+                 int node_id_idx = node_id % 13;
+                 int owner_tid = globalReuseWPs.table[wt->location].tid;
+                 int metricId = globalReuseWPs.table[wt->location].sampledMetricId;
+                 int sample_type = 0;
+                 uint64_t trap_inc = 0;
+                 if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
+                        sample_type = (metricId % 3) % 2;
+                        trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
+                        context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
+                }
+                if(trap_inc == 0) {
+                        trap_inc = 1;
+		}
+                // end here
+                uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
+		// after
+
+          	if(wpi->sample.L2Id != affinity_l2) {
 		uint64_t theCounter = globalStoreReuseWPs.table[wt->location].counter;
                 if((theCounter & 1) == 0) {
                 if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
@@ -2752,7 +2812,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				//fprintf(stderr, "rd_with_store: %ld\n", rd_with_store);
 
 				//fprintf(stderr, "load_count: %d, global_l2_miss_sampling_period: %ld, store_count: %d, global_store_sampling_period: %ld, store_load_ratio: %0.2lf\n", load_count, global_l2_miss_sampling_period, store_count, global_store_sampling_period, store_load_ratio);
-				double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+				/*double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
 				// begin here
                                 int node_id = globalReuseWPs.table[wt->location].node_id;
                                 int node_id_idx = node_id % 13;
@@ -2768,11 +2828,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                 if(trap_inc == 0)
                                         trap_inc = 1;
 
-                                uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
+                                uint64_t inc = trap_inc * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;*/
 				// end here
                                 //uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
 
 				//fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 store miss\n", rd_with_store, inc);
+				globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
 				ReuseAddDistance(rd_with_store, inc);
                                 attributed_inc = inc;
 
@@ -2782,25 +2843,33 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                                 }
 				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				globalStoreReuseWPs.table[wt->location].active = false;
-			}
+			} else if ((wpi->sample.L3Id == affinity_l3) && (globalStoreReuseWPs.table[wt->location].first_coherence_miss == true)) {
+                                        l3_coherence_miss_count += inc;
+                                        globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
+					//fprintf(stderr, "coherence miss is detected by another thread in the same L3 due to reuse of store l2 miss\n");
+                        }
 			globalStoreReuseWPs.table[wt->location].counter++;
 		}
 		}
-	  } /*else if(wpi->sample.first_accessing_tid == me) {
+	  } else {
+		  //fprintf(stderr, "There is a trap in the same L2 due to reuse of store L2 miss\n");
+		  if((globalStoreReuseWPs.table[wt->location].active == false) && (globalStoreReuseWPs.table[wt->location].first_coherence_miss == true)) {
                         uint64_t theCounter = globalStoreReuseWPs.table[wt->location].counter;
                         if((theCounter & 1) == 0) {
                         if(__sync_bool_compare_and_swap(&globalStoreReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
-                                uint64_t inc = numDiffSamples;
-                                if(globalStoreReuseWPs.table[wt->location].active == true) {
-                                        globalStoreReuseWPs.table[wt->location].inc = inc;
-				}	
-                                //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;       
+                                //int load_difference = load_count - wpi->sample.loadCount;
+                                //int store_difference = store_count - wpi->sample.storeCount;  
+                                if(globalStoreReuseWPs.table[wt->location].first_coherence_miss == true) {
+                                        l3_coherence_miss_count += inc;
+                                        globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
+					//fprintf(stderr, "coherence miss is detected by the same thread in the same L3 due to reuse of store l2 miss\n");
+                                }
                                 globalStoreReuseWPs.table[wt->location].counter++;
                                 //break;
                         }
                         }
-
-	  }*/
+          }
+	  }	
 	  }
   }
 //#ifdef REUSE_HISTO
@@ -4707,6 +4776,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					}
 
 					int affinity_l2 = thread_to_l2_mapping[my_core];	
+					sd.L2Id = affinity_l2;
 
 					//fprintf(stderr, "sample at thread %d mapped to core %d located in L2 %d\n", me, my_core, affinity_l2);
 					
@@ -4735,7 +4805,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 								break;
 							}
 						}
-						if(!same_l2 /*|| (me == indices[i])*/) {	
+						//if(!same_l2) {	
 
 							if(sd.L3LoadUse == true) {
 								if(thread_to_l3_mapping[core_id] == affinity_l3) {
@@ -4782,15 +4852,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 									sd.type = WP_WRITE;
 								}
 							} else {
+								if(!same_l2) { 
 								//if(wpConfig.cachelineInvalidation) {
                                                                		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
                                                                 	int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                                                                 	sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
-                                                                	sd.wpLength = MAX_WP_LENGTH;
-                                                                        //fprintf(stderr, "store sample is searching for use of any location in cache line\n");
-                                                        	/*} else {
-									fprintf(stderr, "store sample is searching for use of sampled address\n");
-								}*/
+                                                                	sd.wpLength = MAX_WP_LENGTH; 
+								}
 
 							}
 
@@ -4799,8 +4867,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							//uint64_t numOfEvents = GetWeightedMetricDiffAndResetUncalibrated(sd.node, sd.sampledMetricId, 1.0);
 							//fprintf(stderr, "numOfEvents in the same node by this sample is %ld\n", numOfEvents);
 							//fprintf(stderr, "a sample happens in node %d\n", hpcrun_cct_persistent_id(sd.node));
-							SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
-						}
+							if((sd.L3LoadUse == true) || (!same_l2))
+								SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
+						//}
                                 	}
 					}
 					}
