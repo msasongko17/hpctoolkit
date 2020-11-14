@@ -2404,8 +2404,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                  uint64_t trap_inc = 0;
                  if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
                  	sample_type = (metricId % 3) % 2;
+			//fprintf(stderr, "trap is detected as a reuse to an L2 load miss, context_sample_count: %d, context_watermark_sample_count: %d before\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
                         trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
                         context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
+			//fprintf(stderr, "trap is detected as a reuse to an L2 load miss, context_sample_count: %d, context_watermark_sample_count: %d after\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
 		}
               	if(trap_inc == 0) {
                  	trap_inc = 1;
@@ -2430,7 +2432,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					global_val[i] = 0;
                                 }
 
-				//fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d\n", me, my_core, affinity_l3);
+				//fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
 				int cur_global_thread_count = global_thread_count;
 				uint64_t l2_miss_between_sample_trap = 0;
                         	for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
@@ -2510,7 +2512,9 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				source_code_line_attribution = true;
 				attributed_rd = rd_with_store;
 				time_distance = rdtsc() - wpi->startTime;	
-				}
+				} /*else {
+					fprintf(stderr, "an invalidation due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
+				}*/
 				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				globalReuseWPs.table[wt->location].active = false;
@@ -2520,7 +2524,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					globalReuseWPs.table[wt->location].first_coherence_miss = false;
 					//fprintf(stderr, "coherence miss is detected by another thread in the same L3 due to reuse of load l2 miss\n");
 			}
-			globalReuseWPs.table[wt->location].counter++;
+			//fprintf(stderr, "a coherence miss due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
 		}
 		}
 		  // after
@@ -2534,6 +2538,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					l3_coherence_miss_count += inc;
                         		globalReuseWPs.table[wt->location].first_coherence_miss = false;
 					//fprintf(stderr, "coherence miss is detected by the same thread in the same L3 due to reuse of load l2 miss\n");
+					//fprintf(stderr, "a coherence miss due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
 				}	
 				globalReuseWPs.table[wt->location].counter++;
 				//break;
@@ -2699,6 +2704,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 							}
 							// after	
 
+							/*if (me == indices[i])
+								fprintf(stderr, "thread %d is arming a WP in thread %d for detecting reuse of store\n", me, indices[i]);*/
 							SubscribeWatchpointShared(&(wpi->sample), OVERWRITE, false, indices[i], wt->location);
                                                 //}
                                         }
@@ -2727,9 +2734,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                  uint64_t trap_inc = 0;
                  if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
                         sample_type = (metricId % 3) % 2;
+			//fprintf(stderr, "trap is detected as a reuse to an L2 store miss, context_sample_count: %d, context_watermark_sample_count: %d before\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
                         trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
                         context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
-                }
+                	//fprintf(stderr, "trap is detected as a reuse to an L2 store miss, context_sample_count: %d, context_watermark_sample_count: %d after\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
+		}
                 if(trap_inc == 0) {
                         trap_inc = 1;
 		}
@@ -2840,13 +2849,16 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				source_code_line_attribution = true;
 				attributed_rd = rd_with_store;
 				time_distance = rdtsc() - wpi->startTime;	
-                                }
+                                } /*else {
+					fprintf(stderr, "an invalidation due to store use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
+				}*/
 				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 				globalStoreReuseWPs.table[wt->location].active = false;
 			} else if ((wpi->sample.L3Id == affinity_l3) && (globalStoreReuseWPs.table[wt->location].first_coherence_miss == true)) {
                                         l3_coherence_miss_count += inc;
                                         globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
 					//fprintf(stderr, "coherence miss is detected by another thread in the same L3 due to reuse of store l2 miss\n");
+					//fprintf(stderr, "a coherence miss due to store use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
                         }
 			globalStoreReuseWPs.table[wt->location].counter++;
 		}
@@ -4328,10 +4340,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 		   }
 		   break;
     case WP_REUSETRACKER: {	
-	
-
-
-
 			sample_count++;
 			int me = TD_GET(core_profile_trace_data.id);
 
@@ -4867,8 +4875,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							//uint64_t numOfEvents = GetWeightedMetricDiffAndResetUncalibrated(sd.node, sd.sampledMetricId, 1.0);
 							//fprintf(stderr, "numOfEvents in the same node by this sample is %ld\n", numOfEvents);
 							//fprintf(stderr, "a sample happens in node %d\n", hpcrun_cct_persistent_id(sd.node));
-							if((sd.L3LoadUse == true) || (!same_l2))
+							if((sd.L3LoadUse == true) || (!same_l2)) {
 								SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
+							}
 						//}
                                 	}
 					}
