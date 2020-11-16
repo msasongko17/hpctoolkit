@@ -4343,7 +4343,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			sample_count++;
 			int me = TD_GET(core_profile_trace_data.id);
 
-			int my_core = sched_getcpu();	
+			int my_core = sched_getcpu();
+			/*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+				fprintf(stderr, "l2 miss sample happens1\n");*/	
 			//fprintf(stderr, "thread %d is sampled in core %d\n", me, sched_getcpu());
 			//fprintf(stderr, "sample type: %s in thread %d, sample_count: %d\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
 			int64_t storeCurTime = 0;
@@ -4436,6 +4438,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			if (!IsValidAddress(sd.va, precisePC)) {
 			  goto ErrExit; // incorrect access type
 			}
+
+			/*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+				fprintf(stderr, "l2 miss sample happens2\n");*/
 
 			//fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);
 			//fprintf(stderr, "here4\n");
@@ -4644,14 +4649,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                                         	globalReuseWPs.table[j].tid = me;
 										wait_threshold = sample_count + CHANGE_THRESHOLD;
                                                                         	//GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
-										if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
+										/*if (globalReuseWPs.table[j].residueSampleCountInPrevThread > 0)
 										{
 											uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
 											if(sampleCountDiff > globalReuseWPs.table[j].residueSampleCountInPrevThread) {
 												//fprintf(stderr, "sampleCountDiff is updated by %ld\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
 												UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread);
 											}
-										}
+										}*/
 
 										if (globalReuseWPs.table[j].residueSampleCountInPrevOwner[0] > 0)	
 										{
@@ -4724,6 +4729,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                                 used_wp_count--;                                                                           
                                         }
 
+					/*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+						fprintf(stderr, "l2 miss sample happens2.5\n");*/
                         		//fprintf(stderr, "location: %d, thread: %d\n", location, me);
 					// reset inc counter in node here
                         		if((location != -1)) {
@@ -4739,6 +4746,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 								}
 							}
 						}*/
+					/*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+						fprintf(stderr, "l2 miss sample happens3\n");*/
 					if(ArmWatchPointProb(&location, curTime)) {
 						globalReuseWPs.table[location].node_id = hpcrun_cct_persistent_id(node);
 						globalReuseWPs.table[location].sampledMetricId = sampledMetricId;
@@ -4747,7 +4756,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 					if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
 
 					if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
-						//fprintf(stderr, "store sample is handled with metric id %d\n", sampledMetricId);
+						//fprintf(stderr, "store sample is handled with metric id %d, sample_count: %d\n", sampledMetricId, sample_count);
 						sd.L3StoreUse = false;
 						sd.type = WP_WRITE;
 					} else {
