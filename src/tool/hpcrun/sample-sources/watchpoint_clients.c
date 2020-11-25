@@ -2647,13 +2647,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
               }
               //if(!same_l2) {
 
-              if(wpConfig.cachelineInvalidation) {
+              /*if(wpConfig.cachelineInvalidation) {
                 int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
                 int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                 wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
                 wpi->sample.wpLength = MAX_WP_LENGTH;
                 //fprintf(stderr, "This region is executed\n");
-              }
+              }*/
 
               //fprintf(stderr, "thread %d is being armed by thread %d while handling first store trap\n", indices[i], me);
               int core_id = mapping_vector[indices[i] % mapping_size];
@@ -2673,13 +2673,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                   int wpSizes[] = {8, 4, 2, 1};
                   FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
                   int numFSLocs = 0;
-                  GetAllFalseSharingLocations((size_t)wpi->sample.va, wpi->sample.wpLength, ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                  GetAllFalseSharingLocations((size_t)original_va, original_wpLength, ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
                   if (numFSLocs > 0) {
-                    //fprintf(stderr, "false sharing is searched by store use\n");
+                    //fprintf(stderr, "false sharing is searched by store use on trap to %lx\n", original_va);
                     int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
                     wpi->sample.va = (void *)falseSharingLocs[idx].va;
                     wpi->sample.wpLength = falseSharingLocs[idx].wpLen;
-                  }
+                  } /*else {
+			  fprintf(stderr, "numFSLocs is 0\n");
+		  }*/
                 } else {
                   //fprintf(stderr, "store use tries to detect temporal reuse\n");
                   wpi->sample.va = original_va;
@@ -2690,7 +2692,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 if(wpConfig.cachelineInvalidation) {
                   int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
                   int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
-                  wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(wpi->sample.va)) + (shuffleNums[idx] << 3);
+                  wpi->sample.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(original_va)) + (shuffleNums[idx] << 3);
                   wpi->sample.wpLength = MAX_WP_LENGTH;
                   //fprintf(stderr, "This region is executed\n");
                   //fprintf(stderr, "store use tries to detect cacheline invalidation");
@@ -2841,7 +2843,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 // end here
                 //uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
 
-                //fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 store miss\n", rd_with_store, inc);
+                //fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 store miss in address %lx\n", rd_with_store, inc, wt->va);
                 globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
                 ReuseAddDistance(rd_with_store, inc);
                 attributed_inc = inc;
@@ -4418,6 +4420,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
                                   sd.va = (void *)falseSharingLocs[idx].va;
                                   sd.reuseType = REUSE_SPATIAL;
+				  sd.wpLength = falseSharingLocs[idx].wpLen;
                                   //fprintf(stderr, "REUSE_SPATIAL is activated\n");
 #if 0
                                   int offset = ((uint64_t)data_addr - aligned_pc) / accessLen;
@@ -4875,6 +4878,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                           int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
                                           sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
                                           sd.wpLength = MAX_WP_LENGTH; 
+					  //fprintf(stderr, "setting up armed address in address %lx after a sample on %lx\n", sd.va, data_addr);
                                         }
 
                                         }
