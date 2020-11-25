@@ -1922,7 +1922,7 @@ static WPTriggerActionType DeadStoreWPCallback(WatchPointInfo_t *wpi, int startO
   uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
   int overlapBytes = GET_OVERLAP_BYTES(wpi->sample.va, wpi->sample.wpLength, wt->va, wt->accessLength);
   if(overlapBytes <= 0){
-    fprintf(stderr, "\n wpi->sample.va=%p, wpi->sample.wpLength = %d,  wt->va = %p, wt->accessLength=%d\n", wpi->sample.va, wpi->sample.wpLength, wt->va, wt->accessLength);
+    //fprintf(stderr, "\n wpi->sample.va=%p, wpi->sample.wpLength = %d,  wt->va = %p, wt->accessLength=%d\n", wpi->sample.va, wpi->sample.wpLength, wt->va, wt->accessLength);
     monitor_real_abort();
   }
 
@@ -1973,7 +1973,7 @@ static WPTriggerActionType RedStoreWPCallback(WatchPointInfo_t *wpi, int startOf
   // check integer instructions
   int overlapLen = GET_OVERLAP_BYTES(wt->va, safeAccessLen, wpi->sample.va, wpi->sample.wpLength);
   if(overlapLen <= 0){
-    fprintf(stderr, "\n wpi->sample.va=%p, wpi->sample.wpLength = %d,  wt->va = %p, wt->accessLength=%d\n", wpi->sample.va, wpi->sample.wpLength, wt->va, wt->accessLength);
+    //fprintf(stderr, "\n wpi->sample.va=%p, wpi->sample.wpLength = %d,  wt->va = %p, wt->accessLength=%d\n", wpi->sample.va, wpi->sample.wpLength, wt->va, wt->accessLength);
     monitor_real_abort();
   }
 
@@ -2116,7 +2116,7 @@ static WPTriggerActionType TemporalReuseWPCallback(WatchPointInfo_t *wpi, int st
   // Now increment temporal_metric_id by numDiffSamples * overlapBytes
   uint64_t inc = numDiffSamples;
   reuse += inc;
-  fprintf(stderr, "in TemporalReuseWPCallback, reuse distance: %ld\n", inc);
+  //fprintf(stderr, "in TemporalReuseWPCallback, reuse distance: %ld\n", inc);
   UpdateConcatenatedPathPair(wt->ctxt, wpi->sample.node /* oldNode*/, joinNodes[E_TEPORALLY_REUSED][joinNodeIdx] /* joinNode*/, temporal_metric_id /* checkedMetric */, inc);
   return ALREADY_DISABLED;
 }
@@ -2264,16 +2264,16 @@ static WPTriggerActionType ReuseWPCallback(WatchPointInfo_t *wpi, int startOffse
     }
   }
   cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
-  fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+  //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
   cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
 
   reuseTemporal += inc;
   if (wpi->sample.reuseType == REUSE_TEMPORAL){
     cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-    fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+    //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
   } else {
     cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
-    fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+    //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
@@ -4629,6 +4629,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }
                               }	
 
+			      /*if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_INST_RETIRED.ALL_STORES",27) == 0)
+				      fprintf(stderr, "MEM_INST_RETIRED.ALL_STORES sample is detected\n");
+			      if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+				      fprintf(stderr, "MEM_UOPS_RETIRED:ALL_STORES sample is detected\n");*/
+
                               if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                                 uint64_t theCounter = globalReuseWPs.counter;
                                 if((theCounter & 1) == 0) {
@@ -4756,9 +4761,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   globalReuseWPs.table[location].sampledMetricId = sampledMetricId;
                                   globalReuseWPs.table[location].sampleCountInNode = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
                                   //fprintf(stderr, "sampleCountInNode is %ld\n", globalReuseWPs.table[location].sampleCountInNode);	
-                                  if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)) {
+                                  if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_INST_RETIRED.ALL_STORES",27) == 0)) {
 
-                                    if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
+                                    if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_INST_RETIRED.ALL_STORES",27) == 0)) {
                                       //fprintf(stderr, "store sample is handled with metric id %d, sample_count: %d\n", sampledMetricId, sample_count);
                                       sd.L3StoreUse = false;
                                       sd.type = WP_WRITE;

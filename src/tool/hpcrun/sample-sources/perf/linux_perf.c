@@ -788,7 +788,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 				default_threshold.threshold_num);
 		//global_sampling_period = threshold;
 		//global_sampling_period = threshold;
-		if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+		if ((strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) || (strncmp (name,"MEM_INST_RETIRED.ALL_STORES",27) == 0))
 			global_store_sampling_period = threshold;
 
 		if (strncmp (name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
@@ -843,11 +843,12 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 		/******** For witch client WP_REUSE ***************/
 #ifdef REUSE_HISTO
-		if (strstr(name, "MEM_UOPS_RETIRED") != NULL)
+		if ((strstr(name, "MEM_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_INST_RETIRED") != NULL))
 #else
-			if (strstr(name, "MEM_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+			if ((strstr(name, "MEM_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_INST_RETIRED") != NULL)) //jqswang: TODO // && threshold == 0)
 #endif
 			{
+				//fprintf(stderr, "assignment to l3_reuse_distance_event MEM_INST_RETIRED happens here\n");
 				reuse_distance_events[reuse_distance_num_events++] = i;
 			}
 
@@ -858,7 +859,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 #endif
                         {
                                 l3_reuse_distance_event = i;
-                                //fprintf(stderr, "assignment to l3_reuse_distance_event happens here\n");
+                                //fprintf(stderr, "assignment to l3_reuse_distance_event MEM_LOAD_RETIRED happens here\n");
                         }
 		/**************************************************/
 
