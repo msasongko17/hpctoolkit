@@ -2408,14 +2408,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
       int node_id = globalReuseWPs.table[wt->location].node_id;
       int node_id_idx = node_id % 13;
       int owner_tid = globalReuseWPs.table[wt->location].tid;
+      int monitored_tid = globalReuseWPs.table[wt->location].monitored_tid;
       int metricId = globalReuseWPs.table[wt->location].sampledMetricId;
       int sample_type = 0;
       uint64_t trap_inc = 0;
-      if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
+      if((node_id+1) == context_sample_count[monitored_tid][node_id_idx][0]) {
         sample_type = (metricId % 3) % 2;
         //fprintf(stderr, "trap is detected as a reuse to an L2 load miss, context_sample_count: %d, context_watermark_sample_count: %d before\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
-        trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
-        context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
+        trap_inc = context_sample_count[monitored_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1];
+        context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1] + trap_inc;
         //fprintf(stderr, "trap is detected as a reuse to an L2 load miss, context_sample_count: %d, context_watermark_sample_count: %d after\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
       }
       if(trap_inc == 0) {
@@ -2618,7 +2619,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             globalStoreReuseWPs.table[wt->location].active = true;
             globalStoreReuseWPs.table[wt->location].first_coherence_miss = true;
             globalStoreReuseWPs.table[wt->location].time = globalReuseWPs.table[wt->location].time;
-            globalStoreReuseWPs.table[wt->location].tid = me;					
+            globalStoreReuseWPs.table[wt->location].tid = me;
+	    globalStoreReuseWPs.table[wt->location].monitored_tid = me;	    
 
             wpi->sample.L3StoreUse = true;
 
@@ -2749,14 +2751,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
       int node_id = globalReuseWPs.table[wt->location].node_id;
       int node_id_idx = node_id % 13;
       int owner_tid = globalReuseWPs.table[wt->location].tid;
+      int monitored_tid = globalReuseWPs.table[wt->location].monitored_tid;
       int metricId = globalReuseWPs.table[wt->location].sampledMetricId;
       int sample_type = 0;
       uint64_t trap_inc = 0;
-      if((node_id+1) == context_sample_count[owner_tid][node_id_idx][0]) {
+      if((node_id+1) == context_sample_count[monitored_tid][node_id_idx][0]) {
         sample_type = (metricId % 3) % 2;
         //fprintf(stderr, "trap is detected as a reuse to an L2 store miss, context_sample_count: %d, context_watermark_sample_count: %d before\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
-        trap_inc = context_sample_count[owner_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1];
-        context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1] + trap_inc;
+        trap_inc = context_sample_count[monitored_tid][node_id_idx][sample_type+1] - context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1];
+        context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1] = context_watermark_sample_count[monitored_tid][node_id_idx][sample_type+1] + trap_inc;
         //fprintf(stderr, "trap is detected as a reuse to an L2 store miss, context_sample_count: %d, context_watermark_sample_count: %d after\n", context_sample_count[owner_tid][node_id_idx][sample_type+1], context_watermark_sample_count[owner_tid][node_id_idx][sample_type+1]);
       }
       if(trap_inc == 0) {
@@ -4575,7 +4578,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 
                               //fprintf(stderr, "location: %d, thread: %d\n", location, me);
-                              if((location != -1) && ArmWatchPointProb(&location, curTime)) {
+                              if((location != -1) && ArmWatchPointProb(&location, curTime, me)) {
 
                                 int cur_global_thread_count = global_thread_count;
                                 int indices[cur_global_thread_count];
@@ -4784,7 +4787,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }*/
                                 /*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
                                   fprintf(stderr, "l2 miss sample happens3\n");*/
-                                if(ArmWatchPointProb(&location, curTime)) {
+                                if(ArmWatchPointProb(&location, curTime, me)) {
                                   globalReuseWPs.table[location].node_id = hpcrun_cct_persistent_id(node);
                                   globalReuseWPs.table[location].sampledMetricId = sampledMetricId;
                                   globalReuseWPs.table[location].sampleCountInNode = GetWeightedMetricDiff(node, sampledMetricId, 1.0);

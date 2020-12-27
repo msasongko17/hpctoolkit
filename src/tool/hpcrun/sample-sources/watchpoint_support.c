@@ -463,6 +463,8 @@ __attribute__((constructor))
     for(int i = 0; i < MAX_WP_SLOTS; i++) {
       globalWPIsUsers[i] = -1;
       numWatchpointArmingAttempt[i] = SAMPLES_POST_FULL_RESET_VAL;
+      globalReuseWPs.table[i].tid = -1;
+      globalReuseWPs.table[i].monitored_tid = -1;
       globalReuseWPs.table[i].time = -1;
       globalReuseWPs.table[i].trap_just_happened = false;
       globalReuseWPs.table[i].active = false;
@@ -877,6 +879,14 @@ void WatchpointThreadTerminate(){
 
     // before
     int location = -1;
+
+    for(int j = 0; j < wpConfig.maxWP; j++) {
+      if(me == globalReuseWPs.table[j].monitored_tid) {
+        globalReuseWPs.table[j].monitored_tid = -1;
+        break;
+      }
+    }    
+
     for(int j = 0; j < wpConfig.maxWP; j++) {
       if(me == globalWPIsUsers[j]) {
         location = j;
@@ -953,7 +963,7 @@ void WatchpointThreadTerminate(){
 #endif
 }
 
-bool ArmWatchPointProb(int * location, uint64_t sampleTime) {
+bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
   double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[*location]);
   double randValue;
   drand48_r(&tData.randBuffer, &randValue);
@@ -963,6 +973,7 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime) {
     globalReuseWPs.table[*location].active = true;
     globalReuseWPs.table[*location].first_coherence_miss = true;
     globalReuseWPs.table[*location].time = sampleTime; 
+    globalReuseWPs.table[*location].monitored_tid = me;
     return true;
   }
   //fprintf(stderr, "watchpoint is not armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location], *location, TD_GET(core_profile_trace_data.id));
@@ -1632,7 +1643,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
         }	
 
-        if(!(wpi->sample.L1Sample) || (wpi->sample.L1Sample && (globalReuseWPs.table[location].tid == me) && (wpi->sample.first_accessing_tid == me))) {
+        if(!(wpi->sample.L1Sample) || (wpi->sample.L1Sample && (globalReuseWPs.table[location].monitored_tid == me) && (wpi->sample.first_accessing_tid == me))) {
 
           if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
             tData.numWatchpointDropped++;

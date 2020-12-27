@@ -172,7 +172,7 @@ extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overw
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
-extern bool ArmWatchPointProb(int * location, uint64_t sampleTime);
+extern bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);
 extern double ProportionOfWatchpointAmongOthersSharingTheSameContext(WatchPointInfo_t *wpi);
@@ -206,6 +206,7 @@ typedef struct globalReuseEntry{
   volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
   uint64_t time;
   int tid;
+  int monitored_tid;
   int sampledMetricId;
   bool active;
   bool first_coherence_miss;
