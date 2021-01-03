@@ -2382,7 +2382,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
       //fprintf(stderr, "before time_distance\n");
       time_distance = rdtsc() - wpi->startTime;
-      uint64_t cacheline_scaling_inc = 1;
+      /*uint64_t cacheline_scaling_inc = 1;
       if (reuse_profile_type == REUSE_SPATIAL) { 
 	      cacheline_scaling_inc = (CACHE_LINE_SZ - wpi->sample.accessLength)/wpi->sample.wpLength * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
 	     if(cacheline_scaling_inc > inc) { 
@@ -2390,7 +2390,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 		    inc = cacheline_scaling_inc;
 		    //fprintf(stderr, "inc: %ld\n", inc);
 	     } 
-      }
+      }*/
+      /*if(globalReuseWPs.table[wt->location].monitored_tid != globalReuseWPs.table[wt->location].tid)
+	      fprintf(stderr, "owner tid is different from monitored tid\n");
+      else
+	      fprintf(stderr, "owner tid is the same as monitored tid\n");*/
       ReuseAddDistance(rd, inc);
       attributed_rd = rd;
       attributed_inc = inc;	
@@ -2516,7 +2520,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 //uint64_t inc = globalReuseWPs.table[wt->location].sampleCountInNode * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;		
                 // apply context increment here !!!
     		//fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 load miss\n", rd_with_store, inc);	
-		uint64_t cacheline_scaling_inc = 1;
+		/*uint64_t cacheline_scaling_inc = 1;
       		if (reuse_profile_type == REUSE_SPATIAL) {
               		cacheline_scaling_inc = (CACHE_LINE_SZ - wpi->sample.accessLength)/wpi->sample.wpLength * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
              		if(cacheline_scaling_inc > inc) {
@@ -2524,7 +2528,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                     		inc = cacheline_scaling_inc;
                     		//fprintf(stderr, "inc: %ld\n", inc);
              		}
-      		}
+      		}*/
 		ReuseAddDistance(rd_with_store, inc);
                 globalReuseWPs.table[wt->location].first_coherence_miss = false;
                 attributed_inc = inc;
@@ -2867,14 +2871,14 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 //fprintf(stderr, "reuse distance %ld in L3 is detected %ld times because of L2 store miss in address %lx\n", rd_with_store, inc, wt->va);
 		
 		uint64_t cacheline_scaling_inc = 1;
-                if (reuse_profile_type == REUSE_SPATIAL) {
+                /*if (reuse_profile_type == REUSE_SPATIAL) {
                         cacheline_scaling_inc = (CACHE_LINE_SZ - wpi->sample.accessLength)/wpi->sample.wpLength * hpcrun_id2metric(wpi->sample.sampledMetricId)->period * inc_scale;
                         if(cacheline_scaling_inc > inc) {
                                 //fprintf(stderr, "cacheline_scaling_inc: %ld, inc: %ld\n", cacheline_scaling_inc, inc);
                                 inc = cacheline_scaling_inc;
                                 //fprintf(stderr, "inc: %ld\n", inc);
                         }
-                }	
+                }*/	
                 globalStoreReuseWPs.table[wt->location].first_coherence_miss = false;
                 ReuseAddDistance(rd_with_store, inc);
                 attributed_inc = inc;
@@ -4632,7 +4636,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   }
                                   SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
                                 }
-                              }
+                              } /*else {
+				if(globalReuseWPs.table[wt->location].monitored_tid != globalReuseWPs.table[wt->location].tid)
+              				fprintf(stderr, "owner tid is different from monitored tid on sample\n");
+      				else
+              				fprintf(stderr, "owner tid is the same as monitored tid on sample\n");
+			      }*/
 
                             } else {
 

@@ -977,6 +977,10 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
     return true;
   }
   //fprintf(stderr, "watchpoint is not armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location], *location, TD_GET(core_profile_trace_data.id));
+ 
+  /*if(globalReuseWPs.table[*location].monitored_tid != globalReuseWPs.table[*location].tid)
+  	fprintf(stderr, "owner tid is different from monitored tid and watchpoint arming is not allowed\n");*/
+ 
   numWatchpointArmingAttempt[*location]++;
   return false;
 }
