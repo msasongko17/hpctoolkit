@@ -2450,6 +2450,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
                 for(int i=0; i < 3; i++) {
                   if(val[i] >= wpi->sample.reuseDistance[0][i]) {
+		    fprintf(stderr, "val[%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", i, val[i], i, wpi->sample.reuseDistance[0][i]);
                     val[i] -= wpi->sample.reuseDistance[0][i];
                   } else {
                     //globalReuseWPs.table[wt->location].counter++;
@@ -2465,6 +2466,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 //double store_load_ratio = ((global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period + (global_l2_miss_count - periodic_l2_load_miss_count)) / (global_l2_miss_count - periodic_l2_load_miss_count);
 
                 //uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	 
+		fprintf(stderr, "rd: %ld, inc: %ld\n", rd, inc);
 		ReuseAddDistance(rd, inc);
                 attributed_inc = inc;
                 source_code_line_attribution = true;
