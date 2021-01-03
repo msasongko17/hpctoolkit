@@ -4208,6 +4208,32 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             } else { 
 
 			      //fprintf(stderr, "sample is detected to profile l3\n");
+
+			      bool collect_periodic_l2_load_miss_count = false;
+
+			     if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
+                                uint64_t theCounter = sample_count_counter;
+                                if((theCounter & 1) == 0) {
+                                  if(__sync_bool_compare_and_swap(&sample_count_counter, theCounter, theCounter+1)) {
+                                    //fprintf(stderr, "load use is detected, store_count: %d, load_count: %d\n", store_count, load_count);
+
+                                    detected_l2_miss_counter++;
+                                    if((detected_l2_miss_counter % L2_MISS_RATIO_PERIOD) == 0) {
+                                      collect_periodic_l2_load_miss_count = true;
+                                    }
+                                    sample_count_counter++;
+                                  }
+                                }
+                              } 
+
+			      if(collect_periodic_l2_load_miss_count) {
+                               	//periodic_l2_load_miss_count = next_periodic_l2_load_miss_count;
+                              	//next_periodic_l2_load_miss_count = sd.reuseDistance[0][0];
+                              	fprintf(stderr, "detected_l2_miss_counter: %d, next_periodic_l2_load_miss_count: %ld\n", detected_l2_miss_counter, next_periodic_l2_load_miss_count);
+                                        //periodic_l2_store_miss_sample = next_periodic_l2_store_miss_sample;
+                                        //next_periodic_l2_store_miss_sample = global_store_count;
+                              }
+
 			      int location = -1;
 			      bool steal_wp_slot = false;
                               if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
@@ -4340,8 +4366,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                           }
                                         }
                                         //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
-                                      }
-
+                                      } 
+				      
                                     int affinity_l2 = thread_to_l2_mapping[my_core];	
                                     sd.L2Id = affinity_l2;
 
