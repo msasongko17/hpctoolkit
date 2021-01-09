@@ -165,7 +165,7 @@
 extern int global_thread_count;
 extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
-
+extern int l3_reuse_distance_event_rqsts;
 //******************************************************************************
 // type declarations
 //******************************************************************************
@@ -275,6 +275,7 @@ perf_init()
 		.sa_flags =  SA_ONSTACK
 	};
 
+	fprintf(stderr, "perf_event_handler is set up \n");
 	if(monitor_sigaction(PERF_SIGNAL, perf_event_handler, 0 /*flags*/, &sa1) == -1) {
 		fprintf(stderr, "Failed to set PERF_SIGNAL handler: %s\n", strerror(errno));
 		monitor_real_abort();
@@ -390,6 +391,7 @@ get_fd_index(int nevents, int fd, event_thread_t *event_thread)
 record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		void* context, sample_val_t* sv)
 {
+	//fprintf(stderr, "record_sample is called\n");
 	if (current == NULL || current->event == NULL || current->event->metric < 0)
 		return NULL;
 
@@ -756,6 +758,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	extern int *reuse_distance_events;
 	extern int reuse_distance_num_events;
 	extern int l3_reuse_distance_event;
+	//extern int l3_reuse_distance_event_rqsts;
 	reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
 	reuse_distance_num_events = 0;
 	if (reuse_distance_events == NULL){
@@ -763,6 +766,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		return;
 	}
 	l3_reuse_distance_event = 0;
+	l3_reuse_distance_event_rqsts = 0;
 
 	int i=0;
 
@@ -859,7 +863,17 @@ METHOD_FN(process_event_list, int lush_metrics)
 #endif
                         {
                                 l3_reuse_distance_event = i;
-                                //fprintf(stderr, "assignment to l3_reuse_distance_event MEM_LOAD_RETIRED happens here\n");
+                                fprintf(stderr, "assignment to l3_reuse_distance_event MEM_LOAD_RETIRED happens here\n");
+                        }
+
+		#ifdef REUSE_HISTO
+                if ((strstr(name, "L2_RQSTS") != NULL) || (strstr(name, "L2_RQSTS") != NULL))
+#else
+                        if ((strstr(name, "L2_RQSTS") != NULL) || (strstr(name, "L2_RQSTS") != NULL)) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                l3_reuse_distance_event_rqsts = i;
+                                fprintf(stderr, "assignment to L2_RQSTS.MISS happens here\n");
                         }
 		/**************************************************/
 
@@ -1156,7 +1170,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 		//assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
 		int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
 		//fprintf(stderr, "original counter value %ld\n", scaled_val);
-		if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+		if (((event_index != l3_reuse_distance_event_rqsts) &&  (scaled_val >= sample_period * 10)) // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
 				|| scaled_val < 0){
 			//jqswang: TODO: it does not filter out all the invalid values
 			//fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
@@ -1189,12 +1203,15 @@ perf_event_handler(
 	// ----------------------------------------------------------------------------
 	// disable all counters
 	// ----------------------------------------------------------------------------
+	//fprintf(stderr, "in perf_event_handler 0\n");
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
 	int nevents = self->evl.nevents;
 
 	perf_stop_all(nevents, event_thread);
+
+	//fprintf(stderr, "in perf_event_handler\n");
 
 	// ----------------------------------------------------------------------------
 	// check #0:
@@ -1232,6 +1249,7 @@ perf_event_handler(
 		return 0;
 	}
 
+	//fprintf(stderr, "in perf_event_handler\n");
 	int fd = siginfo->si_fd;
 
 	// ----------------------------------------------------------------------------

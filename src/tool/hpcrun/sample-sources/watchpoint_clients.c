@@ -186,6 +186,7 @@ int reuse_store_buffer_metric_id = -1; // store the last time we get an availabl
 int *reuse_distance_events = NULL;
 int reuse_distance_num_events = 0;
 int l3_reuse_distance_event = 0;
+int l3_reuse_distance_event_rqsts = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
 uint64_t inter_core_invalidation_count = 0;
@@ -198,7 +199,7 @@ extern int dynamic_global_thread_count;
 
 int load_count = 0;
 int store_count = 0;
-uint64_t global_store_count = 0;
+//uint64_t global_store_count = 0;
 uint64_t sample_count_counter = 0;
 extern uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 
@@ -2416,11 +2417,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
               //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
               globalReuseWPs.table[wt->location].active = false;
 	      handle_trap = true;
-	      if(((wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) && ((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE))) {
+	      /*if(((wpi->sample.accessType == STORE) || (wpi->sample.accessType == LOAD_AND_STORE)) && ((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE))) {
                   global_store_count++;
                   //fprintf(stderr, "store reuse is detected\n");
                   //fprintf(stderr, "in store use, global_store_count: %ld\n", global_store_count);
-              } 
+              }*/ 
               //fprintf(stderr, "location %d has been disabled by thread %d\n", wt->location, me);
             }
 	    globalReuseWPs.table[wt->location].counter++;
@@ -2431,10 +2432,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
               if(wpi->sample.L3Id == affinity_l3) {
                 uint64_t rd = 0;
                 uint64_t val[3];
-                uint64_t global_val[3];
+                //uint64_t global_val[3];
                 for(int i=0; i < 3; i++) {
                   val[i] = 0;
-                  global_val[i] = 0;
+                  //global_val[i] = 0;
                 }
 
                 //fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
@@ -2444,43 +2445,44 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                   int core_id = mapping_vector[i % mapping_size];
                   if(thread_to_l3_mapping[core_id] == affinity_l3) {
                     //fprintf(stderr, "thread %d mapped to core %d collects counter values from thread %d mapped to core %d located in the same L3 due to load use-led trap\n", me, my_core, i, core_id);
-                    linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i /*locality_vector[affinity_l3][i+1]*/);
+                    linux_perf_read_event_counter_shared( l3_reuse_distance_event_rqsts, val1, i /*locality_vector[affinity_l3][i+1]*/);
                     for(int j=0; j < 3; j++) {
                       val[j] += val1[j];
-                      global_val[j] += val1[j];
+                      //global_val[j] += val1[j];
                     }
-                  } else {
-                    linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i /*locality_vector[affinity_l3][i+1]*/);
+                  } /*else {
+                    linux_perf_read_event_counter_shared( l3_reuse_distance_event_rqsts, val1, i);
                     for(int j=0; j < 3; j++) {
                       global_val[j] += val1[j];
                     }
-                  }
+                  }*/
                 }  
 
-		uint64_t global_l2_miss_count = global_val[0];
+		//uint64_t global_l2_miss_count = global_val[0];
                 for(int i=0; i < 3; i++) {
                   if(val[i] >= wpi->sample.reuseDistance[0][i]) {
 		    //fprintf(stderr, "val[%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", i, val[i], i, wpi->sample.reuseDistance[0][i]);
                     val[i] -= wpi->sample.reuseDistance[0][i];
                   } else {
+		    //fprintf(stderr, "val[%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", i, val[i], i, wpi->sample.reuseDistance[0][i]);
                     //globalReuseWPs.table[wt->location].counter++;
                     return ALREADY_DISABLED;
                   }
                 }
 
-                if(val[0] > 0)
+                if(val[0] >= 0)
                   rd = val[0];
                 else
-                  rd = 1;
+                  rd = 0;
 
-                double store_load_ratio = ((global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period + (global_l2_miss_count - periodic_l2_load_miss_count)) / (global_l2_miss_count - periodic_l2_load_miss_count);
+                //double store_load_ratio = ((global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period + (global_l2_miss_count - periodic_l2_load_miss_count)) / (global_l2_miss_count - periodic_l2_load_miss_count);
 
-                uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	 
+                //uint64_t rd_with_store = (uint64_t) (rd * store_load_ratio);	 
 		//fprintf(stderr, "rd: %ld, inc: %ld, rd_with_store: %ld, store_load_ratio: %0.2lf, global store count: %ld, global_store_count: %ld, periodic_l2_store_miss_sample: %ld, global_store_sampling_period: %ld\n", rd, inc, rd_with_store, store_load_ratio, (global_store_count - periodic_l2_store_miss_sample) * global_store_sampling_period, global_store_count, periodic_l2_store_miss_sample, global_store_sampling_period);
-		ReuseAddDistance(rd_with_store, inc);
+		ReuseAddDistance(rd, inc);
                 attributed_inc = inc;
                 source_code_line_attribution = true;
-                attributed_rd = rd_with_store; //rd_with_store;
+                attributed_rd = rd; //rd_with_store;
                 time_distance = rdtsc() - wpi->startTime;	
               }
 	}
@@ -3737,11 +3739,15 @@ double thread_coefficient(int as_matrix_size) {
 
 
 bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, cct_node_t *node, int sampledMetricId) {
+  if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
+          fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
   void * contextPC = hpcrun_context_pc(context); 
   void * data_addr = mmap_data->addr; 
   void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
+  if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
+	  fprintf(stderr, "there is an L2_RQSTS.MISS\n");
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
@@ -4220,7 +4226,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			      //fprintf(stderr, "sample is detected to profile l3\n");
 
-			      bool collect_periodic_l2_load_miss_count = false;
+			      /*bool collect_periodic_l2_load_miss_count = false;
 
 			     if ((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
                                 uint64_t theCounter = sample_count_counter;
@@ -4251,10 +4257,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 	
 				// here          
 				int cur_global_thread_count = global_thread_count;   
-				for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
+				for(int i = 0; i < cur_global_thread_count; i++) {
                   			uint64_t val1[3] = { 0 };
                     			//fprintf(stderr, "thread %d mapped to core %d collects counter values from thread %d mapped to core %d located in the same L3 due to load use-led trap\n", me, my_core, i, core_id);
-                    			linux_perf_read_event_counter_shared( l3_reuse_distance_event, val1, i /*locality_vector[affinity_l3][i+1]*/);
+                    			linux_perf_read_event_counter_shared( l3_reuse_distance_event_rqsts, val1, i);
                     			for(int j=0; j < 3; j++) {
                       				global_val[j] += val1[j];
                     			}
@@ -4267,7 +4273,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
               			next_periodic_l2_store_miss_sample = global_store_count;
 
 		       		//fprintf(stderr, "after detected_l2_miss_counter: %d, next_periodic_l2_load_miss_count: %ld\n", detected_l2_miss_counter, next_periodic_l2_load_miss_count);		
-                              }
+                              }*/
 
 			      int location = -1;
 			      bool steal_wp_slot = false;
@@ -4395,12 +4401,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         int core_id = mapping_vector[i % mapping_size];
                                         if(thread_to_l3_mapping[core_id] == affinity_l3) {
                                           //fprintf(stderr, "thread %d in core %d is collecting counter value from thread %d in core %d located in the same L3\n", me, my_core, i, core_id);
-                                          linux_perf_read_event_counter_shared( l3_reuse_distance_event, val, i/*locality_vector[affinity_l3][i+1]*/);
+                                          linux_perf_read_event_counter_shared( l3_reuse_distance_event_rqsts, val, i/*locality_vector[affinity_l3][i+1]*/);
                                           for(int j=0; j < 3; j++) {
                                             sd.reuseDistance[0][j] += val[j];
                                           }
                                         }
-                                        //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event: %d, PMU counter value: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event, val[0]);
+                                        //fprintf(stderr, "thread %d gets L2_MISS count from thread %d, l3_reuse_distance_event_rqsts: %d, PMU counter value 0: %ld, PMU counter value 1: %ld, PMU counter value 2: %ld\n", me, locality_vector[affinity_l3][i+1], l3_reuse_distance_event_rqsts, val[0], val[1], val[2]);
                                       } 
 				      
                                     int affinity_l2 = thread_to_l2_mapping[my_core];	
