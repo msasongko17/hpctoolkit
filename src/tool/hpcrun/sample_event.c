@@ -93,6 +93,9 @@
 // recover from SEGVs and partial unwinds
 // ------------------------------------------------------------
 
+extern int context_sample_count[256][13][3];
+extern int context_watermark_sample_count[256][13][3];
+
 static void
 hpcrun_cleanup_partial_unwind(void)
 {
@@ -234,7 +237,28 @@ hpcrun_sample_callpath(void* context, int metricId,
 
       node  = hpcrun_backtrace2cct(&(epoch->csdata), context, metricId,
                                    metricIncr, skipInner, isSync, data_aux);
-      
+     
+     //fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
+     if(metricId > 0) {
+     int node_id = hpcrun_cct_persistent_id(node);
+     int node_id_idx = node_id % 13;
+     int me = TD_GET(core_profile_trace_data.id);
+     int sample_type = 0;
+     if((node_id+1) == context_sample_count[me][node_id_idx][0]) {
+	sample_type = (metricId % 3) % 2;
+     	context_sample_count[me][node_id_idx][sample_type+1]++; 
+     } else {
+	context_sample_count[me][node_id_idx][0] = node_id+1;
+     	context_sample_count[me][node_id_idx][1] = 1;
+	context_sample_count[me][node_id_idx][2] = 1;
+	context_watermark_sample_count[me][node_id_idx][0] = node_id+1;
+        context_watermark_sample_count[me][node_id_idx][1] = 0;	
+	context_watermark_sample_count[me][node_id_idx][2] = 0;
+     }
+     //fprintf(stderr, "counter in node %d becomes %d and watermark counter is %d for metric %d with index %d\n", context_sample_count[me][node_id_idx][0] - 1, context_sample_count[me][node_id_idx][sample_type+1], context_watermark_sample_count[me][node_id_idx][sample_type+1], metricId, sample_type+1);
+     }
+     //context_sample_count[TD_GET(core_profile_trace_data.id)][hpcrun_cct_persistent_id(node)];
+
      // fprintf(stderr, "this spot\n");
       if (ENABLED(DUMP_BACKTRACES)) {
         hpcrun_bt_dump(td->btbuf_cur, "UNWIND");
@@ -247,6 +271,26 @@ hpcrun_sample_callpath(void* context, int metricId,
     node = record_partial_unwind(cct, td->btbuf_beg, td->btbuf_cur - 1,
         metricId, metricIncr, skipInner, NULL);
     hpcrun_cleanup_partial_unwind();
+
+    //fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
+    if(metricId > 0) {
+    int node_id = hpcrun_cct_persistent_id(node);
+    int node_id_idx = node_id % 13;
+    int me = TD_GET(core_profile_trace_data.id);
+    int sample_type = 0;
+    if(((node_id+1) == context_sample_count[me][node_id_idx][0]) && (metricId > 0)) {
+	sample_type = (metricId % 3) % 2;
+        context_sample_count[me][node_id_idx][sample_type+1]++;
+    } else {
+        context_sample_count[me][node_id_idx][0] = node_id+1;
+        context_sample_count[me][node_id_idx][1] = 1;
+	context_sample_count[me][node_id_idx][2] = 1;
+	context_watermark_sample_count[me][node_id_idx][0] = node_id+1;
+	context_watermark_sample_count[me][node_id_idx][1] = 0;
+	context_watermark_sample_count[me][node_id_idx][2] = 0;
+    } 
+    //fprintf(stderr, "counter in node %d becomes %d and watermark counter is %d for metric %d with index %d\n", context_sample_count[me][node_id_idx][0] - 1, context_sample_count[me][node_id_idx][sample_type+1], context_watermark_sample_count[me][node_id_idx][sample_type+1], metricId, sample_type+1);
+    }
   }
   td->current_jmp_buf = old;
 

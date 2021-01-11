@@ -330,6 +330,7 @@ int perf_read_event_counter(event_thread_t *current, uint64_t *val){
 
   if (current->fd < 0){
     EMSG("Error: unable to open the event %d file descriptor", current->event->id);
+    fprintf("Error: unable to open the event %d file descriptor", current->event->id);
     return -1;
   }
   //fprintf(stderr, "val[0] 1: %ld\n", val[0]);
@@ -342,6 +343,7 @@ int perf_read_event_counter(event_thread_t *current, uint64_t *val){
   //fprintf(stderr, "ret: %d\n", ret);
   if (/*ret < sizeof(uint64_t)*3*/ret < sizeof(uint64_t)) {
     EMSG("Error: unable to read event %d", current->event->id);
+    fprintf(stderr, "Error: unable to read event %d", current->event->id);
     return -1;
   }
   return 0;

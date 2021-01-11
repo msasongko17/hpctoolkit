@@ -162,7 +162,10 @@
 #define PATH_KERNEL_KPTR_RESTICT    "/proc/sys/kernel/kptr_restrict"
 #define PATH_KERNEL_PERF_PARANOID   "/proc/sys/kernel/perf_event_paranoid"
 
-
+extern int global_thread_count;
+extern int dynamic_global_thread_count;
+extern long global_l2_miss_sampling_period;
+extern int l3_reuse_distance_event_rqsts;
 //******************************************************************************
 // type declarations
 //******************************************************************************
@@ -216,6 +219,7 @@ static struct event_threshold_s default_threshold = {DEFAULT_THRESHOLD, FREQUENC
  *****************************************************************************/
 extern __thread bool hpcrun_thread_suppress_sample;
 
+event_thread_t *event_thread_board[503];
 
 //******************************************************************************
 // private operations 
@@ -271,6 +275,7 @@ perf_init()
 		.sa_flags =  SA_ONSTACK
 	};
 
+	fprintf(stderr, "perf_event_handler is set up \n");
 	if(monitor_sigaction(PERF_SIGNAL, perf_event_handler, 0 /*flags*/, &sa1) == -1) {
 		fprintf(stderr, "Failed to set PERF_SIGNAL handler: %s\n", strerror(errno));
 		monitor_real_abort();
@@ -292,8 +297,10 @@ perf_init()
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
 	//printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
-	if(mapping_size > 0)
+	if(mapping_size > 0) {
+		//fprintf(stderr, "thread %d is mapped to core %d\n", TD_GET(core_profile_trace_data.id), mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
+	}
 	et->num_overflows = 0;
 	et->prev_num_overflows = 0;
 	et->event = event;
@@ -384,6 +391,7 @@ get_fd_index(int nevents, int fd, event_thread_t *event_thread)
 record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		void* context, sample_val_t* sv)
 {
+	//fprintf(stderr, "record_sample is called\n");
 	if (current == NULL || current->event == NULL || current->event->metric < 0)
 		return NULL;
 
@@ -749,16 +757,24 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	extern int *reuse_distance_events;
 	extern int reuse_distance_num_events;
+	extern int l3_reuse_distance_event;
+	//extern int l3_reuse_distance_event_rqsts;
 	reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
 	reuse_distance_num_events = 0;
 	if (reuse_distance_events == NULL){
 		EMSG("Unable to allocate %d bytes", sizeof(int)*num_events);
 		return;
 	}
+	l3_reuse_distance_event = 0;
+	l3_reuse_distance_event_rqsts = 0;
 
 	int i=0;
 
 	default_threshold = init_default_count();
+
+	for(int i = 0; i < 503; i++) {
+                event_thread_board[i] = NULL;
+        }
 
 	// do things here
 
@@ -776,11 +792,15 @@ METHOD_FN(process_event_list, int lush_metrics)
 				default_threshold.threshold_num);
 		//global_sampling_period = threshold;
 		//global_sampling_period = threshold;
-		if (strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
+		if ((strncmp (name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) || (strncmp (name,"MEM_INST_RETIRED.ALL_STORES",27) == 0))
 			global_store_sampling_period = threshold;
 
 		if (strncmp (name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
 			global_load_sampling_period = threshold;
+
+		if ((strncmp (name,"MEM_LOAD_UOPS_RETIRED.L2_MISS",29) == 0) || (strncmp (name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0)) {
+			global_l2_miss_sampling_period = threshold;
+		}
 
 		// ------------------------------------------------------------
 		// need a special case if we have our own customized  predefined  event
@@ -827,13 +847,34 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 		/******** For witch client WP_REUSE ***************/
 #ifdef REUSE_HISTO
-		if (strstr(name, "MEM_UOPS_RETIRED") != NULL)
+		if ((strstr(name, "MEM_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_INST_RETIRED") != NULL))
 #else
-			if (strstr(name, "MEM_UOPS_RETIRED") != NULL) //jqswang: TODO // && threshold == 0)
+			if ((strstr(name, "MEM_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_INST_RETIRED") != NULL)) //jqswang: TODO // && threshold == 0)
 #endif
 			{
+				//fprintf(stderr, "assignment to l3_reuse_distance_event MEM_INST_RETIRED happens here\n");
 				reuse_distance_events[reuse_distance_num_events++] = i;
 			}
+
+#ifdef REUSE_HISTO
+                if ((strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_LOAD_RETIRED") != NULL))
+#else
+                        if ((strstr(name, "MEM_LOAD_UOPS_RETIRED") != NULL) || (strstr(name, "MEM_LOAD_RETIRED") != NULL)) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                l3_reuse_distance_event = i;
+                                fprintf(stderr, "assignment to l3_reuse_distance_event MEM_LOAD_RETIRED happens here\n");
+                        }
+
+		#ifdef REUSE_HISTO
+                if ((strstr(name, "L2_RQSTS") != NULL) || (strstr(name, "L2_RQSTS") != NULL))
+#else
+                        if ((strstr(name, "L2_RQSTS") != NULL) || (strstr(name, "L2_RQSTS") != NULL)) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                l3_reuse_distance_event_rqsts = i;
+                                fprintf(stderr, "assignment to L2_RQSTS.MISS happens here\n");
+                        }
 		/**************************************************/
 
 
@@ -901,6 +942,12 @@ METHOD_FN(gen_event_set, int lush_metrics)
 			TMSG(LINUX_PERF, "FAIL to initialize %s", event_desc[i].metric_desc->name);
 		}
 	}
+
+	event_thread_board[TD_GET(core_profile_trace_data.id)] =  event_thread;
+	//fprintf(stderr, "event_thread array is initialized in thread %d\n", TD_GET(core_profile_trace_data.id));
+
+	global_thread_count++;
+	dynamic_global_thread_count++;
 
 	TMSG(LINUX_PERF, "gen_event_set OK");
 }
@@ -1016,7 +1063,7 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 	int ret = perf_read_event_counter(current, val);
 
 	if (ret < 0) {
-		fprintf(stderr, "problem here\n");
+		fprintf(stderr, "problem here 1\n");
 		return -1; // something wrong here
 	}
 
@@ -1037,7 +1084,8 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 		}
 		//fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
 		//fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
-		val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		val[0] = current->num_overflows * sample_period + scaled_val;
 		//fprintf(stderr, "val[0]: %ld\n", val[0]);
 		current->prev_num_overflows = current->num_overflows;
 		val[1] = 0;
@@ -1046,6 +1094,100 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 	}
 }
 
+int linux_perf_read_event_counter_l1(int event_index, uint64_t *val, bool use){
+        //fprintf(stderr, "this function is executed\n");
+        sample_source_t *self = &obj_name();
+        event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+
+        event_thread_t *current = &(event_thread[event_index]);
+
+        int ret = perf_read_event_counter(current, val);
+
+        if (ret < 0) {
+                fprintf(stderr, "problem here 1\n");
+                return -1; // something wrong here
+        }
+
+        uint64_t sample_period = current->event->attr.sample_period;
+        if (sample_period == 0){ // counting event
+                return 0;
+        } else {
+                // overflow event
+                //assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+                int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+                //fprintf(stderr, "original counter value %ld\n", scaled_val);
+                if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+                                || scaled_val < 0){
+                        //jqswang: TODO: it does not filter out all the invalid values
+                        //fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+                        hpcrun_stats_num_corrected_reuse_distance_inc(1);
+                        scaled_val = 0;
+                }
+		val[0] = use ? current->num_overflows * sample_period : current->num_overflows * sample_period + scaled_val;
+		//val[0] = current->num_overflows * sample_period + scaled_val;
+                //fprintf(stderr, "val[0]: %ld\n", val[0]);
+                current->prev_num_overflows = current->num_overflows;
+                val[1] = scaled_val;
+                val[2] = 0;
+                return 0;  
+        }
+}
+
+
+int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid){
+	//fprintf(stderr, "this function is executed\n");
+	//sample_source_t *self = &obj_name();
+	/*if (event_index == 0) {
+                fprintf(stderr, "problem here\n");
+                return -1; // something wrong here
+        }*/
+
+	event_thread_t *event_thread = event_thread_board[tid];
+
+
+	if (event_thread == NULL) {
+                fprintf(stderr, "problem here 2 in thread %d\n", tid);
+                return -1; // something wrong here
+        }
+
+	event_thread_t *current = &(event_thread[event_index]);
+
+
+	//fprintf(stderr, "this function is executed before perf_read_event_counter\n");
+	int ret = perf_read_event_counter(current, val);
+	//fprintf(stderr, "this function is executed after perf_read_event_counter\n");
+	
+	if (ret < 0) {
+		fprintf(stderr, "problem here 3\n");
+		return -1; // something wrong here
+	}
+
+	uint64_t sample_period = current->event->attr.sample_period;
+	if (sample_period == 0){ // counting event
+		return 0;
+	} else {
+		// overflow event
+		//assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+		int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+		//fprintf(stderr, "original counter value %ld\n", scaled_val);
+		if (((event_index != l3_reuse_distance_event_rqsts) &&  (scaled_val >= sample_period * 10)) // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+				|| scaled_val < 0){
+			//jqswang: TODO: it does not filter out all the invalid values
+			//fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+			hpcrun_stats_num_corrected_reuse_distance_inc(1);
+			scaled_val = 0;
+		}
+		//fprintf(stderr, "in linux_perf_read_event_counter %s: num_overflows: %lu, val[0]: %ld, val[1]: %lu, val[2]: %lu\n", current->event->metric_desc->name, current->num_overflows, val[0],val[0],val[1],val[2]);
+		//fprintf(stderr, "current->num_overflows: %ld, current->prev_num_overflows: %ld, sample_period: %ld, scaled_val: %ld\n", current->num_overflows, current->prev_num_overflows, sample_period, scaled_val);
+		//val[0] = (current->num_overflows > current->prev_num_overflows) ? (current->num_overflows * sample_period) : ((current->num_overflows > 0) ? (current->num_overflows * sample_period + scaled_val) : scaled_val);
+		 val[0] = current->num_overflows * sample_period + scaled_val;
+		//fprintf(stderr, "val[0]: %ld\n", val[0]);
+		//current->prev_num_overflows = current->num_overflows;
+		val[1] = 0;
+		val[2] = 0;
+		return 0;
+	}
+}
 
 // ---------------------------------------------
 // signal handler
@@ -1061,12 +1203,15 @@ perf_event_handler(
 	// ----------------------------------------------------------------------------
 	// disable all counters
 	// ----------------------------------------------------------------------------
+	//fprintf(stderr, "in perf_event_handler 0\n");
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
 	int nevents = self->evl.nevents;
 
 	perf_stop_all(nevents, event_thread);
+
+	//fprintf(stderr, "in perf_event_handler\n");
 
 	// ----------------------------------------------------------------------------
 	// check #0:
@@ -1104,6 +1249,7 @@ perf_event_handler(
 		return 0;
 	}
 
+	//fprintf(stderr, "in perf_event_handler\n");
 	int fd = siginfo->si_fd;
 
 	// ----------------------------------------------------------------------------

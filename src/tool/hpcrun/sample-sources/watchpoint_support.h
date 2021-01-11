@@ -112,11 +112,14 @@ typedef struct SampleData{
 	WPTriggerActionType preWPAction;
 	bool isSamplePointAccurate;
 	bool isBackTrace;
+	bool L1Sample;
+	bool L3LoadUse;
+	bool L3StoreUse;
 	ReuseType reuseType;
-	uint64_t eventCountBetweenSamples;
-	uint64_t timeBetweenSamples;
 	uint64_t reuseDistance[2][3];
 	uint64_t sampleTime;
+	int L3Id;
+	int L2Id;
 } SampleData_t;
 
 typedef struct WatchPointInfo{
@@ -140,6 +143,7 @@ typedef struct WatchPointTrigger{
 	FloatType floatType;
 	AccessType accessType;
 	int accessLength; // access length
+	int location;
 } WatchPointTrigger_t;
 
 // Data structure that is maintained per WP armed
@@ -150,6 +154,7 @@ typedef struct WPConfig {
 	bool isLBREnabled;
 	bool isWPModifyEnabled;
 	bool getFloatType;
+	bool cachelineInvalidation;
 	int signalDelivered;
 	size_t pgsz;
 	ReplacementPolicy replacementPolicy;
@@ -167,6 +172,7 @@ extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overw
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
 extern bool OnSample(perf_mmap_data_t * mmap_data, void * contextPC, cct_node_t *node, int sampledMetricId);
+extern bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me);
 extern bool IsAltStackAddress(void *addr);
 extern bool IsFSorGS(void *addr);
 extern double ProportionOfWatchpointAmongOthersSharingTheSameContext(WatchPointInfo_t *wpi);
@@ -184,6 +190,7 @@ extern void IPCAllSharingWPConfigOverride(void*);
 extern void RedSpyWPConfigOverride(void *v);
 extern void LoadSpyWPConfigOverride(void *v);
 extern bool WatchpointClientActive();
+//extern inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int pebsMetricId, double proportion);
 extern void DisableWatchpointWrapper(WatchPointInfo_t *wpi);
 
 static inline  uint64_t rdtsc(){
@@ -191,5 +198,34 @@ static inline  uint64_t rdtsc(){
 	__asm__ __volatile__ ("rdtsc" : "=a" (lo), "=d" (hi));
 	return ((uint64_t)hi << 32) | lo;
 }
+
+#define MAX_WP_SLOTS (5)
+#define CACHE_LINE_SIZE (64)
+
+typedef struct globalReuseEntry{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t time;
+  int tid;
+  int monitored_tid;
+  int sampledMetricId;
+  bool active;
+  bool first_coherence_miss;
+  bool trap_just_happened;
+  //uint64_t rd;
+  int node_id;
+  uint64_t sampleCountInNode;
+  uint64_t residueSampleCountInPrevThread;
+  int residueSampleCountInPrevOwner[2];
+  char dummy[CACHE_LINE_SZ];
+} globalReuseEntry_t;
+
+typedef struct globalReuseTable{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  struct globalReuseEntry table[MAX_WP_SLOTS];
+  //struct SharedData * hashTable;
+} globalReuseTable_t;
+
+#define CHANGE_THRESHOLD 100
+#define L2_MISS_RATIO_PERIOD 50
 
 #endif //__WP_SUPPORT__
