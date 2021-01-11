@@ -4313,33 +4313,34 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 globalReuseWPs.table[location].tid = me;
 
 				wait_threshold = sample_count + CHANGE_THRESHOLD;
+				int node_idx = hpcrun_cct_persistent_id(node) % 13;
 				//fprintf(stderr, "thread %d is getting WP number %d used_wp_count: %d, sample_count: %d, wait_threshold: %d\n", me, location, used_wp_count, sample_count, wait_threshold);
                                 if (globalReuseWPs.table[location].residueSampleCountInPrevOwner[0] > 0)
                                 {
                                 	//int node_id = hpcrun_cct_persistent_id(node);
                                 	//int node_id_idx = node_id % 13;
-                               		for(int i = 0; i < 13; i++) {
-                                       		int sampleCountDiff = context_sample_count[me][i][1] - context_watermark_sample_count[me][i][1];
+                               		//for(int i = 0; i < 13; i++) {
+                                       		int sampleCountDiff = context_sample_count[me][node_idx][1] - context_watermark_sample_count[me][node_idx][1];
                                         	if(sampleCountDiff > globalReuseWPs.table[location].residueSampleCountInPrevOwner[0]) {
-                                        		context_watermark_sample_count[me][i][1] += sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevOwner[0];
+                                        		context_watermark_sample_count[me][node_idx][1] += sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevOwner[0];
 
                                        		//fprintf(stderr, "metric 0 is updated by %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevOwner[0]);
                                        		}
-                                    	}
+                                    	//}
                             	}
 
 				if (globalReuseWPs.table[location].residueSampleCountInPrevOwner[1] > 0)
                                 {
                               		//int node_id = hpcrun_cct_persistent_id(node);
                                 	//int node_id_idx = node_id % 13;
-                                	for(int i = 0; i < 13; i++) {
-                                    		int sampleCountDiff = context_sample_count[me][i][2] - context_watermark_sample_count[me][i][2];
+                                	//for(int i = 0; i < 13; i++) {
+                                    		int sampleCountDiff = context_sample_count[me][node_idx][2] - context_watermark_sample_count[me][node_idx][2];
                                       		if(sampleCountDiff > globalReuseWPs.table[location].residueSampleCountInPrevOwner[1]) {
-                                      			context_watermark_sample_count[me][i][2] += sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevOwner[1];
+                                      			context_watermark_sample_count[me][node_idx][2] += sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevOwner[1];
                                                 //fprintf(stderr, "metric 1 is updated by %d\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevOwner[1]);
 
                                               	}
-                                 	}
+                                 	//}
                         	}
 
 			      }
