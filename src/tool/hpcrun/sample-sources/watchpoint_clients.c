@@ -2438,7 +2438,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                   //global_val[i] = 0;
                 }
 
-                //fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
+		//fprintf(stderr, "a trap happens in the same L3\n");
+               // fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
                int cur_global_thread_count = global_thread_count;
                 for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
                   uint64_t val1[3] = { 0 };
