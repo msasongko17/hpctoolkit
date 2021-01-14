@@ -117,6 +117,7 @@ typedef struct SampleData{
 	bool L3StoreUse;
 	ReuseType reuseType;
 	uint64_t reuseDistance[2][3];
+	uint64_t sharedReuseDistance[2][3];
 	uint64_t sampleTime;
 	int L3Id;
 	int L2Id;
