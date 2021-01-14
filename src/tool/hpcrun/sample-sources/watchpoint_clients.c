@@ -211,6 +211,11 @@ double reuse_bin_ratio = 0;
 uint64_t * reuse_bin_list = NULL;
 double * reuse_bin_pivot_list = NULL; // store the bin intervals
 int reuse_bin_size = 0;
+
+uint64_t * shared_reuse_bin_list = NULL;
+double * shared_reuse_bin_pivot_list = NULL; // store the bin intervals
+int shared_reuse_bin_size = 0;
+
 #else
 #endif
 
@@ -541,6 +546,59 @@ void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
+void ExpandSharedReuseBinList(){
+  // each time we double the size of reuse_bin_list
+  uint64_t *old_reuse_bin_list = shared_reuse_bin_list;
+  double *old_reuse_bin_pivot_list = shared_reuse_bin_pivot_list;
+  int old_reuse_bin_size = shared_reuse_bin_size;
+  shared_reuse_bin_size *= 2;
+
+  shared_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t) * shared_reuse_bin_size);
+  memset(shared_reuse_bin_list, 0, sizeof(uint64_t) * shared_reuse_bin_size);
+  memcpy(shared_reuse_bin_list, old_reuse_bin_list, sizeof(uint64_t) * old_reuse_bin_size);
+
+  shared_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double) * shared_reuse_bin_size);
+  memset(shared_reuse_bin_pivot_list, 0, sizeof(double) * shared_reuse_bin_size);
+  memcpy(shared_reuse_bin_pivot_list, old_reuse_bin_pivot_list, sizeof(double) * old_reuse_bin_size);
+  for(int i=old_reuse_bin_size; i < shared_reuse_bin_size; i++){
+    shared_reuse_bin_pivot_list[i] = shared_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+  }
+
+  //hpcrun_free(old_reuse_bin_list);
+  //hpcrun_free(old_reuse_bin_pivot_list);
+}
+
+int FindSharedReuseBinIndex(uint64_t distance){
+  //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[0]: %0.2lf\n", distance, reuse_bin_pivot_list[0]);
+  if (distance < shared_reuse_bin_pivot_list[0]){
+    //fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf\n", reuse_bin_pivot_list[0]);
+    return 0;
+  }
+  if (distance >= shared_reuse_bin_pivot_list[reuse_bin_size - 1]){
+    ExpandSharedReuseBinList();
+    return FindSharedReuseBinIndex(distance);
+  }
+
+  int left = 0, right = reuse_bin_size - 1;
+  while(left + 1 < right){
+    int mid = (left + right) / 2;
+    //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
+    if ( distance < shared_reuse_bin_pivot_list[mid]){
+      right = mid;
+    } else {
+      left = mid;
+    }
+  }
+  assert(left + 1 == right);
+  return left + 1;
+}
+
+void SharedReuseAddDistance(uint64_t distance, uint64_t inc ){
+  int index = FindSharedReuseBinIndex(distance);
+  shared_reuse_bin_list[index] += inc;
+  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+}
+
 void ReuseSubDistance(uint64_t distance, uint64_t dec ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] -= dec;
@@ -800,9 +858,9 @@ METHOD_FN(start)
     return;
   }
   td->ss_state[self->sel_idx] = START;
-#ifdef REUSE_HISTO
+/*#ifdef REUSE_HISTO
   assert(OpenWitchTraceOutput()==0);
-#endif
+#endif*/
 }
 
 static void ClientTermination(){
@@ -885,25 +943,8 @@ static void ClientTermination(){
       }   break;
     case WP_REUSETRACKER:
       {
+	      /*
 #ifdef REUSE_HISTO
-        //sample_count++;
-        /*fprintf(stderr, "sample_count: %ld\n", sample_count);
-          fprintf(stderr, "wp_arming_count: %ld\n", wp_arming_count);
-          fprintf(stderr, "trap_count: %ld\n", trap_count);
-          fprintf(stderr, "create_wp_count: %ld\n", create_wp_count);
-          fprintf(stderr, "arm_wp_count: %ld\n", arm_wp_count);
-          fprintf(stderr, "sub_wp_count1: %ld\n", sub_wp_count1);
-          fprintf(stderr, "sub_wp_count2: %ld\n", sub_wp_count2);
-          fprintf(stderr, "overlap_count: %ld\n", overlap_count);
-          fprintf(stderr, "none_available_count: %ld\n", none_available_count);
-          fprintf(stderr, "sub_wp_count3: %ld\n", sub_wp_count3);
-          fprintf(stderr, "wp_count: %ld\n", wp_count);
-          fprintf(stderr, "wp_count1: %ld\n", wp_count1);
-          fprintf(stderr, "wp_count2: %ld\n", wp_count2);
-          fprintf(stderr, "wp_dropped: %ld\n", wp_dropped);
-          fprintf(stderr, "wp_active: %ld\n", wp_active);*/
-
-        //fprintf(stderr, "in WP_REUSETRACKER\n");
         uint64_t val[3];
         //fprintf(stderr, "FINAL_COUNTING:");
         if (reuse_output_trace == false){ //dump the bin info
@@ -933,6 +974,7 @@ static void ClientTermination(){
         //close the trace output
         CloseWitchTraceOutput();
 #endif
+*/
         hpcrun_stats_num_accessedIns_inc(accessedIns);
         hpcrun_stats_num_reuseTemporal_inc(mtReuseTemporal);
         hpcrun_stats_num_reuseSpatial_inc(mtReuseSpatial);
@@ -1112,7 +1154,6 @@ METHOD_FN(stop)
     TMSG(WATCHPOINT,"*WARNING* WATCHPOINT stop called when not in state START");
     return;
   }
-
   ClientTermination();
 
   if (ENABLED(PRINTTOPN))
@@ -1475,6 +1516,7 @@ METHOD_FN(process_event_list, int lush_metrics)
         //reuse_profile_type = REUSE_TEMPORAL;
 #ifdef REUSE_HISTO
         {
+	  assert(OpenWitchTraceOutput()==0);
           char * bin_scheme_str = getenv("HPCRUN_WP_REUSE_BIN_SCHEME");
           if (bin_scheme_str){
             if ( 0 == strcasecmp(bin_scheme_str, "TRACE")){
@@ -1526,6 +1568,18 @@ METHOD_FN(process_event_list, int lush_metrics)
               reuse_bin_pivot_list[i] = reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
               //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
             }
+
+	    shared_reuse_bin_size = 20;
+            shared_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*shared_reuse_bin_size);
+            memset(shared_reuse_bin_list, 0, sizeof(uint64_t)*shared_reuse_bin_size);
+            shared_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*shared_reuse_bin_size);
+            shared_reuse_bin_pivot_list[0] = reuse_bin_start;
+            //  fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf, reuse_bin_start: %0.2lf\n", reuse_bin_pivot_list[0], reuse_bin_start);
+            for(int i=1; i < shared_reuse_bin_size; i++){
+              shared_reuse_bin_pivot_list[i] = shared_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+              //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
+            }
+
           }
 
           char * profileL3String = getenv("HPCRUN_PROFILE_L3");
@@ -5029,7 +5083,7 @@ ErrExit:
 
   }
 
-  void dump_comdetective_matrices() {
+  void dump_profiling_metrics() {
     if(theWPConfig->id == WP_COMDETECTIVE) {
       dump_fs_matrix();
       dump_fs_core_matrix();
@@ -5050,13 +5104,54 @@ ErrExit:
       dump_waw_as_matrix();
       dump_waw_as_core_matrix();
     }
-    /*if(theWPConfig->id == WP_REUSETRACKER) {
-      dump_as_matrix();
-      dump_as_core_matrix();
-      dump_invalidation_matrix();
-      dump_invalidation_core_matrix();
+    if(theWPConfig->id == WP_REUSETRACKER) {
+      #ifdef REUSE_HISTO
+        uint64_t val[3];
+        //fprintf(stderr, "FINAL_COUNTING:");
+        if (reuse_output_trace == false){ //dump the bin info
+          //fprintf(stderr, "the bin info is dumped\n");
+          //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+          //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+          WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
+          WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
 
-      }*/
+          for(int i=0; i < reuse_bin_size; i++){
+            WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
+          }
+        }
+
+        //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+        //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+        WriteWitchTraceOutput("COHERENCE_MISS:");
+        WriteWitchTraceOutput(" %ld\n", l3_coherence_miss_count);
+        WriteWitchTraceOutput("FINAL_COUNTING:");
+        for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
+          assert(linux_perf_read_event_counter(reuse_distance_events[i], val) >= 0);
+          //fprintf(stderr, " %lu %lu %lu,", val[0], val[1], val[2]);//jqswang
+          WriteWitchTraceOutput(" %lu %lu %lu,", val[0], val[1], val[2]);
+        }
+        //fprintf(stderr, "\n");
+        WriteWitchTraceOutput("\n");
+        //close the trace output
+        CloseWitchTraceOutput();
+
+	char file_name[PATH_MAX];
+	int ret = snprintf(file_name, PATH_MAX, "%s-%u.shared.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
+        FILE * fp;
+	fp = fopen (file_name, "w+");
+	fprintf(fp, "BIN_START: %lf\n", reuse_bin_start); 
+	fprintf(fp, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+	for(int i=0; i < shared_reuse_bin_size; i++){
+            fprintf(fp, "BIN: %d %lu\n", i, shared_reuse_bin_list[i]);
+        }
+	fprintf(fp, "COHERENCE_MISS:");
+        fprintf(fp, " %ld\n", l3_coherence_miss_count); 
+        //fprintf(stderr, "\n");
+        fprintf(fp, "\n");
+	fclose(fp);
+#endif 
+
+    }
   }
 
 
