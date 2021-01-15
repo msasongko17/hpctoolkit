@@ -2477,68 +2477,64 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 		affinity_l3 = thread_to_l3_mapping[my_core];
 	//if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3)) {
 		// before
-		bool handle_trap = false;
-        	uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
-        	if((theCounter & 1) == 0) {
-          		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
-            			if(globalReuseWPs.table[wt->location].sharedActive) {
+	bool handle_trap = false;
+        uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
+        if((theCounter & 1) == 0) {
+          	if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+            		if(globalReuseWPs.table[wt->location].sharedActive) {
 
-              				//globalReuseWPs.table[wt->location].trap_just_happened = true;
-              				//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-              				globalReuseWPs.table[wt->location].sharedActive = false;
-					if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3))
-              					handle_trap = true;
+              			//globalReuseWPs.table[wt->location].trap_just_happened = true;
+              			//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+              			globalReuseWPs.table[wt->location].sharedActive = false;
+				if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3))
+              				handle_trap = true;
              	 
-            			}
-            			globalReuseWPs.table[wt->location].counter++;
-          		}
-        	}
+            		}
+            		globalReuseWPs.table[wt->location].counter++;
+          	}
+        }
 
-		if(handle_trap) {
+	if(handle_trap) {
 			double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-			numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+			numDiffSamples = hpcrun_id2metric(wpi->sample.sampledMetricId)->period; //GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 			double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
 			uint64_t inc = numDiffSamples * inc_scale;
 			uint64_t rd = 0;
-                	uint64_t val[3];
+                	uint64_t val[2][3];
                 	//uint64_t global_val[3];
-                	for(int i=0; i < 3; i++) {
-                  		val[i] = 0;
-                  		//global_val[i] = 0;
-                	}
+			for(int i=0; i < 2; i++) {
+                		for(int j=0; j < 3; j++) {
+                  			val[i][j] = 0;
+                  			//global_val[i] = 0;
+                		}
+			}
 
                 	//fprintf(stderr, "a trap happens in the same L3\n");
                		// fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
-               		int cur_global_thread_count = global_thread_count;
-                	for(int i = 0; i < cur_global_thread_count/*locality_vector[affinity_l3][0]*/; i++) {
-                  		uint64_t val1[3] = { 0 };
-                  		int core_id = mapping_vector[i % mapping_size];
-                  		if(thread_to_l3_mapping[core_id] == affinity_l3) {
-                    		//fprintf(stderr, "thread %d mapped to core %d collects counter values from thread %d mapped to core %d located in the same L3 due to load use-led trap\n", me, my_core, i, core_id);
-                    			linux_perf_read_event_counter_shared( l3_reuse_distance_event_rqsts, val1, i /*locality_vector[affinity_l3][i+1]*/);
-                    			for(int j=0; j < 3; j++) {
-                      				val[j] += val1[j];
-                      				//global_val[j] += val1[j];
-                    			}
-                  		} 
-                	}
+			// before
+			int cur_global_thread_count = global_thread_count;
+                        for(int i = 0; i < cur_global_thread_count; i++) {
+                        	if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
+                       			for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
+						uint64_t val1[3];
+                                                linux_perf_read_event_counter_shared( reuse_distance_events[j], val1, i/*locality_vector[affinity_l3][i+1]*/);
+                                        	for(int k=0; k < 3; k++) {
+                                          		val[j][k] += val1[k];
+                                          	}
+                                    	}
+                             	}
+                    	}
+			// after	
 
 			// before
-			for(int i=0; i < 3; i++) {
-                  		if(val[i] >= wpi->sample.reuseDistance[0][i]) {
-                    			//fprintf(stderr, "val[%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", i, val[i], i, wpi->sample.reuseDistance[0][i]);
-                    			val[i] -= wpi->sample.reuseDistance[0][i];
-                  		} else {
-                    			//fprintf(stderr, "val[%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", i, val[i], i, wpi->sample.reuseDistance[0][i]);
-                    			//globalReuseWPs.table[wt->location].counter++;
-                    			return ALREADY_DISABLED;
+			for(int i=0; i < 2; i++) {
+                  		if(val[i][0] >= wpi->sample.sharedReuseDistance[i][0]) {
+					
+                    			val[i][0] -= wpi->sample.sharedReuseDistance[i][0];
                   		}
-                	}
+				rd += val[i][0];
+			}
 
-                	if(val[0] >= 0)
-                  		rd = val[0];
-                	else
-                  		rd = 0;
 
                 	SharedReuseAddDistance(rd, inc);
                 	attributed_inc = inc;
@@ -4227,18 +4223,20 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				    sd.L2Id = affinity_l2;
 				}
 
-				for(int j=0; j < 3; j++) {
-                                	sd.sharedReuseDistance[0][j] = 0;
-                              	}
+				for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+					for(int j=0; j < 3; j++) {
+                                		sd.sharedReuseDistance[i][j] = 0;
+                              		}
+				}
 	
                                 int cur_global_thread_count = global_thread_count;
                                 for(int i = 0; i < cur_global_thread_count; i++) {
                                         if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
-						for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+						for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
                                   			uint64_t val[3];  
-                                 			linux_perf_read_event_counter_shared( reuse_distance_events[0], val, i/*locality_vector[affinity_l3][i+1]*/);
-                                          		for(int j=0; j < 3; j++) {
-                                            			sd.sharedReuseDistance[0][j] += val[j];
+                                 			linux_perf_read_event_counter_shared( reuse_distance_events[j], val, i/*locality_vector[affinity_l3][i+1]*/);
+                                          		for(int k=0; k < 3; k++) {
+                                            			sd.sharedReuseDistance[j][k] += val[k];
                                           		}
                                 		}
 					}

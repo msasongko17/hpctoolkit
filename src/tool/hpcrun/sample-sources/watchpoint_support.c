@@ -468,6 +468,7 @@ __attribute__((constructor))
       globalReuseWPs.table[i].time = -1;
       globalReuseWPs.table[i].trap_just_happened = false;
       globalReuseWPs.table[i].active = false;
+      globalReuseWPs.table[i].sharedActive = false;
       globalReuseWPs.table[i].first_coherence_miss = false;
       globalReuseWPs.table[i].counter = 0;
       globalReuseWPs.table[i].node_id = -1;
