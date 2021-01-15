@@ -971,6 +971,7 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
     numWatchpointArmingAttempt[*location]++;
     //fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
     globalReuseWPs.table[*location].active = true;
+    globalReuseWPs.table[*location].sharedActive = true;
     globalReuseWPs.table[*location].first_coherence_miss = true;
     globalReuseWPs.table[*location].time = sampleTime; 
     globalReuseWPs.table[*location].monitored_tid = me;
@@ -1649,22 +1650,15 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             break;
         }	
 
-        if(!(wpi->sample.L1Sample) || (wpi->sample.L1Sample && (globalReuseWPs.table[location].monitored_tid == me) && (wpi->sample.first_accessing_tid == me))) {
-
 	  //fprintf(stderr, "watchpoint trap happens\n");
-          if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
+        if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
             tData.numWatchpointDropped++;
             retVal = DISABLE_WP; // disable if unable to collect any info.
           } else {
             wpt.location = location;
             retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
           }
-        } else if(wpi->sample.L1Sample) {
-          retVal = ALREADY_DISABLED;
-          /*if(globalReuseWPs.table[location].active) {
-            fprintf(stderr, "trap is detected\n");
-            }*/
-        }
+
         switch (retVal) {
           case DISABLE_WP: {
                              if(wpi->isActive){

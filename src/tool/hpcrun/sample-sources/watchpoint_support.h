@@ -210,6 +210,7 @@ typedef struct globalReuseEntry{
   int monitored_tid;
   int sampledMetricId;
   bool active;
+  bool sharedActive;
   bool first_coherence_miss;
   bool trap_just_happened;
   //uint64_t rd;
