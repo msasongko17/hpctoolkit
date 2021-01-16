@@ -160,12 +160,6 @@ __thread uint64_t last_monitored_wp_timestamp = 0;
 __thread cct_node_t *monitored_node;
 __thread int monitored_metric;
 
-typedef struct MonitoredNodeStruct{
-	uint64_t timestamp;
-	int metricId;
- 	bool self_trap;
-} MonitoredNodeStruct_t;
-
 MonitoredNodeStruct_t MonitoredNode;
 
 //int wp_user_list[MAX_WP_SLOTS];
@@ -858,6 +852,7 @@ METHOD_FN(thread_init_action)
   wpStats.numWatchpointsSet = 0;
   WatchpointThreadInit(theWPConfig->wpCallback);
   TMSG(WATCHPOINT, "register thread ok");
+
 }
 
   static void
@@ -1319,7 +1314,6 @@ METHOD_FN(process_event_list, int lush_metrics)
   wpStats.numImpreciseSamples = 0;
   wpStats.numWatchpointsSet = 0;
   WatchpointThreadInit(theWPConfig->wpCallback);
-
   if(theWPConfig->configOverrideCallback){
     theWPConfig->configOverrideCallback(0);
   }
@@ -2411,7 +2405,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
     double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
     uint64_t inc = numDiffSamples * inc_scale;
-
+    uint64_t trapTime = rdtsc();
    // before
    bool handle_trap = false;
    bool post_inc_flag = false;
@@ -2435,7 +2429,6 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
    // after
 
     if(handle_trap) {
-      uint64_t trapTime = rdtsc();
       uint64_t rd = 0;
       uint64_t val[2][3];
 
@@ -2476,9 +2469,16 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 	    SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
     }
     globalReuseWPs.table[wt->location].self_trap = false;
-    if(globalReuseWPs.table[wt->location].time == MonitoredNode.timestamp) {
-    	MonitoredNode.self_trap = false;
-    }
+    theCounter = MonitoredNode.counter;
+   	if((theCounter & 1) == 0) {
+        	if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
+    			if(globalReuseWPs.table[wt->location].time == MonitoredNode.timestamp) {
+    				MonitoredNode.self_trap = false;
+				MonitoredNode.trap_timestamp = trapTime;
+			}
+			MonitoredNode.counter++;
+		}
+    	}
   } else {
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
@@ -4243,17 +4243,18 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               }
 
 			      if(location ==  -1) {
-				if((last_monitored_wp_timestamp == MonitoredNode.timestamp) && (last_trapped_timestamp != MonitoredNode.timestamp) && (MonitoredNode.self_trap == false)) {
-					//reset context scaling count in monitored_node
-					GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
-					last_trapped_timestamp = MonitoredNode.timestamp;
-				}
-				else if(last_monitored_wp_timestamp != MonitoredNode.timestamp) {
-			      		monitored_node = node;
-					monitored_metric = MonitoredNode.metricId;
-					last_monitored_wp_timestamp = MonitoredNode.timestamp;	
-				}
-			      }
+					uint64_t timestamp = MonitoredNode.timestamp;
+					if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
+						//reset context scaling count in monitored_node
+						GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
+						last_trapped_timestamp = timestamp;
+					}
+					else if(last_monitored_wp_timestamp != timestamp) {
+			      			monitored_node = node;
+						monitored_metric = MonitoredNode.metricId;
+						last_monitored_wp_timestamp = timestamp;	
+					}
+			      	}	
 
                               /*if(globalReuseWPs.table[location].tid == me) {
                                 if (sample_count > wait_threshold) {
@@ -4282,10 +4283,18 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               //fprintf(stderr, "location: %d, thread: %d\n", location, me);
                               if((location != -1) && ArmWatchPointProb(&location, curTime, me)) {
 
-			   	if((curTime - MonitoredNode.timestamp) >= 2 * (curTime - lastTime)) {
-					MonitoredNode.timestamp = curTime;
-					MonitoredNode.metricId = sampledMetricId;
-					MonitoredNode.self_trap = true;
+				uint64_t theCounter = MonitoredNode.counter;
+                                if((theCounter & 1) == 0) {
+                                        if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
+
+			   			if((MonitoredNode.self_trap == false) && ((curTime - MonitoredNode.trap_timestamp) >= (2 * (curTime - lastTime)))) {
+							MonitoredNode.timestamp = curTime;
+							MonitoredNode.trap_timestamp = 0;
+							MonitoredNode.metricId = sampledMetricId;
+							MonitoredNode.self_trap = true;
+						}
+						MonitoredNode.counter++;
+					}
 				}	
 
 				// before

@@ -73,6 +73,8 @@ __thread int wait_threshold = 0;
 extern __thread sample_count;
 extern int used_wp_count;
 
+extern MonitoredNodeStruct_t MonitoredNode;
+
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
@@ -479,6 +481,9 @@ __attribute__((constructor))
       globalStoreReuseWPs.table[i].counter = 0;
     }
     globalReuseWPs.counter = 0;
+    MonitoredNode.timestamp = 0;
+    MonitoredNode.trap_timestamp = 0;
+    MonitoredNode.self_trap = false;
 
   }
 
@@ -869,7 +874,6 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
   //if((event_type == WP_REUSE_MT) || (event_type == WP_MT_REUSE))
   threadDataTable.hashTable[me] = tData;
 #endif
-
 }
 
 void WatchpointThreadTerminate(){

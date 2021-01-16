@@ -164,6 +164,13 @@ typedef struct WPConfig {
 
 extern WPConfig_t wpConfig;
 
+typedef struct MonitoredNodeStruct{
+        uint64_t timestamp;
+        uint64_t trap_timestamp;
+        uint64_t counter;
+        int metricId;
+        bool self_trap;
+} MonitoredNodeStruct_t;
 
 typedef WPTriggerActionType (*WatchPointUpCall_t)(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 typedef void (*ClientConfigOverrideCall_t)(void *);
