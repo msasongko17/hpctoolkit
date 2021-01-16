@@ -169,6 +169,7 @@ typedef WPTriggerActionType (*WatchPointUpCall_t)(WatchPointInfo_t *wpi, int sta
 typedef void (*ClientConfigOverrideCall_t)(void *);
 extern void WatchpointThreadInit();
 extern void WatchpointThreadTerminate();
+extern WatchPointInfo_t * getWPI  (int me, int location);
 extern bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue);
 extern bool SubscribeWatchpointWithTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime, uint64_t lastTime);
 extern bool SubscribeWatchpointWithStoreTime(SampleData_t * sampleData, OverwritePolicy overwritePolicy, bool captureValue, uint64_t curTime);
@@ -213,8 +214,11 @@ typedef struct globalReuseEntry{
   bool sharedActive;
   bool first_coherence_miss;
   bool trap_just_happened;
+  bool self_trap;
   //uint64_t rd;
   int node_id;
+  uint64_t inc;
+  uint64_t rd;
   uint64_t sampleCountInNode;
   uint64_t residueSampleCountInPrevThread;
   int residueSampleCountInPrevOwner[2];

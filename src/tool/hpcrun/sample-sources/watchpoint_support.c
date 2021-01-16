@@ -976,6 +976,9 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
     globalReuseWPs.table[*location].first_coherence_miss = true;
     globalReuseWPs.table[*location].time = sampleTime; 
     globalReuseWPs.table[*location].monitored_tid = me;
+    globalReuseWPs.table[*location].self_trap = true;
+    globalReuseWPs.table[*location].inc = 0;
+    globalReuseWPs.table[*location].rd = 0;
     return true;
   } else {
 	  //fprintf(stderr, "thread %d fails to arm location %d while a wp armed by %d is still monitored, randValue: %0.2lf, probabilityToReplace:%0.2lf\n", me, *location, globalReuseWPs.table[*location].monitored_tid, randValue, probabilityToReplace);
@@ -1583,6 +1586,11 @@ void DisableWatchpointWrapper(WatchPointInfo_t *wpi){
     DisArm(wpi);
   }
 }
+
+WatchPointInfo_t * getWPI  (int me, int location) {
+	return &threadDataTable.hashTable[me].watchPointArray[location];
+}
+
 
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //volatile int x;

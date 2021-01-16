@@ -155,6 +155,19 @@ int max_used_wp_count = 0;
 extern __thread int wait_threshold;
 extern int mapping_size;
 
+__thread uint64_t last_trapped_timestamp = 0;
+__thread uint64_t last_monitored_wp_timestamp = 0;
+__thread cct_node_t *monitored_node;
+__thread int monitored_metric;
+
+typedef struct MonitoredNodeStruct{
+	uint64_t timestamp;
+	int metricId;
+ 	bool self_trap;
+} MonitoredNodeStruct_t;
+
+MonitoredNodeStruct_t MonitoredNode;
+
 //int wp_user_list[MAX_WP_SLOTS];
 #define SAMPLES_POST_FULL_RESET_VAL (1)
 extern int globalWPIsUsers[MAX_WP_SLOTS];
@@ -2396,9 +2409,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   if(me == monitored_tid) {
     double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
     numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+    double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+    uint64_t inc = numDiffSamples * inc_scale;
 
    // before
    bool handle_trap = false;
+   bool post_inc_flag = false;
    uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
    if((theCounter & 1) == 0) {
    	if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
@@ -2410,15 +2426,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
               	globalReuseWPs.table[wt->location].active = false;
               	handle_trap = true;	
             }
+	    if(globalReuseWPs.table[wt->location].sharedActive) {
+		post_inc_flag = true;	
+	    }
             globalReuseWPs.table[wt->location].counter++;
           }
         }
    // after
 
     if(handle_trap) {
-      double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
-      uint64_t inc = numDiffSamples * inc_scale;
-
       uint64_t trapTime = rdtsc();
       uint64_t rd = 0;
       uint64_t val[2][3];
@@ -2454,6 +2470,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
       attributed_inc = inc;	
       source_code_line_attribution = true;
     }
+    if(post_inc_flag) {
+	    globalReuseWPs.table[wt->location].inc = inc;
+    } else if(globalReuseWPs.table[wt->location].rd > 0) {
+	    SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+    }
+    globalReuseWPs.table[wt->location].self_trap = false;
+    if(globalReuseWPs.table[wt->location].time == MonitoredNode.timestamp) {
+    	MonitoredNode.self_trap = false;
+    }
   } else {
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
@@ -2477,6 +2502,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 		affinity_l3 = thread_to_l3_mapping[my_core];
 	//if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3)) {
 		// before
+	bool post_rd_flag = false;
 	bool handle_trap = false;
         uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
         if((theCounter & 1) == 0) {
@@ -2486,9 +2512,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
               			//globalReuseWPs.table[wt->location].trap_just_happened = true;
               			//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
               			globalReuseWPs.table[wt->location].sharedActive = false;
-				if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3))
+				if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3)) {
               				handle_trap = true;
-             	 
+					if(globalReuseWPs.table[wt->location].inc == 0) {
+						post_rd_flag = true;
+					}
+				}
+        
             		}
             		globalReuseWPs.table[wt->location].counter++;
           	}
@@ -2536,7 +2566,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			}
 
 
-                	SharedReuseAddDistance(rd, inc);
+			if(post_rd_flag) {
+            			globalReuseWPs.table[wt->location].rd = rd;
+    			} else if(globalReuseWPs.table[wt->location].inc > 0) {
+            			SharedReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+    			}
                 	attributed_inc = inc;
                 	source_code_line_attribution = true;
                 	attributed_rd = rd; //rd_with_store;
@@ -4177,6 +4211,28 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               int item_not_found_flag = 0;
                               sd.sampleTime=curTime;
 
+			      int monitored_location = -1;
+
+			      for(int j = 0; j < used_wp_count; j++) {
+                                if(me == globalReuseWPs.table[j].monitored_tid) {
+                                  monitored_location = j;
+                                  break;
+                                }
+                              }
+
+			      if(monitored_location != -1) {
+				if(!globalReuseWPs.table[monitored_location].sharedActive && globalReuseWPs.table[monitored_location].self_trap && (globalReuseWPs.table[monitored_location].rd > 0)) {
+					WatchPointInfo_t * wpi = getWPI(me, monitored_location);
+					double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+  					uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+					double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+					uint64_t inc = numDiffSamples * inc_scale;
+					SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+
+					// update shared reuse histogram
+				}
+			      } 
+
                               location = -1;
 
                               for(int j = 0; j < used_wp_count; j++) {
@@ -4185,6 +4241,19 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   break;
                                 }
                               }
+
+			      if(location ==  -1) {
+				if((last_monitored_wp_timestamp == MonitoredNode.timestamp) && (last_trapped_timestamp != MonitoredNode.timestamp) && (MonitoredNode.self_trap == false)) {
+					//reset context scaling count in monitored_node
+					GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
+					last_trapped_timestamp = MonitoredNode.timestamp;
+				}
+				else if(last_monitored_wp_timestamp != MonitoredNode.timestamp) {
+			      		monitored_node = node;
+					monitored_metric = MonitoredNode.metricId;
+					last_monitored_wp_timestamp = MonitoredNode.timestamp;	
+				}
+			      }
 
                               /*if(globalReuseWPs.table[location].tid == me) {
                                 if (sample_count > wait_threshold) {
@@ -4212,6 +4281,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
                               //fprintf(stderr, "location: %d, thread: %d\n", location, me);
                               if((location != -1) && ArmWatchPointProb(&location, curTime, me)) {
+
+			   	if((curTime - MonitoredNode.timestamp) >= 2 * (curTime - lastTime)) {
+					MonitoredNode.timestamp = curTime;
+					MonitoredNode.metricId = sampledMetricId;
+					MonitoredNode.self_trap = true;
+				}	
 
 				// before
 				int affinity_l3;
