@@ -2458,6 +2458,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
       //fprintf(stderr, "before time_distance\n");
       time_distance = rdtsc() - wpi->startTime;
+      fprintf(stderr, "private reuse is detected me: %d, monitored_tid: %d\n", me, monitored_tid);
       ReuseAddDistance(rd, inc);
       attributed_rd = rd;
       attributed_inc = inc;	
@@ -2465,8 +2466,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     }
     if(post_inc_flag) {
 	    globalReuseWPs.table[wt->location].inc = inc;
+	    fprintf(stderr, "inc is posted, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
     } else if(globalReuseWPs.table[wt->location].rd > 0) {
 	    SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+	    fprintf(stderr, "shared reuse histogram is updated, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
     }
     globalReuseWPs.table[wt->location].self_trap = false;
     theCounter = MonitoredNode.counter;
