@@ -2458,7 +2458,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
       //fprintf(stderr, "before time_distance\n");
       time_distance = rdtsc() - wpi->startTime;
-      fprintf(stderr, "private reuse is detected me: %d, monitored_tid: %d\n", me, monitored_tid);
+      //fprintf(stderr, "private reuse is detected me: %d, monitored_tid: %d\n", me, monitored_tid);
       ReuseAddDistance(rd, inc);
       attributed_rd = rd;
       attributed_inc = inc;	
@@ -2466,10 +2466,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     }
     if(post_inc_flag) {
 	    globalReuseWPs.table[wt->location].inc = inc;
-	    fprintf(stderr, "inc is posted, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
+	    //fprintf(stderr, "inc is posted, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
     } else if(globalReuseWPs.table[wt->location].rd > 0) {
 	    SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
-	    fprintf(stderr, "shared reuse histogram is updated, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
+	    //fprintf(stderr, "shared reuse histogram is updated, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
     }
     globalReuseWPs.table[wt->location].self_trap = false;
     theCounter = MonitoredNode.counter;
@@ -4226,12 +4226,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			      if(monitored_location != -1) {
 				if(!globalReuseWPs.table[monitored_location].sharedActive && globalReuseWPs.table[monitored_location].self_trap && (globalReuseWPs.table[monitored_location].rd > 0)) {
 					WatchPointInfo_t * wpi = getWPI(me, monitored_location);
-					double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-  					uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
-					double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
-					uint64_t inc = numDiffSamples * inc_scale;
-					SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
-
+					if(wpi && wpi->sample.node) {
+						double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+  						uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+						double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+						uint64_t inc = numDiffSamples * inc_scale;
+						SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+					}
 					// update shared reuse histogram
 				}
 			      } 
@@ -4290,7 +4291,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 if((theCounter & 1) == 0) {
                                         if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
 
-			   			if((MonitoredNode.self_trap == false) && ((curTime - MonitoredNode.trap_timestamp) >= (2 * (curTime - lastTime)))) {
+			   			if((MonitoredNode.self_trap == true) || ((curTime - MonitoredNode.trap_timestamp) >= (2 * (curTime - lastTime)))) {
 							MonitoredNode.timestamp = curTime;
 							MonitoredNode.trap_timestamp = 0;
 							MonitoredNode.metricId = sampledMetricId;
