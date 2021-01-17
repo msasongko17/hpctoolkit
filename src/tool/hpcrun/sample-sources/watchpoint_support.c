@@ -485,6 +485,7 @@ __attribute__((constructor))
     MonitoredNode.trap_timestamp = 0;
     MonitoredNode.self_trap = false;
     MonitoredNode.counter = 0;
+    MonitoredNode.tid = -1;
   }
 
 void RedSpyWPConfigOverride(void *v){
@@ -907,6 +908,8 @@ void WatchpointThreadTerminate(){
             globalWPIsUsers[location] = -1;
             globalReuseWPs.table[location].tid = -1;
             used_wp_count--;
+	    if(MonitoredNode.tid == me)
+		MonitoredNode.tid = -1;
             //fprintf(stderr, "WP number %d is released by thread %d\n", location, me);
             // after        
             globalReuseWPs.counter++;

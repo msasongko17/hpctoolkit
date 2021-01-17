@@ -169,6 +169,7 @@ typedef struct MonitoredNodeStruct{
         uint64_t trap_timestamp;
         uint64_t counter;
         int metricId;
+	int tid;
         bool self_trap;
 } MonitoredNodeStruct_t;
 
