@@ -484,7 +484,7 @@ __attribute__((constructor))
     MonitoredNode.timestamp = 0;
     MonitoredNode.trap_timestamp = 0;
     MonitoredNode.self_trap = false;
-
+    MonitoredNode.counter = 0;
   }
 
 void RedSpyWPConfigOverride(void *v){

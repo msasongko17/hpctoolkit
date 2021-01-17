@@ -2472,7 +2472,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 	    //fprintf(stderr, "shared reuse histogram is updated, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
     }
     globalReuseWPs.table[wt->location].self_trap = false;
-    /*theCounter = MonitoredNode.counter;
+    theCounter = MonitoredNode.counter;
    	if((theCounter & 1) == 0) {
         	if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
     			if(globalReuseWPs.table[wt->location].time == MonitoredNode.timestamp) {
@@ -2481,7 +2481,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			}
 			MonitoredNode.counter++;
 		}
-    	}*/
+    	}
   } else {
 	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
@@ -4225,15 +4225,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
 			      /*if(monitored_location != -1) {
 				if(!globalReuseWPs.table[monitored_location].sharedActive && globalReuseWPs.table[monitored_location].self_trap && (globalReuseWPs.table[monitored_location].rd > 0)) {
-					WatchPointInfo_t * wpi = getWPI(me, monitored_location);
-					if(wpi && wpi->sample.node) {
-						double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-  						uint64_t numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+					//WatchPointInfo_t * wpi = getWPI(me, monitored_location);
+					//if(wpi && wpi->sample.node) {
+						//double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+  						uint64_t numDiffSamples = hpcrun_id2metric(sampledMetricId)->period; //GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
 						double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
 						uint64_t inc = numDiffSamples * inc_scale;
 						SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
 						globalReuseWPs.table[monitored_location].rd = 0;
-					}
+					//}
 					// update shared reuse histogram
 				}
 			      }*/ 
@@ -4247,7 +4247,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }
                               }
 
-			      /*if(location ==  -1) {
+			      if(location ==  -1) {
 					uint64_t timestamp = MonitoredNode.timestamp;
 					if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
 						//reset context scaling count in monitored_node
@@ -4259,7 +4259,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						monitored_metric = MonitoredNode.metricId;
 						last_monitored_wp_timestamp = timestamp;	
 					}
-			      	}*/	      
+			      	}	      
 
                               /*if(globalReuseWPs.table[location].tid == me) {
                                 if (sample_count > wait_threshold) {
@@ -4288,7 +4288,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               //fprintf(stderr, "location: %d, thread: %d\n", location, me);
                               if((location != -1) && ArmWatchPointProb(&location, curTime, me)) {
 
-				/*uint64_t theCounter = MonitoredNode.counter;
+				uint64_t theCounter = MonitoredNode.counter;
                                 if((theCounter & 1) == 0) {
                                         if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
 
@@ -4300,7 +4300,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 						}
 						MonitoredNode.counter++;
 					}
-				}*/	
+				}	
 
 				// before
 				int affinity_l3;
