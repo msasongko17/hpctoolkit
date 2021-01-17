@@ -2521,12 +2521,15 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
               			//globalReuseWPs.table[wt->location].trap_just_happened = true;
               			//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-              			globalReuseWPs.table[wt->location].sharedActive = false;
 				if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3)) {
+					globalReuseWPs.table[wt->location].sharedActive = false;
               				handle_trap = true;
 					if(globalReuseWPs.table[wt->location].inc == 0) {
 						post_rd_flag = true;
 					}
+				} else if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
+					//fprintf(stderr, "invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
+					globalReuseWPs.table[wt->location].sharedActive = false;	
 				}
         
             		}
