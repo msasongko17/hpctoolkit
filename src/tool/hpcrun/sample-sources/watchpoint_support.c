@@ -975,7 +975,7 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
   double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[*location]);
   double randValue;
   drand48_r(&tData.randBuffer, &randValue);
-  if((randValue <= probabilityToReplace) || (probabilityToReplace <= 0.001)) { 
+  if((randValue <= probabilityToReplace) /*|| (probabilityToReplace <= 0.001)*/) { 
     numWatchpointArmingAttempt[*location]++;
     //fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
     globalReuseWPs.table[*location].active = true;
