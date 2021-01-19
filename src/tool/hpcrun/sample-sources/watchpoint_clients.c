@@ -184,6 +184,8 @@ int true_wr_metric_id = -1;
 
 int temporal_reuse_metric_id = -1;
 int spatial_reuse_metric_id = -1;
+int l3_temporal_reuse_metric_id = -1;
+int l3_spatial_reuse_metric_id = -1;
 int reuse_time_distance_metric_id = -1; // use rdtsc() to represent the reuse distance
 int reuse_time_distance_count_metric_id = -1; // how many times reuse_time_distance_metric is incremented
 int reuse_memory_distance_metric_id = -1; // use Loads+stores to reprent the reuse distance
@@ -1685,6 +1687,12 @@ METHOD_FN(process_event_list, int lush_metrics)
         hpcrun_set_metric_info_and_period(temporal_reuse_metric_id, "TEMPORAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
         spatial_reuse_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(spatial_reuse_metric_id, "SPATIAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
+
+	l3_temporal_reuse_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(l3_temporal_reuse_metric_id, "L3_TEMPORAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
+        l3_spatial_reuse_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(l3_spatial_reuse_metric_id, "L3_SPATIAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
+
         reuse_memory_distance_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(reuse_memory_distance_metric_id, "MEMORY_DISTANCE_SUM", MetricFlags_ValFmt_Int, 1, metric_property_none);
         reuse_memory_distance_count_metric_id = hpcrun_new_metric();
@@ -1784,6 +1792,10 @@ enum JoinNodeType {
   E_TEMPORALLY_REUSED_BY,
   E_SPATIALLY_REUSED_FROM,
   E_SPATIALLY_REUSED_BY,
+  E_L3_TEMPORALLY_REUSED_FROM,
+  E_L3_TEMPORALLY_REUSED_BY,
+  E_L3_SPATIALLY_REUSED_FROM,
+  E_L3_SPATIALLY_REUSED_BY,
   E_TEPORALLY_REUSED,
   E_SPATIALLY_REUSED,
   E_TRUE_WW_SHARE,
@@ -2389,6 +2401,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     return ALREADY_DISABLED;
   }
 #endif //jqswang
+
+  int reuse_type = REUSE_NONE;
+  bool l3_rd_attribute = false;
+  bool l3_inc_attribute = false;
+  bool time_distance_attribute = false;
 
   uint64_t numDiffSamples = 0;
 
@@ -4102,7 +4119,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             sd.type = WP_RW;//reuse_trap_type;
                             //fprintf(stderr, "here1\n");
 #endif
-                            bool isProfileSpatial;
+                            if (reuse_profile_type == REUSE_SPATIAL){
+				    sd.reuseType = REUSE_SPATIAL;
+			    } else {
+				    sd.reuseType = REUSE_TEMPORAL;
+			    }
+			    /*bool isProfileSpatial;
                             if (reuse_profile_type == REUSE_TEMPORAL){
                               isProfileSpatial = false;
                               //fprintf(stderr, "temporal reuse distance\n");
@@ -4128,7 +4150,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 int wpSizes[] = {8, 4, 2, 1};
                                 FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
                                 int numFSLocs = 0;
-                                GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                                GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 , 4 , falseSharingLocs, &numFSLocs);
                                 if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
                                   sd.va = data_addr;
                                   sd.reuseType = REUSE_TEMPORAL;
@@ -4154,9 +4176,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 sd.reuseType = REUSE_TEMPORAL;
                                 //fprintf(stderr, "REUSE_TEMPORAL is activated\n");
                               }
-                            }
+                            }*/
                             //fprintf(stderr, "here3\n");
-                            if (!IsValidAddress(sd.va, precisePC)) {
+                            if (!IsValidAddress(data_addr, precisePC)) {
                               goto ErrExit; // incorrect access type
                             }
 
@@ -4398,7 +4420,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                              		GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
 				}
 
-                                void * original_va = sd.va;
+                                //void * original_va = sd.va;
                                 int original_wpLength = sd.wpLength;
                                 for(int i = 0; i < cur_global_thread_count; i++) {
                                   /*if(indices[i] == me) {
