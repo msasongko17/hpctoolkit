@@ -468,16 +468,16 @@ __attribute__((constructor))
       globalReuseWPs.table[i].tid = -1;
       globalReuseWPs.table[i].monitored_tid = -1;
       globalReuseWPs.table[i].time = -1;
-      globalReuseWPs.table[i].trap_just_happened = false;
+      //globalReuseWPs.table[i].trap_just_happened = false;
       globalReuseWPs.table[i].active = false;
       globalReuseWPs.table[i].sharedActive = false;
-      globalReuseWPs.table[i].first_coherence_miss = false;
+      //globalReuseWPs.table[i].first_coherence_miss = false;
       globalReuseWPs.table[i].counter = 0;
       globalReuseWPs.table[i].node_id = -1;
-      globalReuseWPs.table[i].sampleCountInNode = 0;	
+      //globalReuseWPs.table[i].sampleCountInNode = 0;	
       globalStoreReuseWPs.table[i].active = false;
-      globalStoreReuseWPs.table[i].first_coherence_miss = false;
-      globalStoreReuseWPs.table[i].trap_just_happened = false;
+      //globalStoreReuseWPs.table[i].first_coherence_miss = false;
+      //globalStoreReuseWPs.table[i].trap_just_happened = false;
       globalStoreReuseWPs.table[i].counter = 0;
     }
     globalReuseWPs.counter = 0;
@@ -980,7 +980,7 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
     //fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
     globalReuseWPs.table[*location].active = true;
     globalReuseWPs.table[*location].sharedActive = true;
-    globalReuseWPs.table[*location].first_coherence_miss = true;
+    //globalReuseWPs.table[*location].first_coherence_miss = true;
     globalReuseWPs.table[*location].time = sampleTime; 
     globalReuseWPs.table[*location].monitored_tid = me;
     globalReuseWPs.table[*location].self_trap = true;
