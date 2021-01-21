@@ -228,6 +228,10 @@ uint64_t * shared_reuse_bin_list = NULL;
 double * shared_reuse_bin_pivot_list = NULL; // store the bin intervals
 int shared_reuse_bin_size = 0;
 
+uint64_t * communication_reuse_bin_list = NULL;
+double * communication_reuse_bin_pivot_list = NULL; // store the bin intervals
+int communication_reuse_bin_size = 0;
+
 #else
 #endif
 
@@ -608,6 +612,59 @@ int FindSharedReuseBinIndex(uint64_t distance){
 void SharedReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindSharedReuseBinIndex(distance);
   shared_reuse_bin_list[index] += inc;
+  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+}
+
+void ExpandCommunicationReuseBinList(){
+  // each time we double the size of reuse_bin_list
+  uint64_t *old_reuse_bin_list = communication_reuse_bin_list;
+  double *old_reuse_bin_pivot_list = communication_reuse_bin_pivot_list;
+  int old_reuse_bin_size = communication_reuse_bin_size;
+  communication_reuse_bin_size *= 2;
+
+  communication_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t) * communication_reuse_bin_size);
+  memset(communication_reuse_bin_list, 0, sizeof(uint64_t) * communication_reuse_bin_size);
+  memcpy(communication_reuse_bin_list, old_reuse_bin_list, sizeof(uint64_t) * old_reuse_bin_size);
+
+  communication_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double) * communication_reuse_bin_size);
+  memset(communication_reuse_bin_pivot_list, 0, sizeof(double) * communication_reuse_bin_size);
+  memcpy(communication_reuse_bin_pivot_list, old_reuse_bin_pivot_list, sizeof(double) * old_reuse_bin_size);
+  for(int i=old_reuse_bin_size; i < communication_reuse_bin_size; i++){
+    communication_reuse_bin_pivot_list[i] = communication_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+  }
+
+  //hpcrun_free(old_reuse_bin_list);
+  //hpcrun_free(old_reuse_bin_pivot_list);
+}
+
+int FindCommunicationReuseBinIndex(uint64_t distance){
+  //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[0]: %0.2lf\n", distance, reuse_bin_pivot_list[0]);
+  if (distance < communication_reuse_bin_pivot_list[0]){
+    //fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf\n", reuse_bin_pivot_list[0]);
+    return 0;
+  }
+  if (distance >= communication_reuse_bin_pivot_list[communication_reuse_bin_size - 1]){
+    ExpandSharedReuseBinList();
+    return FindSharedReuseBinIndex(distance);
+  }
+
+  int left = 0, right = communication_reuse_bin_size - 1;
+  while(left + 1 < right){
+    int mid = (left + right) / 2;
+    //fprintf(stderr, "distance: %ld, reuse_bin_pivot_list[%d]: %0.2lf\n", distance, mid, reuse_bin_pivot_list[mid]);
+    if ( distance < communication_reuse_bin_pivot_list[mid]){
+      right = mid;
+    } else {
+      left = mid;
+    }
+  }
+  assert(left + 1 == right);
+  return left + 1;
+}
+
+void CommunicationReuseAddDistance(uint64_t distance, uint64_t inc ){
+  int index = FindSharedReuseBinIndex(distance);
+  communication_reuse_bin_list[index] += inc;
   //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
@@ -1592,6 +1649,17 @@ METHOD_FN(process_event_list, int lush_metrics)
               //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
             }
 
+	    communication_reuse_bin_size = 20;
+            communication_reuse_bin_list = hpcrun_malloc(sizeof(uint64_t)*communication_reuse_bin_size);
+            memset(communication_reuse_bin_list, 0, sizeof(uint64_t)*communication_reuse_bin_size);
+            communication_reuse_bin_pivot_list = hpcrun_malloc(sizeof(double)*communication_reuse_bin_size);
+            communication_reuse_bin_pivot_list[0] = reuse_bin_start;
+            //  fprintf(stderr, "reuse_bin_pivot_list[0]: %0.2lf, reuse_bin_start: %0.2lf\n", reuse_bin_pivot_list[0], reuse_bin_start);
+            for(int i=1; i < communication_reuse_bin_size; i++){
+              communication_reuse_bin_pivot_list[i] = communication_reuse_bin_pivot_list[i-1] * reuse_bin_ratio;
+              //fprintf(stderr, "reuse_bin_pivot_list[%d]: %0.2lf\n", i, reuse_bin_pivot_list[i]);
+            }
+
           }
 
           char * profileL3String = getenv("HPCRUN_PROFILE_L3");
@@ -2497,6 +2565,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             //if((theCounter & 1) == 0) {
                 //if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
 	    		SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+			if(globalReuseWPs.table[wt->location].is_rar == false)
+				CommunicationReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
 			l3_attributed_inc = inc;
 			l3_inc_attribute = true;	
 			//shared_reuse_counter++;
@@ -2610,12 +2680,16 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				reuse_type = L3_REUSE_SPATIAL;	
 
 			if(post_rd_flag) {
-            			globalReuseWPs.table[wt->location].rd = rd;	
+            			globalReuseWPs.table[wt->location].rd = rd;
+				if(wpi->sample.accessType == LOAD && wt->accessType == LOAD)	
+					globalReuseWPs.table[wt->location].is_rar = true;
     			} else if(globalReuseWPs.table[wt->location].inc > 0) {
 				//uint64_t theCounter = shared_reuse_counter;
             			//if((theCounter & 1) == 0) {
                 			//if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
             					SharedReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+						if(wpi->sample.accessType != LOAD && wt->accessType != LOAD)
+							CommunicationReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
 						//shared_reuse_counter++;
 						l3_attributed_inc = globalReuseWPs.table[wt->location].inc;
 						l3_inc_attribute = true;
@@ -4319,6 +4393,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 		//if((theCounter & 1) == 0) {
                                         		//if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
 						SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+						if(globalReuseWPs.table[monitored_location].is_rar == false)
+							CommunicationReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
 						if (reuse_profile_type == REUSE_TEMPORAL) {
         						cct_metric_data_increment(l3_temporal_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
     						} else if (reuse_profile_type == REUSE_SPATIAL) {
@@ -5337,7 +5413,20 @@ ErrExit:
         fprintf(fp, "\n");
 	fclose(fp);
 #endif 
-
+	ret = snprintf(file_name, PATH_MAX, "%s-%u.communication.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
+        FILE * fp1;
+        fp1 = fopen (file_name, "w+");
+        fprintf(fp1, "BIN_START: %lf\n", reuse_bin_start);
+        fprintf(fp1, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+        for(int i=0; i < communication_reuse_bin_size; i++){
+            fprintf(fp1, "BIN: %d %lu\n", i, communication_reuse_bin_list[i]);
+        }
+        fprintf(fp1, "COHERENCE_MISS:");
+        fprintf(fp1, " %ld\n", l3_coherence_miss_count);
+        //fprintf(stderr, "\n");
+        fprintf(fp1, "\n");
+        fclose(fp1);
+	
     }
   }
 

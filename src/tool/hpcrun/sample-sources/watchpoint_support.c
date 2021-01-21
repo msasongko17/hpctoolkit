@@ -468,6 +468,7 @@ __attribute__((constructor))
       globalReuseWPs.table[i].tid = -1;
       globalReuseWPs.table[i].monitored_tid = -1;
       globalReuseWPs.table[i].time = -1;
+      globalStoreReuseWPs.table[i].is_rar = false;
       //globalReuseWPs.table[i].trap_just_happened = false;
       globalReuseWPs.table[i].active = false;
       globalReuseWPs.table[i].sharedActive = false;
@@ -984,6 +985,7 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
     globalReuseWPs.table[*location].time = sampleTime; 
     globalReuseWPs.table[*location].monitored_tid = me;
     globalReuseWPs.table[*location].self_trap = true;
+    globalReuseWPs.table[*location].is_rar = false;
     globalReuseWPs.table[*location].inc = 0;
     globalReuseWPs.table[*location].rd = 0;
     return true;
