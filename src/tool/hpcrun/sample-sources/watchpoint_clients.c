@@ -2624,6 +2624,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					if(globalReuseWPs.table[wt->location].inc == 0) {
 						post_rd_flag = true;
 					}
+					/*if(wpi->sample.type == WP_WRITE)
+						fprintf(stderr, "L1 invalidation is detected in the same L3\n");*/
 				} else if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/wpi->sample.type == WP_WRITE) {
 					//fprintf(stderr, "invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
 					globalReuseWPs.table[wt->location].sharedActive = false;
@@ -4596,10 +4598,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                             sd.wpLength = 1;
                                             //fprintf(stderr, "sample tries to detect temporal reuse in L3\n");
                                           }
-					  if(rdtsc() % 2) {
-                                          	sd.type = WP_RW;
-					  } else {
+					  if((rdtsc() % 100) >= 50) {
 						sd.type = WP_WRITE;
+					  } else {
+						sd.type = WP_RW;
 					  }
                                         } else {
                                           //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
