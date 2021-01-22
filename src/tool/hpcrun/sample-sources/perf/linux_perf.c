@@ -1063,7 +1063,7 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 	int ret = perf_read_event_counter(current, val);
 
 	if (ret < 0) {
-		fprintf(stderr, "problem here 1\n");
+		//fprintf(stderr, "problem here 1\n");
 		return -1; // something wrong here
 	}
 
@@ -1104,7 +1104,7 @@ int linux_perf_read_event_counter_l1(int event_index, uint64_t *val, bool use){
         int ret = perf_read_event_counter(current, val);
 
         if (ret < 0) {
-                fprintf(stderr, "problem here 1\n");
+                //fprintf(stderr, "problem here 1\n");
                 return -1; // something wrong here
         }
 
@@ -1146,7 +1146,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 
 
 	if (event_thread == NULL) {
-                fprintf(stderr, "problem here 2 in thread %d\n", tid);
+                //fprintf(stderr, "problem here 2 in thread %d\n", tid);
                 return -1; // something wrong here
         }
 
@@ -1158,7 +1158,7 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 	//fprintf(stderr, "this function is executed after perf_read_event_counter\n");
 	
 	if (ret < 0) {
-		fprintf(stderr, "problem here 3\n");
+		//fprintf(stderr, "problem here 3\n");
 		return -1; // something wrong here
 	}
 

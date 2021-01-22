@@ -2586,7 +2586,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 		}
     	}
   } else {
-	if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
+	if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/ wpi->sample.type == WP_WRITE) {
 		uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
    		if((theCounter & 1) == 0) {
         		if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
@@ -2595,6 +2595,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
                 			//globalReuseWPs.table[wt->location].trap_just_happened = true;
                 			numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
                 			//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					//fprintf(stderr, "L1 invalidation is detected in the same L3\n");
                 			globalReuseWPs.table[wt->location].active = false;
             			}
             			globalReuseWPs.table[wt->location].counter++;
@@ -2623,9 +2624,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 					if(globalReuseWPs.table[wt->location].inc == 0) {
 						post_rd_flag = true;
 					}
-				} else if((wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)) {
+				} else if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/wpi->sample.type == WP_WRITE) {
 					//fprintf(stderr, "invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
-					globalReuseWPs.table[wt->location].sharedActive = false;	
+					globalReuseWPs.table[wt->location].sharedActive = false;
+					//fprintf(stderr, "L3 invalidation is detected\n");
 				}
         
             		}
@@ -2681,14 +2683,14 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 
 			if(post_rd_flag) {
             			globalReuseWPs.table[wt->location].rd = rd;
-				if(wpi->sample.accessType == LOAD && wt->accessType == LOAD)	
+				if(wpi->sample.accessType == LOAD /*&& wt->accessType == LOAD*/)	
 					globalReuseWPs.table[wt->location].is_rar = true;
     			} else if(globalReuseWPs.table[wt->location].inc > 0) {
 				//uint64_t theCounter = shared_reuse_counter;
             			//if((theCounter & 1) == 0) {
                 			//if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
             					SharedReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
-						if(wpi->sample.accessType != LOAD && wt->accessType != LOAD)
+						if(wpi->sample.accessType != LOAD /*|| wt->accessType != LOAD*/)
 							CommunicationReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
 						//shared_reuse_counter++;
 						l3_attributed_inc = globalReuseWPs.table[wt->location].inc;
@@ -4594,7 +4596,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                             sd.wpLength = 1;
                                             //fprintf(stderr, "sample tries to detect temporal reuse in L3\n");
                                           }
-                                          sd.type = WP_RW;
+					  if(rdtsc() % 2) {
+                                          	sd.type = WP_RW;
+					  } else {
+						sd.type = WP_WRITE;
+					  }
                                         } else {
                                           //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
                                           if(wpConfig.cachelineInvalidation) {
