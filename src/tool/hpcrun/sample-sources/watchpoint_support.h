@@ -230,6 +230,7 @@ typedef struct globalReuseEntry{
   uint64_t rd;
   bool is_rar;
   cct_node_t *reusePairNode;
+  cct_node_t *commReusePairNode;
   //uint64_t sampleCountInNode;
   //uint64_t residueSampleCountInPrevThread;
   //int residueSampleCountInPrevOwner[2];

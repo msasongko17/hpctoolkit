@@ -186,12 +186,16 @@ int temporal_reuse_metric_id = -1;
 int spatial_reuse_metric_id = -1;
 int l3_temporal_reuse_metric_id = -1;
 int l3_spatial_reuse_metric_id = -1;
+int comm_temporal_reuse_metric_id = -1;
+int comm_spatial_reuse_metric_id = -1;
 int reuse_time_distance_metric_id = -1; // use rdtsc() to represent the reuse distance
 int reuse_time_distance_count_metric_id = -1; // how many times reuse_time_distance_metric is incremented
 int reuse_memory_distance_metric_id = -1; // use Loads+stores to reprent the reuse distance
 int reuse_memory_distance_count_metric_id = -1; // how many times reuse_memory_distance_metric is incremented
 int l3_reuse_memory_distance_metric_id = -1; // use Loads+stores to reprent the reuse distance
 int l3_reuse_memory_distance_count_metric_id = -1; // how many times reuse_memory_distance_metric is incremented
+int comm_reuse_memory_distance_metric_id = -1; // use Loads+stores to reprent the reuse distance
+int comm_reuse_memory_distance_count_metric_id = -1; // how many times reuse_memory_distance_metric is incremented
 int reuse_buffer_metric_ids[2] = {-1, -1}; // used to store temporal data for reuse client
 int reuse_store_buffer_metric_id = -1; // store the last time we get an available value of stores
 
@@ -1764,6 +1768,12 @@ METHOD_FN(process_event_list, int lush_metrics)
         l3_spatial_reuse_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(l3_spatial_reuse_metric_id, "L3_SPATIAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
 
+	comm_temporal_reuse_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(comm_temporal_reuse_metric_id, "COMM_TEMPORAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
+        comm_spatial_reuse_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(comm_spatial_reuse_metric_id, "COMM_SPATIAL", MetricFlags_ValFmt_Int, 1, metric_property_none);
+
+
         reuse_memory_distance_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(reuse_memory_distance_metric_id, "MEMORY_DISTANCE_SUM", MetricFlags_ValFmt_Int, 1, metric_property_none);
         reuse_memory_distance_count_metric_id = hpcrun_new_metric();
@@ -1772,6 +1782,10 @@ METHOD_FN(process_event_list, int lush_metrics)
         hpcrun_set_metric_info_and_period(l3_reuse_memory_distance_metric_id, "L3_MEMORY_DISTANCE_SUM", MetricFlags_ValFmt_Int, 1, metric_property_none);
         l3_reuse_memory_distance_count_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(l3_reuse_memory_distance_count_metric_id, "L3_MEMORY_DISTANCE_COUNT", MetricFlags_ValFmt_Int, 1, metric_property_none); 
+	comm_reuse_memory_distance_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(comm_reuse_memory_distance_metric_id, "COMM_MEMORY_DISTANCE_SUM", MetricFlags_ValFmt_Int, 1, metric_property_none);
+        comm_reuse_memory_distance_count_metric_id = hpcrun_new_metric();
+        hpcrun_set_metric_info_and_period(comm_reuse_memory_distance_count_metric_id, "COMM_MEMORY_DISTANCE_COUNT", MetricFlags_ValFmt_Int, 1, metric_property_none);
 	reuse_time_distance_metric_id = hpcrun_new_metric();
         hpcrun_set_metric_info_and_period(reuse_time_distance_metric_id, "TIME_DISTANCE_SUM", MetricFlags_ValFmt_Int, 1, metric_property_none);
         reuse_time_distance_count_metric_id = hpcrun_new_metric();
@@ -1871,6 +1885,10 @@ enum JoinNodeType {
   E_L3_TEMPORALLY_REUSED_BY,
   E_L3_SPATIALLY_REUSED_FROM,
   E_L3_SPATIALLY_REUSED_BY,
+  E_COMM_TEMPORALLY_REUSED_FROM,
+  E_COMM_TEMPORALLY_REUSED_BY,
+  E_COMM_SPATIALLY_REUSED_FROM,
+  E_COMM_SPATIALLY_REUSED_BY,
   E_TEPORALLY_REUSED,
   E_SPATIALLY_REUSED,
   E_TRUE_WW_SHARE,
@@ -2483,12 +2501,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   bool time_distance_attribute = false;
 
   uint64_t numDiffSamples = 0;
-
+  bool comm_reuse = false;
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
   bool source_code_line_attribution = false;
   uint64_t attributed_rd = 0;
   uint64_t attributed_inc = 0;
+  uint64_t l3_attributed_rd = 0;
   uint64_t l3_attributed_inc = 0;
   uint64_t time_distance;
   int me = TD_GET(core_profile_trace_data.id);
@@ -2567,9 +2586,12 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             //if((theCounter & 1) == 0) {
                 //if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
 	    		SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
-			if(globalReuseWPs.table[wt->location].is_rar == false)
+			if(globalReuseWPs.table[wt->location].is_rar == false) {
 				CommunicationReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+				comm_reuse = true;
+			}
 			l3_attributed_inc = inc;
+			l3_attributed_rd = globalReuseWPs.table[wt->location].rd;
 			l3_inc_attribute = true;	
 			//shared_reuse_counter++;
 		//}
@@ -2694,10 +2716,13 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             			//if((theCounter & 1) == 0) {
                 			//if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
             					SharedReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
-						if(wpi->sample.accessType != LOAD /*|| wt->accessType != LOAD*/)
+						if(wpi->sample.accessType != LOAD /*|| wt->accessType != LOAD*/) {
 							CommunicationReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+							comm_reuse = true;
+						}
 						//shared_reuse_counter++;
 						l3_attributed_inc = globalReuseWPs.table[wt->location].inc;
+						l3_attributed_rd = rd;
 						l3_inc_attribute = true;
 					//}
 				//}
@@ -2718,6 +2743,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   //fprintf(stderr, "this region is executed\n");
   //if (source_code_line_attribution) {
     cct_node_t *reusePairNode;
+    cct_node_t *commReusePairNode;
     if (reuse_type == REUSE_TEMPORAL){
       sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
       cct_node_t *reuseNode = v.sample_node;
@@ -2740,24 +2766,42 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
     } else if (reuse_type == L3_REUSE_TEMPORAL){
       sample_val_t v = hpcrun_sample_callpath(wt->ctxt, l3_temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
       cct_node_t *reuseNode = v.sample_node;
+      sample_val_t v1 = hpcrun_sample_callpath(wt->ctxt, comm_temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+      cct_node_t *commReuseNode = v1.sample_node;
       //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
       if (reuse_concatenate_use_reuse){
         reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_L3_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+	if (comm_reuse) {
+		commReusePairNode = getConcatenatedNode(commReuseNode, wpi->sample.node, joinNodes[E_COMM_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+	}
       }else{
         reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_L3_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
+	if (comm_reuse) {
+                commReusePairNode = getConcatenatedNode(wpi->sample.node, commReuseNode, joinNodes[E_COMM_TEMPORALLY_REUSED_FROM][joinNodeIdx]); 
+        }
       }
       globalReuseWPs.table[wt->location].reusePairNode = reusePairNode;
+      globalReuseWPs.table[wt->location].commReusePairNode = commReusePairNode;
     }
     else if (reuse_type == L3_REUSE_SPATIAL) { // REUSE_SPATIAL
       sample_val_t v = hpcrun_sample_callpath(wt->ctxt, l3_spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
       cct_node_t *reuseNode = v.sample_node;
+      sample_val_t v1 = hpcrun_sample_callpath(wt->ctxt, comm_spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+      cct_node_t *commReuseNode = v1.sample_node;
       //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
       if (reuse_concatenate_use_reuse){
         reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_L3_SPATIALLY_REUSED_BY][joinNodeIdx]);
+	if(comm_reuse) {
+		commReusePairNode = getConcatenatedNode(commReuseNode, wpi->sample.node, joinNodes[E_COMM_SPATIALLY_REUSED_BY][joinNodeIdx]);
+	}
       }else{
         reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_L3_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+	if(comm_reuse) {
+		commReusePairNode = getConcatenatedNode(wpi->sample.node, commReuseNode, joinNodes[E_COMM_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+	}
       }
       globalReuseWPs.table[wt->location].reusePairNode = reusePairNode;
+      globalReuseWPs.table[wt->location].commReusePairNode = commReusePairNode;
     }
     if ((reuse_type == REUSE_TEMPORAL) || (reuse_type == REUSE_SPATIAL)) {
     	cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (attributed_rd) });
@@ -2767,6 +2811,11 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 	cct_metric_data_increment(l3_reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (attributed_rd) });
         //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
         cct_metric_data_increment(l3_reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+	if(comm_reuse) {
+		cct_metric_data_increment(comm_reuse_memory_distance_metric_id, commReusePairNode, (cct_metric_data_t){.i = (l3_attributed_rd) });
+        	//fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+       		cct_metric_data_increment(comm_reuse_memory_distance_count_metric_id, commReusePairNode, (cct_metric_data_t){.i = 1});
+	}
     }
 
     reuseTemporal += attributed_inc;
@@ -2778,8 +2827,14 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
       //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
     } else if ((wpi->sample.reuseType == REUSE_TEMPORAL) && l3_inc_attribute) {
 	cct_metric_data_increment(l3_temporal_reuse_metric_id, globalReuseWPs.table[wt->location].reusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+	if(comm_reuse) {
+		cct_metric_data_increment(comm_temporal_reuse_metric_id, globalReuseWPs.table[wt->location].commReusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+	}
     } else if ((wpi->sample.reuseType == REUSE_SPATIAL) && l3_inc_attribute) {
         cct_metric_data_increment(l3_spatial_reuse_metric_id, globalReuseWPs.table[wt->location].reusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+	if(comm_reuse) {
+                cct_metric_data_increment(comm_spatial_reuse_metric_id, globalReuseWPs.table[wt->location].commReusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+        }
     }
     cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
     cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
@@ -4395,16 +4450,33 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   						uint64_t numDiffSamples = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, myProportion); //hpcrun_id2metric(sampledMetricId)->period;
 						double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
 						uint64_t inc = numDiffSamples * inc_scale;
+						bool comm_reuse = false;
 						//uint64_t theCounter = shared_reuse_counter;
                                 		//if((theCounter & 1) == 0) {
                                         		//if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
 						SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
-						if(globalReuseWPs.table[monitored_location].is_rar == false)
+						if(globalReuseWPs.table[monitored_location].is_rar == false) {
 							CommunicationReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+							comm_reuse = true;
+						}
+						cct_metric_data_increment(l3_reuse_memory_distance_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = (globalReuseWPs.table[monitored_location].rd) });
+        //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+        					cct_metric_data_increment(l3_reuse_memory_distance_count_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = 1});
+						if(comm_reuse) {
+							cct_metric_data_increment(comm_reuse_memory_distance_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = (globalReuseWPs.table[monitored_location].rd) });
+        //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+                                                	cct_metric_data_increment(comm_reuse_memory_distance_count_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = 1});
+						}
 						if (reuse_profile_type == REUSE_TEMPORAL) {
         						cct_metric_data_increment(l3_temporal_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
-    						} else if (reuse_profile_type == REUSE_SPATIAL) {
+    							if(comm_reuse) {
+								cct_metric_data_increment(comm_temporal_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+							}
+						} else if (reuse_profile_type == REUSE_SPATIAL) {
         						cct_metric_data_increment(l3_spatial_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+							if(comm_reuse) {
+								cct_metric_data_increment(comm_spatial_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+							}	
     						}
 						//fprintf(stderr, "histogram is updated by %ld, rd: %ld, me: %d, monitored_tid: %d\n", inc, globalReuseWPs.table[monitored_location].rd, me, globalReuseWPs.table[monitored_location].monitored_tid);
 						globalReuseWPs.table[monitored_location].rd = 0;
