@@ -241,7 +241,7 @@ AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
 ReuseType reuse_profile_type = REUSE_SPATIAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
-bool profiling_l3 = false;
+bool profiling_mode = false;
 //#endif
 
 #define NUM_WATERMARK_METRICS (4)
@@ -1664,17 +1664,18 @@ METHOD_FN(process_event_list, int lush_metrics)
 
           char * profileL3String = getenv("HPCRUN_PROFILE_L3");
           if(profileL3String){
-            if(0 == strcasecmp(profileL3String, "1")) {
-              profiling_l3 = true;
-            } if (0 == strcasecmp(profileL3String, "true")) {
-              profiling_l3 = true;
+            if (0 == strcasecmp(profileL3String, "true")) {
+              profiling_mode = L3;
+            } else if (0 == strcasecmp(profileL3String, "false")) {
+              profiling_mode = L1;
+	      fprintf(stderr, "L1 profiling is activated\n");
             } else {
               // default;
-              profiling_l3 = false;
+              profiling_mode = MIXED;
             }
           } else {
             // default;
-            profiling_l3 = false;
+            profiling_mode = MIXED;
           }
 
           //until here
@@ -2012,7 +2013,8 @@ static inline uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetr
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   //diff.r = diff.r * proportion;
   //uint64_t nodeSpecificEventCount = diff.r;
-  return (uint64_t) (diff.r * proportion);
+  return (uint64_t) (diffWithPeriod.r * proportion);
+  //return (uint64_t) (diff.r * proportion);
 }
 
 
@@ -4578,7 +4580,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				      }
                                         if((mapping_size == 0) || (thread_to_l3_mapping[core_id] == affinity_l3)) {
                                           //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
-                                          if (reuse_profile_type == REUSE_SPATIAL){ 
+                                        if(indices[i] == me || profiling_mode == L3 || profiling_mode == MIXED) { 
+					if (reuse_profile_type == REUSE_SPATIAL){ 
                                             if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
                                               sd.va = data_addr;
                                               sd.reuseType = REUSE_TEMPORAL;
@@ -4598,11 +4601,31 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                             sd.wpLength = 1;
                                             //fprintf(stderr, "sample tries to detect temporal reuse in L3\n");
                                           }
-					  if((rdtsc() % 100) >= 50) {
-						sd.type = WP_WRITE;
-					  } else {
-						sd.type = WP_RW;
+					  if(indices[i] == me || profiling_mode == L3) {
+                                                  sd.type = WP_RW;
+                                          } else if (profiling_mode == MIXED) {
+						if((rdtsc() % 100) >= 50) {
+                                                        sd.type = WP_WRITE;
+                                                } else {
+                                                        sd.type = WP_RW;
+                                                }
 					  }
+
+					} else if (profiling_mode == L1) {
+						if(wpConfig.cachelineInvalidation) {
+                                            		int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                            		int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                            		sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                            		sd.wpLength = MAX_WP_LENGTH;
+                                            		//fprintf(stderr, "This region is executed\n");
+                                            		//fprintf(stderr, "sample tries to detect L1 cache line invalidation\n");
+                                          	} else {
+                                            		//fprintf(stderr, "sample tries to detect true sharing\n");
+                                            		sd.va = data_addr;
+                                            		sd.wpLength = MAX_WP_LENGTH;
+                                          	}
+                                          	sd.type = WP_WRITE;
+					} 
                                         } else {
                                           //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
                                           if(wpConfig.cachelineInvalidation) {
@@ -4611,7 +4634,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                             sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
                                             sd.wpLength = MAX_WP_LENGTH;
                                             //fprintf(stderr, "This region is executed\n");
-                                            //fprintf(stderr, "sample tries to detect cache line invalidation\n");
+                                            //fprintf(stderr, "sample tries to detect L3 cache line invalidation\n");
                                           } else {
                                             //fprintf(stderr, "sample tries to detect true sharing\n");
                                             sd.va = data_addr;

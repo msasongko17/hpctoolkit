@@ -86,6 +86,7 @@ typedef enum OverwritePolicy {OVERWRITE, NO_OVERWRITE} OverwritePolicy;
 typedef enum VictimType {EMPTY_SLOT, NON_EMPTY_SLOT, NONE_AVAILABLE} VictimType;
 typedef enum WPTriggerActionType {DISABLE_WP, ALREADY_DISABLED, DISABLE_ALL_WP, RETAIN_WP} WPTriggerActionType;
 typedef enum ReuseType { REUSE_TEMPORAL, REUSE_SPATIAL, REUSE_BOTH, REUSE_CACHELINE, L3_REUSE_TEMPORAL, L3_REUSE_SPATIAL, REUSE_NONE} ReuseType;
+typedef enum ProfilingType { L1, L3, MIXED} ProfilingType;
 
 // Data structure that is given by clients to set a WP
 typedef struct SampleData{
