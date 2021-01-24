@@ -75,6 +75,8 @@ extern int used_wp_count;
 
 extern MonitoredNodeStruct_t MonitoredNode;
 
+extern int profiling_mode;
+
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
@@ -976,7 +978,9 @@ bool ArmWatchPointProb(int * location, uint64_t sampleTime, int me) {
   double probabilityToReplace =  1.0/((double)numWatchpointArmingAttempt[*location]);
   double randValue;
   drand48_r(&tData.randBuffer, &randValue);
-  if((randValue <= probabilityToReplace) /*|| (probabilityToReplace <= 0.001)*/) { 
+  if((randValue <= probabilityToReplace) /*|| (profiling_mode == L3 && probabilityToReplace <= 0.001)*/) { 
+    /*if(profiling_mode == L3 && probabilityToReplace <= 0.001)
+	    fprintf(stderr, "reset that is special to L3 profiling");*/
     numWatchpointArmingAttempt[*location]++;
     //fprintf(stderr, "watchpoint is armed randValue: %0.2lf and probabilityToReplace: %0.2lf, denominator: %d, location: %d, arming thread: %d\n", randValue, probabilityToReplace, numWatchpointArmingAttempt[*location]-1, *location, TD_GET(core_profile_trace_data.id));
     globalReuseWPs.table[*location].active = true;
@@ -1686,7 +1690,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                              //wpi->samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
                              tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;
                              threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-                             if(wpi->sample.L1Sample) { 
+                             /*if(wpi->sample.L1Sample) { 
                                uint64_t theCounter = globalReuseWPs.table[location].counter;
                                if((theCounter & 1) == 0) {
                                  if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
@@ -1700,7 +1704,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                  numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
                                  //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
                                }
-                             }
+                             }*/
                            }
                            break;
 
@@ -1708,18 +1712,12 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                    //assert(wpi->isActive == false);
                                    tData.samplePostFull = SAMPLES_POST_FULL_RESET_VAL;					       
                                    threadDataTable.hashTable[me].numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;
-                                   if(wpi->sample.L1Sample) {
+                                   /*if(wpi->sample.L1Sample) {
                                      uint64_t theCounter = globalReuseWPs.table[location].counter;
                                      if((theCounter & 1) == 0) {
                                        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[location].counter, theCounter, theCounter+1)) {
                                          if(globalReuseWPs.table[location].active) {
-                                           /*if (sample_count > wait_threshold) {
-                                             globalWPIsUsers[location] = -1;
-                                             globalReuseWPs.table[location].tid = -1;
-                                             wait_threshold = sample_count + CHANGE_THRESHOLD;
-                                             used_wp_count--;
-                                           //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold);	
-                                           }*/
+                                           
                                            numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
                                            globalReuseWPs.table[location].active = false;
                                            //fprintf(stderr, "location %d has been disabled by thread %d\n", location, me);
@@ -1727,7 +1725,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                          globalReuseWPs.table[location].counter++;
                                        }
                                      }
-                                     /*if(globalReuseWPs.table[location].tid == me) {
+                                     if(globalReuseWPs.table[location].tid == me) {
                                        if (sample_count > wait_threshold) {
                                        globalWPIsUsers[location] = -1;
                                        globalReuseWPs.table[location].tid = -1;
@@ -1740,8 +1738,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
                                      }
                                      numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;	
                                      //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
-                                     }*/
-                                   }
+                                     }
+                                   }*/
                                  }
                                  break;
           default: // Retain the state

@@ -245,7 +245,7 @@ AccessType reuse_monitor_type = LOAD_AND_STORE; // WP_REUSE: what kind of memory
 WatchPointType reuse_trap_type = WP_RW; // WP_REUSE: what kind of memory access can trap the watchpoint
 ReuseType reuse_profile_type = REUSE_SPATIAL; // WP_REUSE: we want to collect temporal reuse, spatial reuse OR both?
 bool reuse_concatenate_use_reuse = false; // WP_REUSE: how to concatentate the use and reuse
-bool profiling_mode = false;
+int profiling_mode = L1;
 //#endif
 
 #define NUM_WATERMARK_METRICS (4)
@@ -2528,7 +2528,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             if(globalReuseWPs.table[wt->location].active) {
 
               	//globalReuseWPs.table[wt->location].trap_just_happened = true;
-                numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+		if(profiling_mode == L1 || profiling_mode == MIXED)
+                	numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
               	//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
               	globalReuseWPs.table[wt->location].active = false;
               	handle_trap = true;	
@@ -2590,6 +2591,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 				CommunicationReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
 				comm_reuse = true;
 			}
+			if(profiling_mode == L3)
+				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 			l3_attributed_inc = inc;
 			l3_attributed_rd = globalReuseWPs.table[wt->location].rd;
 			l3_inc_attribute = true;	
@@ -2617,7 +2620,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
             			if(globalReuseWPs.table[wt->location].active) {
 
                 			//globalReuseWPs.table[wt->location].trap_just_happened = true;
-                			numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+					if(profiling_mode == L1 || profiling_mode == MIXED)
+                				numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
                 			//numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 					//fprintf(stderr, "L1 invalidation is detected in the same L3\n");
                 			globalReuseWPs.table[wt->location].active = false;
@@ -2720,6 +2724,8 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 							CommunicationReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
 							comm_reuse = true;
 						}
+						if(profiling_mode == L3)
+							numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
 						//shared_reuse_counter++;
 						l3_attributed_inc = globalReuseWPs.table[wt->location].inc;
 						l3_attributed_rd = rd;
@@ -4373,10 +4379,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
                               int sType = -1;
 
-                              if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0)
-                                sType = ALL_STORE;
-                              else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0)
-                                sType = ALL_LOAD;
+                              if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_STORES",27) == 0) {
+                                      //fprintf(stderr, "store sample is detected\n");
+				      sType = ALL_STORE;
+			      }
+                              else if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_UOPS_RETIRED:ALL_LOADS",26) == 0) {
+                                      //fprintf(stderr, "load sample is detected\n");
+				      sType = ALL_LOAD;
+			      }
                               //fprintf(stderr, "threads are selected here\n");
                               //fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
                               prev_sample_timestamp = last_sample_timestamp;
@@ -4459,6 +4469,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 							CommunicationReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
 							comm_reuse = true;
 						}
+						if(profiling_mode == L3)
+							numWatchpointArmingAttempt[monitored_location] = SAMPLES_POST_FULL_RESET_VAL;
 						cct_metric_data_increment(l3_reuse_memory_distance_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = (globalReuseWPs.table[monitored_location].rd) });
         //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
         					cct_metric_data_increment(l3_reuse_memory_distance_count_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = 1});
