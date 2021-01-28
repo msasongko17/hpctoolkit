@@ -2631,6 +2631,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
         	}
 	}
 
+	if(profiling_mode == L3 || profiling_mode == MIXED) {
 	int affinity_l3 = 0;
 	int my_core = sched_getcpu();
 	if(l3_count > 1)
@@ -2740,7 +2741,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 			// after
 		}
 		// after
-	//}
+	}
 
   }
 		 
@@ -4452,7 +4453,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }
                               }
 
-			      if(monitored_location != -1) {
+			      if(monitored_location != -1 && (profiling_mode == L3 || profiling_mode == MIXED)) {
 				if(!globalReuseWPs.table[monitored_location].sharedActive && globalReuseWPs.table[monitored_location].self_trap && (globalReuseWPs.table[monitored_location].rd > 0)) {
 					WatchPointInfo_t * wpi = getWPI(me, monitored_location);
 					if(wpi && wpi->sample.node) {
@@ -4587,6 +4588,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 				}
 	
                                 int cur_global_thread_count = global_thread_count;
+				if(profiling_mode == L3 || profiling_mode == MIXED) {
                                 for(int i = 0; i < cur_global_thread_count; i++) {
                                         if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
 						for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
@@ -4598,6 +4600,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 		}
 					}
                            	}
+				}
 
                                 
 				// after

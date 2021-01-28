@@ -93,8 +93,8 @@
 // recover from SEGVs and partial unwinds
 // ------------------------------------------------------------
 
-extern int context_sample_count[256][13][3];
-extern int context_watermark_sample_count[256][13][3];
+//extern int context_sample_count[256][13][3];
+//extern int context_watermark_sample_count[256][13][3];
 
 static void
 hpcrun_cleanup_partial_unwind(void)
@@ -239,7 +239,7 @@ hpcrun_sample_callpath(void* context, int metricId,
                                    metricIncr, skipInner, isSync, data_aux);
      
      //fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
-     if(metricId > 0) {
+     /*if(metricId > 0) {
      int node_id = hpcrun_cct_persistent_id(node);
      int node_id_idx = node_id % 13;
      int me = TD_GET(core_profile_trace_data.id);
@@ -256,7 +256,7 @@ hpcrun_sample_callpath(void* context, int metricId,
 	context_watermark_sample_count[me][node_id_idx][2] = 0;
      }
      //fprintf(stderr, "counter in node %d becomes %d and watermark counter is %d for metric %d with index %d\n", context_sample_count[me][node_id_idx][0] - 1, context_sample_count[me][node_id_idx][sample_type+1], context_watermark_sample_count[me][node_id_idx][sample_type+1], metricId, sample_type+1);
-     }
+     }*/
      //context_sample_count[TD_GET(core_profile_trace_data.id)][hpcrun_cct_persistent_id(node)];
 
      // fprintf(stderr, "this spot\n");
@@ -273,7 +273,7 @@ hpcrun_sample_callpath(void* context, int metricId,
     hpcrun_cleanup_partial_unwind();
 
     //fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
-    if(metricId > 0) {
+    /*if(metricId > 0) {
     int node_id = hpcrun_cct_persistent_id(node);
     int node_id_idx = node_id % 13;
     int me = TD_GET(core_profile_trace_data.id);
@@ -290,7 +290,7 @@ hpcrun_sample_callpath(void* context, int metricId,
 	context_watermark_sample_count[me][node_id_idx][2] = 0;
     } 
     //fprintf(stderr, "counter in node %d becomes %d and watermark counter is %d for metric %d with index %d\n", context_sample_count[me][node_id_idx][0] - 1, context_sample_count[me][node_id_idx][sample_type+1], context_watermark_sample_count[me][node_id_idx][sample_type+1], metricId, sample_type+1);
-    }
+    }*/
   }
   td->current_jmp_buf = old;
 
