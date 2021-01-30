@@ -152,7 +152,7 @@
 #define WAIT_THRESHOLD 10
 int used_wp_count = 0;
 int max_used_wp_count = 0;
-extern __thread int wait_threshold;
+extern int wait_threshold;
 extern int mapping_size;
 
 __thread uint64_t last_trapped_timestamp = 0;
@@ -406,7 +406,7 @@ __thread uint64_t inter_core_ts_num = 0;
 __thread uint64_t as_num = 0;
 __thread uint64_t inter_core_as_num = 0;
 __thread uint64_t line_transfer_num = 0;
-__thread uint64_t sample_count = 0;
+uint64_t sample_count = 0;
 __thread uint64_t trap_count = 0;
 __thread uint64_t wp_arming_count = 0;
 // ComDetective stats end
