@@ -69,8 +69,8 @@
 
 //#define CHANGE_THRESHOLD 100
 
-int wait_threshold = 0;
-extern uint64_t sample_count;
+__thread int wait_threshold = 0;
+extern __thread sample_count;
 extern int used_wp_count;
 
 extern MonitoredNodeStruct_t MonitoredNode;
