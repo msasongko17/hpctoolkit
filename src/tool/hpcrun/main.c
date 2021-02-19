@@ -838,6 +838,7 @@ monitor_init_process(int *argc, char **argv, void* data)
 
   char* s = getenv(HPCRUN_EVENT_LIST);
 
+  //fprintf(stderr, "in monitor_init_process\n");
   if (! is_child) {
     hpcrun_sample_sources_from_eventlist(s);
   }

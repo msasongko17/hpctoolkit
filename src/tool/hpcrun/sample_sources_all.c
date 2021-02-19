@@ -234,6 +234,7 @@ hpcrun_sample_sources_from_eventlist(char* evl)
     hpcrun_ssfail_none();
   }
 
+  fprintf(stderr, "hpcrun_sample_sources_from_eventlist is called\n");
   TMSG(EVENTS,"evl (before processing) = |%s|",evl);
 
   for(char *event = start_tok(evl); more_tok(); event = next_tok()){

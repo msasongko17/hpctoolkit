@@ -319,6 +319,7 @@ uint64_t detected_store_counter = 0;
 #define WP_LOADSPY_EVENT_NAME "WP_LOADSPY"
 #define WP_REUSE_EVENT_NAME "WP_REUSE"
 #define WP_REUSETRACKER_EVENT_NAME "WP_REUSETRACKER"
+#define WP_AMD_COMM_EVENT_NAME "WP_AMD_COMM"
 #define WP_TEMPORAL_REUSE_EVENT_NAME "WP_TEMPORAL_REUSE"
 #define WP_SPATIAL_REUSE_EVENT_NAME "WP_SPATIAL_REUSE"
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
@@ -336,6 +337,7 @@ typedef enum WP_CLIENT_ID{
   WP_LOADSPY,
   WP_REUSE,
   WP_REUSETRACKER,
+  WP_AMD_COMM,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -701,6 +703,7 @@ static WPTriggerActionType SpatialReuseWPCallback(WatchPointInfo_t *wpi, int sta
 static WPTriggerActionType LoadLoadWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AllSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TrueSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType IPCFalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -787,6 +790,14 @@ static WpClientConfig_t wpClientConfig[] = {
     .wpCallback = ReuseTrackerWPCallback,
     .preWPAction = DISABLE_WP,
     .configOverrideCallback = ReuseWPConfigOverride
+  },
+  /**** AMD Communication ***/
+  {
+    .id = WP_AMD_COMM,
+    .name = WP_AMD_COMM_EVENT_NAME,
+    .wpCallback = AMDCommWPCallback,
+    .preWPAction = DISABLE_WP,
+    .configOverrideCallback = ComDetectiveWPConfigOverride
   },
   /**** Contention ***/
   {
@@ -1250,9 +1261,12 @@ METHOD_FN(shutdown)
   static bool
 METHOD_FN(supports_event, const char *ev_str)
 {
+  fprintf(stderr, "event is checked here\n");
   for(int i = 0; i < WP_MAX_CLIENTS; i++) {
-    if (hpcrun_ev_is(ev_str, wpClientConfig[i].name))
+    if (hpcrun_ev_is(ev_str, wpClientConfig[i].name)) {
+      fprintf(stderr, "event is supported\n");
       return true;
+    }
   }
   return false;
 }
@@ -1371,6 +1385,7 @@ METHOD_FN(process_event_list, int lush_metrics)
   for(int i = 0; i < WP_MAX_CLIENTS; i++) {
     if (hpcrun_ev_is(event, wpClientConfig[i].name)) {
       theWPConfig  = &wpClientConfig[i];
+      fprintf(stderr, "theWPConfig is initialized\n");
       if(theWPConfig->id == WP_COMDETECTIVE)
         //fprintf(stderr, "watchpoint client configuration is retrieved and the id is WP_COMDETECTIVE\n");
         break;
@@ -1833,6 +1848,8 @@ METHOD_FN(display_events)
   printf("%s\n", WP_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_REUSETRACKER_EVENT_NAME);
+  printf("---------------------------------------------------------------------------\n");
+  printf("%s\n", WP_AMD_COMM_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_TEMPORAL_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
@@ -2822,6 +2839,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
   return ALREADY_DISABLED;
+}
+
+static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+	return ALREADY_DISABLED;
 }
 
 // Handles the debug register trap (callback). When the PC reaches an adress (breakpoint) or accesses a designated adress (watchpoint), the cpu is trapped.

@@ -708,11 +708,15 @@ METHOD_FN(supports_event, const char *ev_str)
 	hpcrun_extract_ev_thresh(ev_str, sizeof(ev_tmp), ev_tmp, &thresh, DEFAULT_THRESHOLD) ;
 
 	// check if the event is a predefined event
-	if (event_custom_find(ev_tmp) != NULL)
+	fprintf(stderr, "support of event is checked here\n");
+	if (event_custom_find(ev_tmp) != NULL) {
+		fprintf(stderr, "event is supported here\n");
 		return true;
+	}
 
 	// this is not a predefined event, we need to consult to perfmon (if enabled)
 #ifdef ENABLE_PERFMON
+	fprintf(stderr, "final event check is here\n");
 	return pfmu_isSupported(ev_tmp) >= 0;
 #else
 	return (strncmp(event_name, ev_str, strlen(event_name)) == 0);

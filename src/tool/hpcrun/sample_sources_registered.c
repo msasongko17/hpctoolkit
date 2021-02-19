@@ -122,6 +122,7 @@ hpcrun_ss_register(sample_source_t* src)
 sample_source_t*
 hpcrun_source_can_process(char *event)
 {
+  fprintf(stderr, "hpcrun_source_can_process is called\n");
   for (sample_source_t* ss=registered_sample_sources; ss; ss = ss->next_reg){
     if (METHOD_CALL(ss, supports_event, event)){
       return ss;
