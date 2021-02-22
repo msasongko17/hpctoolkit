@@ -122,6 +122,7 @@
 
 #include "kernel_blocking.h"  // api for predefined kernel blocking event
 
+#include "amd_support.h"
 //******************************************************************************
 // macros
 //******************************************************************************
@@ -161,6 +162,17 @@
 
 #define PATH_KERNEL_KPTR_RESTICT    "/proc/sys/kernel/kptr_restrict"
 #define PATH_KERNEL_PERF_PARANOID   "/proc/sys/kernel/perf_event_paranoid"
+
+// data structures for amd begins
+
+int n_op_samples[1024];
+int n_lost_op_samples[1024];
+
+int op_cnt_max_to_set = 0;
+int buffer_size = 0;
+__thread char *global_buffer = NULL;
+
+// ends
 
 extern int global_thread_count;
 extern int dynamic_global_thread_count;
@@ -296,7 +308,7 @@ perf_init()
 	static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
-	//printf("this is thread %d\n", TD_GET(core_profile_trace_data.id));
+	printf("perf_thread_init is called in thread %d\n", TD_GET(core_profile_trace_data.id));
 	if(mapping_size > 0) {
 		//fprintf(stderr, "thread %d is mapped to core %d\n", TD_GET(core_profile_trace_data.id), mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
@@ -829,7 +841,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		struct perf_event_attr *event_attr = &(event_desc[i].attr);
 
 		int isPMU = pfmu_getEventAttribute(name, event_attr);
-		if (isPMU < 0) {
+		if (isPMU < 0 && !hpcrun_ev_is(name, "IBS_OP")) {
 			fprintf(stderr, "%s is an unknown event\n", name);
 			// case for unknown event
 			// it is impossible to be here, unless the code is buggy
@@ -842,7 +854,8 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// initialize the generic perf event attributes for this event
 		// all threads and file descriptor will reuse the same attributes.
 		// ------------------------------------------------------------
-		perf_attr_init(event_attr, is_period, threshold, 0);
+		if(!hpcrun_ev_is(name, "IBS_OP"))
+			perf_attr_init(event_attr, is_period, threshold, 0);
 
 		// ------------------------------------------------------------
 		// initialize the property of the metric
@@ -925,9 +938,11 @@ METHOD_FN(gen_event_set, int lush_metrics)
 {
 	TMSG(LINUX_PERF, "gen_event_set");
 
+	fprintf(stderr, "this gen_event_set is called\n");
 	int nevents 	  = (self->evl).nevents;
 	int num_metrics = hpcrun_get_num_metrics();
 
+	fprintf(stderr, "this gen_event_set is called with %d events\n", nevents);
 	// a list of event information, private for each thread
 	event_thread_t  *event_thread = (event_thread_t*) hpcrun_malloc(sizeof(event_thread_t) * nevents);
 
