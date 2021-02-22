@@ -714,6 +714,11 @@ METHOD_FN(supports_event, const char *ev_str)
 		return true;
 	}
 
+	if (hpcrun_ev_is(ev_tmp, "IBS_OP")) {
+		fprintf(stderr, "event %s is supported with period: %ld\n", ev_tmp, thresh);
+		return true;
+	}
+
 	// this is not a predefined event, we need to consult to perfmon (if enabled)
 #ifdef ENABLE_PERFMON
 	fprintf(stderr, "final event check is here\n");
@@ -733,6 +738,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 {
 	TMSG(LINUX_PERF, "process event list");
 
+	fprintf(stderr, "this process_event_list is called\n");
 	metric_desc_properties_t prop = metric_property_none;
 	char *event;
 
@@ -823,10 +829,12 @@ METHOD_FN(process_event_list, int lush_metrics)
 		struct perf_event_attr *event_attr = &(event_desc[i].attr);
 
 		int isPMU = pfmu_getEventAttribute(name, event_attr);
-		if (isPMU < 0)
+		if (isPMU < 0) {
+			fprintf(stderr, "%s is an unknown event\n", name);
 			// case for unknown event
 			// it is impossible to be here, unless the code is buggy
 			continue;
+		}
 
 		bool is_period = (period_type == 1);
 

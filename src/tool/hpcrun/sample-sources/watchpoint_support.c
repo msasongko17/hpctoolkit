@@ -64,7 +64,7 @@
 #include <adm_init_fini.h>
 #endif
 #include "matrix.h"
-#include "amd_support.h"
+//#include "amd_support.h"
 
 //extern int init_adamant;
 
