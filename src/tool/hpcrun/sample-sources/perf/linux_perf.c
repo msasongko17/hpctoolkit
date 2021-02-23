@@ -1,4 +1,4 @@
-// -*-Mode: C++;-*- // technically C99
+// technically C99
 
 // * BeginRiceCopyright *****************************************************
 //
@@ -178,6 +178,7 @@ extern int global_thread_count;
 extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
 extern int l3_reuse_distance_event_rqsts;
+int ibs_event = -1;
 //******************************************************************************
 // type declarations
 //******************************************************************************
@@ -257,8 +258,18 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 perf_stop_all(int nevents, event_thread_t *event_thread)
 {
 	int i;
+	char filename[64];
+	//sprintf(filename, "/dev/cpu/%d/ibs/op", TD_GET(core_profile_trace_data.id));
+	//int fd = open(filename, O_RDONLY | O_NONBLOCK);
 	for(i=0; i<nevents; i++) {
-		ioctl(event_thread[i].fd, PERF_EVENT_IOC_DISABLE, 0);
+		//fprintf(stderr, "event %d is closed\n", i);
+		//fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
+		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+			ioctl(event_thread[i].fd, IBS_DISABLE);
+			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
+		}
+		else
+			ioctl(event_thread[i].fd, PERF_EVENT_IOC_DISABLE, 0);
 	}
 }
 
@@ -308,11 +319,13 @@ perf_init()
 	static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
-	printf("perf_thread_init is called in thread %d\n", TD_GET(core_profile_trace_data.id));
+	printf("perf_thread_init is called in thread %d for event %s with period %ld\n", TD_GET(core_profile_trace_data.id), event->metric_desc->name, event->metric_desc->period);
 	if(mapping_size > 0) {
 		//fprintf(stderr, "thread %d is mapped to core %d\n", TD_GET(core_profile_trace_data.id), mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 	}
+
+	if(!hpcrun_ev_is(event->metric_desc->name, "IBS_OP")) {
 	et->num_overflows = 0;
 	et->prev_num_overflows = 0;
 	et->event = event;
@@ -364,6 +377,33 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 
 	ioctl(et->fd, PERF_EVENT_IOC_RESET, 0);
 	return (ret >= 0);
+	} else {
+		char filename [64];
+		et->event = event;
+		global_buffer = malloc(BUFFER_SIZE_B);
+		int my_id = TD_GET(core_profile_trace_data.id);
+		sprintf(filename, "/dev/cpu/%d/ibs/op", my_id);
+                et->fd = open(filename, O_RDONLY | O_NONBLOCK);
+
+                if (et->fd < 0) {
+                        fprintf(stderr, "Could not open %s\n", filename);
+                        return false;
+                        //continue;
+                }
+
+                ioctl(et->fd, SET_BUFFER_SIZE, BUFFER_SIZE_B);
+                //ioctl(fd[cpu], SET_POLL_SIZE, poll_size / sizeof(ibs_op_t));
+                ioctl(et->fd, SET_MAX_CNT, event->metric_desc->period);
+		if (ioctl(et->fd, IBS_ENABLE)) {
+                        fprintf(stderr, "IBS op enable failed on cpu %d\n", my_id);
+                        return false;
+                        //continue;
+                }
+		//for (int i = 0; i < nopfds; i++)
+                ioctl(et->fd, RESET_BUFFER);
+		ioctl(et->fd, REG_CURRENT_PROCESS); 
+		ioctl(et->fd, ASSIGN_FD, et->fd);	
+	}
 }
 
 
