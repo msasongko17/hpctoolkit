@@ -149,6 +149,7 @@
 // - PAPI uses SIGRTMIN+2
 // so SIGRTMIN+4 is a safe bet (temporarily)
 #define PERF_SIGNAL (SIGRTMIN+4)
+#define SIGNEW 44
 
 #define PERF_EVENT_AVAILABLE_UNKNOWN 0
 #define PERF_EVENT_AVAILABLE_NO      1
@@ -205,7 +206,8 @@ perf_thread_fini(int nevents, event_thread_t *event_thread);
 static int 
 perf_event_handler( int sig, siginfo_t* siginfo, void* context);
 
-
+static int
+sig_event_handler( int sig, siginfo_t* siginfo, void* context);
 //******************************************************************************
 // constants
 //******************************************************************************
@@ -307,6 +309,15 @@ perf_init()
 	monitor_real_pthread_sigmask(SIG_UNBLOCK, &sig_mask, NULL);
 }
 
+static void
+ibs_perf_init()
+{
+	struct sigaction act;
+        sigemptyset(&act.sa_mask);
+        act.sa_flags = (SA_SIGINFO | SA_RESTART);
+        act.sa_sigaction = sig_event_handler;
+        sigaction(SIGNEW, &act, NULL);
+}
 
 
 
@@ -844,6 +855,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	// for each perf's event, create the metric descriptor which will be used later
 	// during thread initialization for perf event creation
 	// ----------------------------------------------------------------------
+	bool ibs_flag = false;
 	for (event = start_tok(evlist); more_tok(); event = next_tok(), i++) {
 		char name[1024];
 		long threshold = 1;
@@ -896,6 +908,8 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP"))
 			perf_attr_init(event_attr, is_period, threshold, 0);
+		else
+			ibs_flag = true;
 
 		// ------------------------------------------------------------
 		// initialize the property of the metric
@@ -967,7 +981,10 @@ METHOD_FN(process_event_list, int lush_metrics)
 	}
 
 	if (num_events > 0)
-		perf_init();
+		if(!ibs_flag)
+			perf_init();
+		else
+			ibs_perf_init();
 }
 
 
@@ -1259,6 +1276,48 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 // ---------------------------------------------
 // signal handler
 // ---------------------------------------------
+
+        static int
+sig_event_handler(int n, siginfo_t *info, void *unused)
+{
+	int fd;
+    fprintf(stderr, "sig_event_handler is called\n");
+    int my_id = TD_GET(core_profile_trace_data.id);
+    if (n == SIGNEW && my_id >= 0) {
+        fd = info->si_int;
+        //printf ("Received signal from kernel : Value =  %u\n", check);
+        //read(check, read_buf, 1024);
+        printf("signal %d from file with fd %d\n", n, fd);
+	ioctl(fd, IBS_DISABLE);
+	// before
+	int tmp = 0;
+	int num_items = 0;
+
+	tmp = read(fd, global_buffer[my_id], buffer_size);
+	if (tmp <= 0) {
+		fprintf(stderr, "returns here\n");
+		ioctl(fd, IBS_ENABLE);
+		return;
+	}
+	num_items = tmp / sizeof(ibs_op_t);
+	n_op_samples[my_id] += num_items;
+	n_lost_op_samples[my_id] += ioctl(fd, GET_LOST);
+	char * sample_buffer = malloc (sizeof(ibs_op_t));
+	int offset = 0;
+	for (int i = 0; i < num_items; i++) {
+		//fread((char *)&op, sizeof(op), 1, op_in_fp)
+		memcpy ( sample_buffer, global_buffer[my_id] + offset, sizeof(ibs_op_t) );
+		offset += i * sizeof(ibs_op_t);
+		ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
+		//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid);
+		if (op_data->op_data3.reg.ibs_lin_addr_valid)
+			fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, i: %d out of %d items in buffer\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), i, num_items);
+	}
+	free (sample_buffer);
+	// after
+	ioctl(fd, IBS_ENABLE);
+    }
+}
 
 	static int
 perf_event_handler(

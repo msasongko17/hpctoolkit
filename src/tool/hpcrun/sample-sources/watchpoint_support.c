@@ -512,6 +512,12 @@ void ComDetectiveWPConfigOverride(void *v){
   wpConfig.replacementPolicy = OLDEST;
 }
 
+void AMDCommWPConfigOverride(void *v){
+  // replacement policy is OLDEST forced.
+  wpConfig.isLBREnabled = false;
+  wpConfig.replacementPolicy = OLDEST;
+}
+
 void ReuseWPConfigOverride(void *v){
   // dont fix IP
   //wpConfig.dontFixIP = true;

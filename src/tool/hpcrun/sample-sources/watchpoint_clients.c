@@ -797,7 +797,7 @@ static WpClientConfig_t wpClientConfig[] = {
     .name = WP_AMD_COMM_EVENT_NAME,
     .wpCallback = AMDCommWPCallback,
     .preWPAction = DISABLE_WP,
-    .configOverrideCallback = ComDetectiveWPConfigOverride
+    .configOverrideCallback = AMDCommWPConfigOverride
   },
   /**** Contention ***/
   {
@@ -1394,10 +1394,13 @@ METHOD_FN(process_event_list, int lush_metrics)
 
   wpStats.numImpreciseSamples = 0;
   wpStats.numWatchpointsSet = 0;
-  WatchpointThreadInit(theWPConfig->wpCallback);
+  fprintf(stderr, "before WatchpointThreadInit\n");
+  //WatchpointThreadInit(theWPConfig->wpCallback);
+  fprintf(stderr, "after WatchpointThreadInit\n");
   if(theWPConfig->configOverrideCallback){
     theWPConfig->configOverrideCallback(0);
   }
+  WatchpointThreadInit(theWPConfig->wpCallback);
 
   PopulateBlackListAddresses();
 

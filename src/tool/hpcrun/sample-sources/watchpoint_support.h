@@ -195,6 +195,7 @@ extern void FalseSharingWPConfigOverride(void*);
 extern void TrueSharingWPConfigOverride(void*);
 extern void AllSharingWPConfigOverride(void*);
 extern void ComDetectiveWPConfigOverride(void*);
+extern void AMDCommWPConfigOverride(void*);
 extern void IPCFalseSharingWPConfigOverride(void*);
 extern void IPCTrueSharingWPConfigOverride(void*);
 extern void IPCAllSharingWPConfigOverride(void*);
