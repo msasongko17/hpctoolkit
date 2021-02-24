@@ -413,7 +413,8 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 		//for (int i = 0; i < nopfds; i++)
                 ioctl(et->fd, RESET_BUFFER);
 		ioctl(et->fd, REG_CURRENT_PROCESS); 
-		ioctl(et->fd, ASSIGN_FD, et->fd);	
+		ioctl(et->fd, ASSIGN_FD, et->fd);
+		fprintf(stderr, "everything is fine\n");
 	}
 }
 
@@ -1281,21 +1282,21 @@ int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid
 sig_event_handler(int n, siginfo_t *info, void *unused)
 {
 	int fd;
-    fprintf(stderr, "sig_event_handler is called\n");
+    //fprintf(stderr, "sig_event_handler is called\n");
     int my_id = TD_GET(core_profile_trace_data.id);
     if (n == SIGNEW && my_id >= 0) {
         fd = info->si_int;
         //printf ("Received signal from kernel : Value =  %u\n", check);
         //read(check, read_buf, 1024);
-        printf("signal %d from file with fd %d\n", n, fd);
+        //printf("signal %d from file with fd %d\n", n, fd);
 	ioctl(fd, IBS_DISABLE);
 	// before
 	int tmp = 0;
 	int num_items = 0;
 
-	tmp = read(fd, global_buffer[my_id], buffer_size);
+	tmp = read(fd, global_buffer, BUFFER_SIZE_B);
 	if (tmp <= 0) {
-		fprintf(stderr, "returns here\n");
+		fprintf(stderr, "returns here tmp: %d\n", tmp);
 		ioctl(fd, IBS_ENABLE);
 		return;
 	}
@@ -1306,7 +1307,7 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
 	int offset = 0;
 	for (int i = 0; i < num_items; i++) {
 		//fread((char *)&op, sizeof(op), 1, op_in_fp)
-		memcpy ( sample_buffer, global_buffer[my_id] + offset, sizeof(ibs_op_t) );
+		memcpy ( sample_buffer, global_buffer + offset, sizeof(ibs_op_t) );
 		offset += i * sizeof(ibs_op_t);
 		ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
 		//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid);
