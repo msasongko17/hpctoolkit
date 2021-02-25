@@ -475,20 +475,24 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 	if (current == NULL || current->event == NULL || current->event->metric < 0)
 		return NULL;
 
+	//fprintf(stderr, "record_sample is called 1\n");
 	// ----------------------------------------------------------------------------
 	// for event with frequency, we need to increase the counter by its period
 	// sampling taken by perf event kernel
 	// ----------------------------------------------------------------------------
+	bool amd_ibs_event = false;
+	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
+			amd_ibs_event = true;
 	uint64_t metric_inc = 1;
-	if (current->event->attr.freq==1 && mmap_data->period > 0)
+	if ((amd_ibs_event || current->event->attr.freq==1) && mmap_data->period > 0)
 		metric_inc = mmap_data->period;
 	//fprintf(stderr, "metric_inc: %ld\n", metric_inc);
 	// ----------------------------------------------------------------------------
 	// record time enabled and time running
 	// if the time enabled is not the same as running time, then it's multiplexed
 	// ----------------------------------------------------------------------------
-	u64 time_enabled = current->mmap->time_enabled;
-	u64 time_running = current->mmap->time_running;
+	u64 time_enabled = !amd_ibs_event ? current->mmap->time_enabled : 1;
+	u64 time_running = !amd_ibs_event ? current->mmap->time_running : 1;
 
 	// ----------------------------------------------------------------------------
 	// the estimate count = raw_count * scale_factor
@@ -575,13 +579,14 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		TMSG(RALOC, "--------------------------");
 	}
 
-
 	if(WatchpointClientActive()){
+		fprintf(stderr, "OnSample is called\n");
 		OnSample(mmap_data,
 				/*hpcrun_context_pc(context)*/ context,
 				sv->sample_node,
 				current->event->metric);
 	}
+
 	return sv;
 }
 
@@ -1354,6 +1359,16 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
 int
 read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t * op_data)
 {
+	mmap_info->period = current->event->metric_desc->period;
+	mmap_info->time = op_data->tsc;
+	mmap_info->cpu = op_data->cpu;
+	mmap_info->tid = op_data->tid;
+	mmap_info->pid = op_data->pid;
+	mmap_info->addr = op_data->dc_lin_ad;
+	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
+	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
+	mmap_info->ip = op_data->op_rip;
+
 	fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid));
 	return 0;
 }
@@ -1508,7 +1523,7 @@ perf_event_handler(
                 	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
 			if (op_data->op_data3.reg.ibs_lin_addr_valid) {
 				read_ibs_buffer(current, &mmap_data, op_data);
-				//record_sample(current, &mmap_data, context, &sv);
+				record_sample(current, &mmap_data, context, &sv);
 			}
 			more_data--;
 		} else

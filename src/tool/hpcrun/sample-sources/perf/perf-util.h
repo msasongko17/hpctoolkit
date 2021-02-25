@@ -91,6 +91,8 @@ typedef struct perf_mmap_data_s {
   u32    cpu, res;   /* if PERF_SAMPLE_CPU */
   u64    period;     /* if PERF_SAMPLE_PERIOD */
                      /* if PERF_SAMPLE_READ */
+  bool load;
+  bool store;
   u64    nr;         /* if PERF_SAMPLE_CALLCHAIN */
   u64    ips[MAX_CALLCHAIN_FRAMES];       /* if PERF_SAMPLE_CALLCHAIN */
   u32    size;       /* if PERF_SAMPLE_RAW */
