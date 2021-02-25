@@ -115,6 +115,7 @@
 #endif
 
 #include "perf-util.h"        // u64, u32 and perf_mmap_data_t
+#include "amd_support.h"
 #include "perf_mmap.h"        // api for parsing mmapped buffer
 #include "event_custom.h"     // api for pre-defined events
 
@@ -122,7 +123,6 @@
 
 #include "kernel_blocking.h"  // api for predefined kernel blocking event
 
-#include "amd_support.h"
 //******************************************************************************
 // macros
 //******************************************************************************
@@ -180,6 +180,7 @@ extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
 extern int l3_reuse_distance_event_rqsts;
 int ibs_event = -1;
+bool amd_ibs_flag = false;
 //******************************************************************************
 // type declarations
 //******************************************************************************
@@ -249,7 +250,13 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 {
 	int i;
 	for(i=0; i<nevents; i++) {
-		ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
+		//ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
+		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+                        ioctl(event_thread[i].fd, IBS_ENABLE);
+                        //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
+                }
+                else
+                        ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
 	}
 }
 
@@ -315,7 +322,7 @@ ibs_perf_init()
 	struct sigaction act;
         sigemptyset(&act.sa_mask);
         act.sa_flags = (SA_SIGINFO | SA_RESTART);
-        act.sa_sigaction = sig_event_handler;
+        act.sa_sigaction = perf_event_handler; //sig_event_handler;
         sigaction(SIGNEW, &act, NULL);
 }
 
@@ -330,7 +337,7 @@ ibs_perf_init()
 	static bool
 perf_thread_init(event_info_t *event, event_thread_t *et)
 {
-	printf("perf_thread_init is called in thread %d for event %s with period %ld\n", TD_GET(core_profile_trace_data.id), event->metric_desc->name, event->metric_desc->period);
+	fprintf(stderr, "perf_thread_init is called in thread %d for event %s with period %ld\n", TD_GET(core_profile_trace_data.id), event->metric_desc->name, event->metric_desc->period);
 	if(mapping_size > 0) {
 		//fprintf(stderr, "thread %d is mapped to core %d\n", TD_GET(core_profile_trace_data.id), mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
@@ -400,7 +407,9 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
                         fprintf(stderr, "Could not open %s\n", filename);
                         return false;
                         //continue;
-                }
+                } else {
+			amd_ibs_flag = true;
+		}
 
                 ioctl(et->fd, SET_BUFFER_SIZE, BUFFER_SIZE_B);
                 //ioctl(fd[cpu], SET_POLL_SIZE, poll_size / sizeof(ibs_op_t));
@@ -431,8 +440,15 @@ perf_thread_fini(int nevents, event_thread_t *event_thread)
 		if (event_thread[i].fd) 
 			close(event_thread[i].fd);
 
-		if (event_thread[i].mmap) 
-			perf_unmmap(event_thread[i].mmap);
+		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0)
+		{
+			free(global_buffer);
+		}
+		else
+		{
+			if (event_thread[i].mmap) 
+				perf_unmmap(event_thread[i].mmap);
+		}
 	}
 }
 
@@ -664,7 +680,11 @@ METHOD_FN(start)
 
 	for (int i=0; i<nevents; i++)
 	{
-		int ret = ioctl(event_thread[i].fd, PERF_EVENT_IOC_RESET, 0);
+		int ret;
+		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+			ret = ioctl(event_thread[i].fd, IBS_ENABLE);
+		} else
+			ret = ioctl(event_thread[i].fd, PERF_EVENT_IOC_RESET, 0);
 		if (ret == -1) {
 			TMSG(LINUX_PERF, "error fd %d in IOC_RESET: %s", event_thread[i].fd, strerror(errno));
 		}
@@ -1098,14 +1118,25 @@ restart_perf_event(int fd)
 		return -1;
 	}
 
-	int ret = ioctl(fd, PERF_EVENT_IOC_RESET, 0);
-	if (ret == -1) {
-		TMSG(LINUX_PERF, "error fd %d in PERF_EVENT_IOC_RESET: %s", fd, strerror(errno));
-	}
+	int ret;
+	if (!amd_ibs_flag)
+	{
+		ret = ioctl(fd, PERF_EVENT_IOC_RESET, 0);
 
-	ret = ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-	if (ret == -1) {
-		TMSG(LINUX_PERF, "error fd %d in IOC_REFRESH: %s", fd, strerror(errno));
+		if (ret == -1) {
+			TMSG(LINUX_PERF, "error fd %d in PERF_EVENT_IOC_RESET: %s", fd, strerror(errno));
+		}
+
+		ret = ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+		if (ret == -1) {
+			TMSG(LINUX_PERF, "error fd %d in IOC_REFRESH: %s", fd, strerror(errno));
+		}
+	} else 
+	{
+		ret = ioctl(fd, RESET_BUFFER);	
+		if (ret < 0) {
+                        TMSG(LINUX_PERF, "error fd %d in ioctl RESET_BUFFER: %s", fd, strerror(errno));
+                }
 	}
 	return ret;
 }
@@ -1320,6 +1351,13 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
     }
 }
 
+int
+read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t * op_data)
+{
+	fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid));
+	return 0;
+}
+
 	static int
 perf_event_handler(
 		int sig, 
@@ -1338,7 +1376,7 @@ perf_event_handler(
 
 	perf_stop_all(nevents, event_thread);
 
-	//fprintf(stderr, "in perf_event_handler\n");
+	//fprintf(stderr, "in perf_event_handler 1\n");
 
 	// ----------------------------------------------------------------------------
 	// check #0:
@@ -1349,20 +1387,23 @@ perf_event_handler(
 	void *pc = hpcrun_context_pc(context);
 
 
-	if (! hpcrun_safe_enter_async(pc)) {
+	if (! hpcrun_safe_enter_async(pc) && !amd_ibs_flag) {
 		hpcrun_stats_num_samples_blocked_async_inc();
-		restart_perf_event(siginfo->si_fd);
+		restart_perf_event(siginfo->si_int);
+		fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
 		perf_start_all(nevents, event_thread);
-
 		return 0; // tell monitor the signal has been handled.
 	}
+
+	//fprintf(stderr, "in perf_event_handler 2\n");
 
 	// ----------------------------------------------------------------------------
 	// check #1: check if signal generated by kernel for profiling
 	// ----------------------------------------------------------------------------
-	if (siginfo->si_code < 0) {
+	if (siginfo->si_code < 0 && !amd_ibs_flag) {
 		TMSG(LINUX_PERF, "signal si_code %d < 0 indicates not from kernel", 
 				siginfo->si_code);
+		fprintf(stderr, "quit 1\n");
 		perf_start_all(nevents, event_thread);
 
 		return 1; // tell monitor the signal has not been handled.
@@ -1373,12 +1414,22 @@ perf_event_handler(
 	// if sampling disabled explicitly for this thread, skip all processing
 	// ----------------------------------------------------------------------------
 	if (hpcrun_thread_suppress_sample) {
+		fprintf(stderr, "quit 2\n");
 		return 0;
 	}
 
 	//fprintf(stderr, "in perf_event_handler\n");
-	int fd = siginfo->si_fd;
+	int fd;
+	//if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
+	if(amd_ibs_flag)
+        {
+		fd = siginfo->si_int;
+	} else 
+	{
+		fd = siginfo->si_fd;
+	}
 
+	//fprintf(stderr, "in perf_event_handler fd: %d\n", fd);
 	// ----------------------------------------------------------------------------
 	// check #3: we expect only POLL_HUP, not POLL_IN
 	// Sometimes we have signal code other than POll_HUP
@@ -1406,7 +1457,8 @@ perf_event_handler(
 	if (current == NULL) {
 		// signal not from perf event
 		TMSG(LINUX_PERF, "signal si_code %d with fd %d: unknown perf event",
-				siginfo->si_code, fd);
+				siginfo->si_int, fd);
+		fprintf(stderr, "signal si_code %d with fd %d: unknown perf event\n", siginfo->si_code, fd);
 		hpcrun_safe_exit();
 
 		restart_perf_event(fd);
@@ -1416,20 +1468,62 @@ perf_event_handler(
 	}
 
 
+	int tmp = 0;
+	bool amd_ibs_event = false;
+	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
+	{
+		amd_ibs_event = true;
+		tmp = read(fd, global_buffer, BUFFER_SIZE_B);
+	}
+
 	// Increment the number of overflows for the current event
 	current->num_overflows++;
 	// ----------------------------------------------------------------------------
 	// parse the buffer until it finishes reading all buffers
 	// ----------------------------------------------------------------------------
 	int more_data = 0;
+	char * sample_buffer;
+	if(amd_ibs_event)
+	{
+       		more_data = tmp / sizeof(ibs_op_t);
+		sample_buffer = malloc (sizeof(ibs_op_t));
+	} 
+
+	int offset = 0;
+	//fprintf(stderr, "event with name %s is about to be read\n", current->event->metric_desc->name);
+	int i = 0;
+
 	do {
 		perf_mmap_data_t mmap_data;
 		memset(&mmap_data, 0, sizeof(perf_mmap_data_t));
 
+		 sample_val_t sv;
+		 memset(&sv, 0, sizeof(sample_val_t));
 		// reading info from mmapped buffer
-		more_data = read_perf_buffer(current, &mmap_data);
+		if(amd_ibs_event)
+		{
+			memcpy ( sample_buffer, global_buffer + offset, sizeof(ibs_op_t) );
+			i++;
+                	offset += i * sizeof(ibs_op_t);
+                	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
+			if (op_data->op_data3.reg.ibs_lin_addr_valid) {
+				read_ibs_buffer(current, &mmap_data, op_data);
+				//record_sample(current, &mmap_data, context, &sv);
+			}
+			more_data--;
+		} else
+		{
+			more_data = read_perf_buffer(current, &mmap_data);
+
+                	if (mmap_data.header_type == PERF_RECORD_SAMPLE)
+                        	record_sample(current, &mmap_data, context, &sv);
+
+			kernel_block_handler(current, sv, &mmap_data);
+		}
+		//fprintf(stderr, "event with name %s has been read\n", current->event->metric_desc->name);
 		TMSG(LINUX_PERF, "record buffer: sid: %d, ip: %p, addr: %p, id: %d", mmap_data.sample_id, mmap_data.ip, mmap_data.addr, mmap_data.id);
 
+#if 0
 		sample_val_t sv;
 		memset(&sv, 0, sizeof(sample_val_t));
 
@@ -1437,9 +1531,14 @@ perf_event_handler(
 			record_sample(current, &mmap_data, context, &sv);
 
 		kernel_block_handler(current, sv, &mmap_data);
+#endif
 
-	} while (more_data);
+	} while (more_data > 0);
 
+	if(amd_ibs_event)
+        {
+                free(sample_buffer);
+        }
 	hpcrun_safe_exit();
 
 	restart_perf_event(fd);
