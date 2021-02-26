@@ -1369,7 +1369,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
 	mmap_info->ip = op_data->op_rip;
 
-	fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid));
+	fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
 	return 0;
 }
 
@@ -1523,7 +1523,8 @@ perf_event_handler(
                 	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
 			if (op_data->op_data3.reg.ibs_lin_addr_valid) {
 				read_ibs_buffer(current, &mmap_data, op_data);
-				record_sample(current, &mmap_data, context, &sv);
+				if(!op_data->kern_mode)
+					record_sample(current, &mmap_data, context, &sv);	
 			}
 			more_data--;
 		} else

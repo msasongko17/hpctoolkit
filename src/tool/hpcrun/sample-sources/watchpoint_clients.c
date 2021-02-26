@@ -150,6 +150,7 @@
 #include "reuse.h"
 
 #define WAIT_THRESHOLD 10
+extern bool amd_ibs_flag;
 int used_wp_count = 0;
 int max_used_wp_count = 0;
 extern __thread int wait_threshold;
@@ -3340,9 +3341,11 @@ static inline bool IsValidAddress(void * addr, void * pc){
   if( (addr == 0) )
     return false;
 
+  fprintf(stderr, "failed here 1\n");
   if( (pc == 0) )
     return false;
 
+  fprintf(stderr, "failed here 2\n");
   if(( (void*)(td-1) <= addr) && (addr < (void*)(td+2))) // td data
     return false;
   if(IsAltStackAddress(addr))
@@ -3350,6 +3353,7 @@ static inline bool IsValidAddress(void * addr, void * pc){
   if(IsFSorGS(addr))
     return false;   
 
+  fprintf(stderr, "failed here 3\n");
   if(IsBlackListedWatchpointAddress(addr) || IsBlackListedWatchpointAddress(pc)){
     return false;
   }
@@ -4052,29 +4056,34 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
   void * contextPC = hpcrun_context_pc(context); 
   void * data_addr = mmap_data->addr; 
-  void * precisePC = (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP) ? mmap_data->ip : 0;
+  void * precisePC = (amd_ibs_flag || (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
-  //fprintf(stderr, "OnSample is called %lx\n", data_addr);
+  fprintf(stderr, "OnSample is called %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
+  fprintf(stderr, "no problem 1\n");
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
   }
 
+  fprintf(stderr, "no problem 2\n");
+
   uint64_t curTime = rdtsc();
   int accessLen;
   AccessType accessType;
-  if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
+  if(!amd_ibs_flag && false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
-  if(accessType == UNKNOWN || accessLen == 0){
+  fprintf(stderr, "no problem 3\n");
+  if(!amd_ibs_flag && (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
     goto ErrExit; // incorrect access type
   }
+  fprintf(stderr, "no problem 4\n");
 
   //fprintf(stderr, "A sample is handled in OnSample\n");
   // if the context PC and precise PC are not in the same function, then the sample point is inaccurate.
@@ -4086,6 +4095,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     isSamplePointAccurate = false;
   }
 
+  fprintf(stderr, "no problem 5\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:{
                       if(accessType == LOAD){
@@ -4882,6 +4892,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               }
                               break;
 
+    case WP_AMD_COMM:	{
+				fprintf(stderr, "WP_AMD_COMM is handled\n");
+				if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"IBS_OP",6) == 0)
+					fprintf(stderr, "IBS_OP event is detected\n");
+				fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
+			}
+			break;
     case WP_COMDETECTIVE: {
                             int sType = -1;
                             sample_count++;
