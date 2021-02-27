@@ -2846,6 +2846,162 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+	fprintf(stderr, "AMDCommWPCallback is called\n");
+	int metricId = -1;
+  const void* joinNode;
+  int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+  number_of_traps++;
+  int max_thread_num = wpi->sample.first_accessing_tid;
+  if(max_thread_num < TD_GET(core_profile_trace_data.id))
+  {
+    max_thread_num = TD_GET(core_profile_trace_data.id);
+  }
+  if(fs_matrix_size < max_thread_num)
+  {
+    fs_matrix_size =  max_thread_num; // false sharing
+    ts_matrix_size =  max_thread_num; // true sharing
+    as_matrix_size =  max_thread_num; // any sharing
+  }
+
+  //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+  int64_t trapTime = rdtsc();
+  int max_core_num = wpi->sample.first_accessing_core_id;
+
+  if(max_core_num < sched_getcpu()) // sched_getcpu() finds the cpu on which the thread is running
+  {   
+    max_core_num = sched_getcpu(); 
+  }
+  if(fs_core_matrix_size < max_core_num)
+  {
+    fs_core_matrix_size =  max_core_num;
+    ts_core_matrix_size =  max_core_num;
+    as_core_matrix_size =  max_core_num;
+  }
+
+  long global_sampling_period = 0;
+
+  int index1 = wpi->sample.first_accessing_tid; 
+  int index2 = TD_GET(core_profile_trace_data.id); 
+
+  int core_id1 = wpi->sample.first_accessing_core_id;  
+  int core_id2 = sched_getcpu();  
+  int flag = 0;
+  // if ts2 > tprev then
+  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
+    if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
+      if(wpi->sample.sampleType == ALL_LOAD) {
+        global_sampling_period = global_load_sampling_period;
+        flag = 1;
+        number_of_caught_read_traps++;
+      }
+    } else if (wt->accessType == STORE && wpi->sample.samplerAccessType == STORE) {
+      if(wpi->sample.sampleType == ALL_STORE) {
+        global_sampling_period = global_store_sampling_period;
+        flag = 2;
+        number_of_caught_write_traps++;
+      }
+    } else if (wt->accessType == LOAD_AND_STORE && wpi->sample.samplerAccessType == LOAD_AND_STORE){
+      if(wpi->sample.sampleType == ALL_LOAD) {
+        global_sampling_period = global_load_sampling_period;
+        flag = 1;
+        number_of_caught_read_write_traps++;
+      }
+      if(wpi->sample.sampleType == ALL_STORE) {
+        global_sampling_period = global_store_sampling_period;
+        flag = 2;
+        number_of_caught_read_write_traps++;
+      }
+    }
+  }
+
+
+  if (flag == 1) { // Load trap (WAR)
+    void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
+    double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+
+    // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+    if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
+      int id = -1;
+      // Record true sharing
+      trueWRIns ++;
+      metricId =  true_wr_metric_id;
+      joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
+      ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
+      war_ts_matrix[index1][index2] = war_ts_matrix[index1][index2] + increment;
+      if(core_id1 != core_id2) {
+        ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
+        war_ts_core_matrix[core_id1][core_id2] = war_ts_core_matrix[core_id1][core_id2] + increment;
+      }
+
+    } else {
+      int id = -1;
+      // Record false sharing
+      falseWRIns ++;
+      metricId =  false_wr_metric_id;
+      joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
+      fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
+      war_fs_matrix[index1][index2] = war_fs_matrix[index1][index2] + increment;
+      if(core_id1 != core_id2) {
+        fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
+        war_fs_core_matrix[core_id1][core_id2] = war_fs_core_matrix[core_id1][core_id2] + increment;
+      }
+    }
+    as_matrix[index1][index2] = as_matrix[index1][index2] + increment;
+    war_as_matrix[index1][index2] = war_as_matrix[index1][index2] + increment;
+    if(core_id1 != core_id2) {
+      as_core_matrix[core_id1][core_id2] = as_core_matrix[core_id1][core_id2] + increment; 
+      war_as_core_matrix[core_id1][core_id2] = war_as_core_matrix[core_id1][core_id2] + increment;
+    }
+    // tprev = ts2
+    prev_timestamp = wpi->sample.bulletinBoardTimestamp;
+  }
+  else if (flag == 2) { // Store trap (WAW)
+    void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
+    double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+
+    // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
+    if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
+      int id = -1;
+      // Record true sharing
+      trueWWIns ++;
+      metricId =  true_ww_metric_id;
+      joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+      ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
+      waw_ts_matrix[index1][index2] = waw_ts_matrix[index1][index2] + increment;
+      if(core_id1 != core_id2) {
+        ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
+        waw_ts_core_matrix[core_id1][core_id2] = waw_ts_core_matrix[core_id1][core_id2] + increment;
+      }
+
+    } else {
+      int id = -1;
+      // Record false sharing
+      falseWWIns ++;
+      metricId =  false_ww_metric_id;
+      joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+      fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
+      waw_fs_matrix[index1][index2] = waw_fs_matrix[index1][index2] + increment;
+      if(core_id1 != core_id2) {
+        fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
+        waw_fs_core_matrix[core_id1][core_id2] = waw_fs_core_matrix[core_id1][core_id2] + increment;
+      }
+    }
+    as_matrix[index1][index2] = as_matrix[index1][index2] + increment;
+    waw_as_matrix[index1][index2] = waw_as_matrix[index1][index2] + increment;
+    if(core_id1 != core_id2) {
+      as_core_matrix[core_id1][core_id2] = as_core_matrix[core_id1][core_id2] + increment; 
+      waw_as_core_matrix[core_id1][core_id2] = waw_as_core_matrix[core_id1][core_id2] + increment;
+    }
+    // tprev = ts2
+    prev_timestamp = wpi->sample.bulletinBoardTimestamp;
+  }
+#if 0
+  sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+  cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
+  node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+#endif
 	return ALREADY_DISABLED;
 }
 
@@ -4897,6 +5053,311 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"IBS_OP",6) == 0)
 					fprintf(stderr, "IBS_OP event is detected\n");
 				fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
+				int sType = -1;
+                            	sample_count++;
+
+                            	if (mmap_data->store)
+                              		sType = ALL_STORE;
+                            	else if(mmap_data->load)
+                              		sType = ALL_LOAD;
+				int metricId = -1;
+                            	const void* joinNode;  
+                            	int joinNodeIdx = isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+                            	uint64_t curtime = rdtsc();
+
+				int64_t storeCurTime = 0;
+                            	if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
+                              		storeCurTime = curtime;
+
+
+                            	int me = TD_GET(core_profile_trace_data.id);
+                            	int current_core = sched_getcpu();
+                            // L1 = getCacheline ( M1 )
+                            	void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
+                            	int item_not_found = 0;
+                            	struct SharedEntry item;
+                            	do{
+                              		int64_t startCounter = bulletinBoard.counter;
+                              		if(startCounter & 1) {
+                                		continue;
+                              		}
+                              		//__sync_synchronize();
+                              		// entry = BulletinBoard.AtomicGet (key= L1 )
+                              		item = getEntryFromBulletinBoard(cacheLineBaseAddressVar, &item_not_found);
+                              		//__sync_synchronize();
+                              		int64_t endCounter = bulletinBoard.counter;
+                              		if(startCounter == endCounter) {
+                                		break;
+                              		}
+                            	}while(1);
+
+				int arm_watchpoint_flag = 0;
+
+                            // if entry == NULL then // nothing was found related to cachelineBaseAddr in bb
+                            if((item.cacheLineBaseAddress == -1) || (item_not_found == 1)) {
+                              //fprintf(stderr, "not found\n");
+                              // TryArmWatchpoint( T 1 )
+                              arm_watchpoint_flag = 1;
+                              // else
+                            } else { // something was found related to cachelineBaseAddr in bb, com detected on sample
+                              //fprintf(stderr, "found\n");
+                              // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
+                              // if T1 != T2 and ts2 > tprev then
+                              if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
+                                int flag = 0;
+                                double global_sampling_period = 0;
+                                if(sType == ALL_LOAD /*accessType == LOAD*/) { // means that the sample is (read) (WAR)
+                                  global_sampling_period = (double) hpcrun_id2metric(sampledMetricId)->period;
+                                  flag = 1;
+                                }
+                                if(sType == ALL_STORE) { // means that the sample is a store type (write) (WAW)
+                                  global_sampling_period = (double) hpcrun_id2metric(sampledMetricId)->period;
+                                  flag = 2;
+                                } 
+                                int max_thread_num = item.tid; 
+                                if(max_thread_num < me) 
+                                {   
+                                  max_thread_num = me; 
+                                }
+                                if(as_matrix_size < max_thread_num) 
+                                { 
+#if ADAMANT_USED  
+                                  matrix_size_set(max_thread_num);
+#endif
+                                  fs_matrix_size =  max_thread_num;
+                                  ts_matrix_size =  max_thread_num;
+                                  as_matrix_size =  max_thread_num;  
+                                }
+
+                                int max_core_num = item.core_id;
+                                if(max_core_num < current_core)
+                                {
+                                  max_core_num = current_core;
+                                }
+                                if(as_core_matrix_size < max_core_num)
+                                {
+#if ADAMANT_USED
+                                  core_matrix_size_set(max_core_num);
+#endif
+                                  fs_core_matrix_size =  max_core_num;
+                                  ts_core_matrix_size =  max_core_num;
+                                  as_core_matrix_size =  max_core_num;
+                                }
+                                if(flag == 1) {  // if sType is all_loads (WAR)
+                                  int id = -1;
+                                  int metricId = -1;
+                                  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
+                                  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
+
+                                    // ends
+                                    trueWRIns ++;
+                                    metricId = true_wr_metric_id;
+                                    joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
+
+
+                                    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
+                                    war_ts_matrix[item.tid][me] = war_ts_matrix[item.tid][me] + increment;
+                                    if(item.core_id != current_core) {
+                                      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + increment;
+                                      war_ts_core_matrix[item.core_id][current_core] = war_ts_core_matrix[item.core_id][current_core] + increment;        			    }
+                                  } else { 
+                                
+
+                                    falseWRIns ++;
+                                    metricId = false_wr_metric_id;
+                                    joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
+
+                                    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
+                                    war_fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
+                                    if(item.core_id != current_core) {
+                                      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + increment;
+                                      war_fs_core_matrix[item.core_id][current_core] = war_fs_core_matrix[item.core_id][current_core] + increment;
+                                    }
+                                  }
+                                  as_matrix[item.tid][me] = as_matrix[item.tid][me] + increment;
+                                  war_as_matrix[item.tid][me] = war_as_matrix[item.tid][me] + increment;
+                                  if(item.core_id != current_core) {
+                                    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + increment;
+                                    war_as_core_matrix[item.core_id][current_core] = war_as_core_matrix[item.core_id][current_core] + increment;
+                                  }	
+                                  // tprev = ts2
+                                  prev_timestamp = item.time;
+
+                                  //sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+                                  // insert a special node
+                                  /*cct_node_t *node1 = hpcrun_insert_special_node(node, joinNode);
+                                    node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
+                                  // update the metricId
+                                  cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});*/
+
+                                }
+                                else if(flag == 2) {  // if sType is all_stores (WAW)
+                                  int id = -1;
+                                  int metricId = -1;
+                                  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
+                                  if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
+                                    // ends
+
+                                    trueWWIns ++;
+                                    metricId = true_ww_metric_id;
+                                    joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
+
+                                    ts_matrix[item.tid][me] = ts_matrix[item.tid][me] + increment;
+                                    waw_ts_matrix[item.tid][me] = waw_ts_matrix[item.tid][me] + increment;
+                                    if(item.core_id != current_core) { 
+                                      ts_core_matrix[item.core_id][current_core] = ts_core_matrix[item.core_id][current_core] + increment;
+                                      waw_ts_core_matrix[item.core_id][current_core] = waw_ts_core_matrix[item.core_id][current_core] + increment;			    }
+                                  } else {
+                                    /*falseWWIns ++;
+                                      metricId =  false_ww_metric_id;
+                                      cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});*/
+                                    // Record false sharing
+#if ADAMANT_USED
+                                   #endif
+                                    falseWWIns ++;
+                                    metricId = false_ww_metric_id;
+                                    joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
+
+                                    fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
+                                    waw_fs_matrix[item.tid][me] = waw_fs_matrix[item.tid][me] + increment;
+                                    if(item.core_id != current_core) {
+#if ADAMANT_USED
+#endif
+                                      fs_core_matrix[item.core_id][current_core] = fs_core_matrix[item.core_id][current_core] + increment;
+                                      waw_fs_core_matrix[item.core_id][current_core] = waw_fs_core_matrix[item.core_id][current_core] + increment;
+                                    }
+                                  }
+                                  as_matrix[item.tid][me] = as_matrix[item.tid][me] + increment;
+                                  waw_as_matrix[item.tid][me] = waw_as_matrix[item.tid][me] + increment;
+                                  if(item.core_id != current_core) {
+                                    as_core_matrix[item.core_id][current_core] = as_core_matrix[item.core_id][current_core] + increment;
+                                    waw_as_core_matrix[item.core_id][current_core] = waw_as_core_matrix[item.core_id][current_core] + increment;
+                                  }	
+                                  // tprev = ts2
+                                  prev_timestamp = item.time;
+                                  /*
+                                     sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
+                                  // insert a special node
+                                  cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
+                                  node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
+                                  // update the metricId
+                                  cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+                                   */
+                                }
+
+#if 0	
+                                sample_val_t v = hpcrun_sample_callpath(context, measured_metric_id, SAMPLE_UNIT_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+                                cct_node_t *node1 = hpcrun_insert_special_node(v.sample_node, joinNode);
+                                node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
+                                // update the metricId
+                                cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});
+#endif
+                                // after
+                              } else {
+                                // TryArmWatchpoint(T1)
+                                arm_watchpoint_flag = 1;
+                              }
+                            }
+
+                            if (arm_watchpoint_flag) {
+                              // begin watchpoints
+                              int do_not_arm_watchpoint = 0;
+                              // getting an unexpired address from BulletinBoard that is not from T
+                              struct SharedEntry localSharedData;
+                              do{ 
+                                int64_t startCounter1 = bulletinBoard.counter;
+                                if(startCounter1 & 1) {
+                                  continue;
+                                }
+                                localSharedData = getEntryRandomlyFromBulletinBoard(me, curtime, &do_not_arm_watchpoint);	
+                                int64_t endCounter1 = bulletinBoard.counter;
+                                if(startCounter1 == endCounter1) {
+                                  break;
+                                }
+                              }while(1);
+
+                              if((localSharedData.cacheLineBaseAddress != -1) && !do_not_arm_watchpoint) {
+                                long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
+                                accessedIns += metricThreshold;
+                                void * cacheLineBaseAddress = localSharedData.cacheLineBaseAddress;
+                                int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7}; // hard coded
+                                for(int i = 0; i < wpConfig.maxWP; i ++) {
+                                  int idx = rdtsc() & (CACHE_LINE_SZ/MAX_WP_LENGTH -1);
+                                  int tmpVal = shuffleNums[idx];
+                                  shuffleNums[idx] = shuffleNums[i];
+                                  shuffleNums[i] = tmpVal;
+                                }
+                                number_of_arming++;
+
+                                for(int i = 0; i < wpConfig.maxWP; i ++) {
+                                  SampleData_t sd= {
+                                    .va = cacheLineBaseAddress + (shuffleNums[i] << 3),
+                                    .target_va = localSharedData.address,
+                                    .node = localSharedData.node,
+                                    .samplerAccessType = accessType,
+                                    .accessType=localSharedData.accessType,
+                                    .sampleType=sType,
+                                    .type=localSharedData.wpType,
+                                    .wpLength = MAX_WP_LENGTH,
+                                    .accessLength= accessLen,
+                                    .sampledMetricId=sampledMetricId,
+                                    .isSamplePointAccurate = isSamplePointAccurate,
+                                    .preWPAction=theWPConfig->preWPAction,
+                                    .isBackTrace = false,
+                                    .first_accessing_tid = localSharedData.tid,
+                                    .first_accessing_core_id = localSharedData.core_id,
+                                    .bulletinBoardTimestamp = localSharedData.time,
+                                    .expirationPeriod = localSharedData.expiration_period
+                                  };
+                                  // if current WPs in T are old then
+                                  // Disarm any previously armed WPs
+                                  fprintf(stderr, "watchpoint is to be armed\n"); 
+                                  SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */);
+                                }
+                              }
+                              // end watchpoints
+                            }
+
+                            // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
+                            if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+                            } else {
+                              // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
+                              uint64_t bulletinCounter = bulletinBoard.counter;
+                              if((bulletinCounter & 1) == 0) {
+                                //bool __sync_bool_compare_and_swap (type *ptr, type oldval type newval, ...)
+                                //These builtins perform an atomic compare and swap. That is, if the current value of *ptr
+                                //is oldval, then write newval into *ptr.
+                                //The “bool” version returns true if the comparison is successful and newval was written.
+                                if(__sync_bool_compare_and_swap(&bulletinBoard.counter, bulletinCounter, bulletinCounter+1)){
+                                  struct SharedEntry inserted_item;
+                                  inserted_item.time = curtime;
+                                  inserted_item.tid = me;
+                                  inserted_item.core_id = sched_getcpu();
+                                  inserted_item.wpType = WP_RW;
+                                  inserted_item.accessType = accessType;
+                                  inserted_item.sampleType = sType;
+                                  inserted_item.address = data_addr;
+                                  inserted_item.accessLen = accessLen;
+                                  inserted_item.node = node;
+                                  inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
+                                  inserted_item.prev_transfer_counter = 0;
+                                  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+                                  int bb_flag = 0;
+                                  //__sync_synchronize();
+                                  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
+                                  //__sync_synchronize();
+                                  bulletinBoard.counter++;
+                                }
+                              }
+                            }
+                            // ends
+
+                            lastTime = curtime;
+                            if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
+                              storeLastTime = storeCurTime;  	
 			}
 			break;
     case WP_COMDETECTIVE: {

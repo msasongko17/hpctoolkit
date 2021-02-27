@@ -514,6 +514,8 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void AMDCommWPConfigOverride(void *v){
   // replacement policy is OLDEST forced.
+  wpConfig.dontFixIP = true;
+  wpConfig.dontDisassembleWPAddress = true;
   wpConfig.isLBREnabled = false;
   wpConfig.replacementPolicy = OLDEST;
 }
@@ -603,10 +605,11 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 #if defined(FAST_BP_IOC_FLAG)
   if(modify) {
     // modification
+    fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
     assert(wpi->fileHandle != -1);
-    assert(wpi->mmapBuffer != 0);
+    //assert(wpi->mmapBuffer != 0);
     //DisableWatchpoint(wpi);
-    //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
+    fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
     //create_wp_count++;
     CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
     //if(wpi->isActive == false) {
@@ -615,13 +618,16 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
   } else
 #endif
   {
+
     //create_wp_count++;
     // fresh creation
     // Create the perf_event for this thread on all CPUs with no event group
-    //fprintf(stderr, "watchpoint is created with perf_event_open\n");
+    fprintf(stderr, "watchpoint is created with perf_event_open\n");
+
     int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
     if (perf_fd == -1) {
       EMSG("Failed to open perf event file: %s\n",strerror(errno));
+      fprintf(stderr, "failed at perf_event_open\n");
       monitor_real_abort();
     }
     // Set the perf_event file to async mode
@@ -636,6 +642,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     fown_ex.pid  = syscall(__NR_gettid);//gettid();
     int ret = fcntl(perf_fd, F_SETOWN_EX, &fown_ex);
     if (ret == -1){
+      fprintf(stderr, "failed at F_SETOWN_EX\n");
       EMSG("Failed to set the owner of the perf event file: %s\n", strerror(errno));
       return;
     }
@@ -646,6 +653,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     wpi->fileHandle = perf_fd;
     // mmap the file if lbr is enabled
     if(wpConfig.isLBREnabled) {
+      fprintf(stderr, "failed at mmapBuffer\n");
       wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
     }
   }
@@ -656,6 +664,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
   wpi->sample = *sampleData;
   wpi->startTime = rdtsc();
   wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
+  fprintf(stderr, "CreateWatchPoint is done\n");
 }
 
 static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleData, int tid, bool modify) {
@@ -779,7 +788,7 @@ static void CloseDummyHardwareEvent(int perf_fd){
 
 static void DisArm(WatchPointInfo_t * wpi){
 
-  //    assert(wpi->isActive);
+  //assert(wpi->isActive);
   assert(wpi->fileHandle != -1);
 
   if(wpi->mmapBuffer)
@@ -1616,19 +1625,22 @@ WatchPointInfo_t * getWPI  (int me, int location) {
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //volatile int x;
   //fprintf(stderr, "OnWatchPoint=%p\n", &x);
-  //printf("OnWatchPoint is executed\n");
+  fprintf(stderr, "OnWatchPoint is executed\n");
   // Disable HPCRUN sampling
   // if the trap is already in hpcrun, return
   // If the interrupt came from inside our code, then drop the sample
   // and return and avoid any MSG.
   //fprintf(stderr, "in OnWatchpoint\n");
+  fprintf(stderr, "OnWatchPoint is executed 1\n");
   linux_perf_events_pause();
   wp_count++;
+  fprintf(stderr, "OnWatchPoint is executed 2\n");
   void* pc = hpcrun_context_pc(context);
   if (!hpcrun_safe_enter_async(pc)) {
     linux_perf_events_resume();
     return 0;
   }
+  fprintf(stderr, "OnWatchPoint is executed 3\n");
   wp_count1++;
 
   if(event_type == WP_REUSETRACKER) {
@@ -1774,7 +1786,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
       break;
     }
   }
-  //fprintf(stderr, "in OnWatchpoint at this point\n");
+  fprintf(stderr, "in OnWatchpoint at this point\n");
   // Ensure it is an active WP
   if(location == -1) {
     // before
@@ -1816,9 +1828,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
       break;
   }
 
-  //fprintf(stderr, "in OnWatchpoint at that point\n"); 
+  fprintf(stderr, "in OnWatchpoint at that point 2\n"); 
+#if 0
   if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
-    //fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
+    fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
     tData.numWatchpointDropped++;
     retVal = DISABLE_WP; // disable if unable to collect any info.
     wp_dropped++;
@@ -1828,7 +1841,10 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
     //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
   }
-  //fprintf(stderr, "in OnWatchpoint at that point !!!\n");
+ #endif
+  tData.numActiveWatchpointTriggers++;
+      retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
+  fprintf(stderr, "in OnWatchpoint at that point 3\n");
 
   // Let the client take action.
   switch (retVal) {
@@ -1961,12 +1977,14 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     //printf("and this region\n");
     //printf("arming watchpoints\n");
     //fprintf(stderr, "watchpoint is armed\n");
+
     if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
       //LOG to hpcrun log
       EMSG("ArmWatchPoint failed for address %p", sampleData->va);
       return false;
     }
     return true;
+    //return false;
   }
   none_available_count++;
   return false;
