@@ -5890,7 +5890,7 @@ ErrExit:
 }
 
 void dump_profiling_metrics() {
-  if(theWPConfig->id == WP_COMDETECTIVE) {
+  if(theWPConfig->id == WP_COMDETECTIVE || theWPConfig->id == WP_AMD_COMM) {
     dump_fs_matrix();
     dump_fs_core_matrix();
     dump_ts_matrix();
