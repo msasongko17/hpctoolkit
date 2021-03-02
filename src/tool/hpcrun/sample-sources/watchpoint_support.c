@@ -78,6 +78,8 @@ extern MonitoredNodeStruct_t MonitoredNode;
 
 extern int profiling_mode;
 
+extern bool amd_ibs_flag;
+
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
 #define IS_ALIGNED(address, alignment) (! ((size_t)(address) & (alignment-1)))
@@ -607,7 +609,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     // modification
     fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
     assert(wpi->fileHandle != -1);
-    //assert(wpi->mmapBuffer != 0);
+    assert(wpi->mmapBuffer != 0 || amd_ibs_flag);
     //DisableWatchpoint(wpi);
     fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
     //create_wp_count++;
@@ -1790,13 +1792,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   // Ensure it is an active WP
   if(location == -1) {
     // before
-    for(int i = 0 ; i < wpConfig.maxWP; i++) {
+    //for(int i = 0 ; i < wpConfig.maxWP; i++) {
       //if((tData.watchPointArray[i].isActive) && (info->si_fd == tData.watchPointArray[i].fileHandle)) {
       //location = i;
       //break;
       //fprintf(stderr, "tData.watchPointArray[%d].isActive = %d and info->si_fd = %d and tData.watchPointArray[%d].fileHandle = %d monitored address: %lx\n", i, tData.watchPointArray[i].isActive, info->si_fd, i, tData.watchPointArray[i].fileHandle, (long) tData.watchPointArray[i].va);
       //}
-    }
+    //}
     // after
     EMSG("\n WP trigger did not match any known active WP\n");
     //monitor_real_abort();
@@ -1829,7 +1831,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   }
 
   fprintf(stderr, "in OnWatchpoint at that point 2\n"); 
-#if 0
+  if (!amd_ibs_flag)
+  {
   if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
     fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
     tData.numWatchpointDropped++;
@@ -1841,10 +1844,11 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
     //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
   }
- #endif
+ } else {
   tData.numActiveWatchpointTriggers++;
       retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
   fprintf(stderr, "in OnWatchpoint at that point 3\n");
+}
 
   // Let the client take action.
   switch (retVal) {
