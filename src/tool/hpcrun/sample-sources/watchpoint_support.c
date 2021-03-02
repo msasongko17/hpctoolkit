@@ -135,6 +135,7 @@ typedef enum WP_CLIENT_ID{
   WP_LOADSPY,
   WP_REUSE,
   WP_REUSETRACKER,
+  WP_AMD_COMM,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -145,6 +146,8 @@ typedef enum WP_CLIENT_ID{
   WP_IPC_TRUE_SHARING,
   WP_IPC_ALL_SHARING,
   WP_MAX_CLIENTS }WP_CLIENT_ID;
+
+WP_CLIENT_ID event_id;
 
 // Data structure that is given by clients to set a WP
 typedef struct ThreadData{
@@ -516,9 +519,9 @@ void ComDetectiveWPConfigOverride(void *v){
 
 void AMDCommWPConfigOverride(void *v){
   // replacement policy is OLDEST forced.
-  wpConfig.dontFixIP = true;
-  wpConfig.dontDisassembleWPAddress = true;
-  wpConfig.isLBREnabled = false;
+  //wpConfig.dontFixIP = true;
+  //wpConfig.dontDisassembleWPAddress = true;
+  //wpConfig.isLBREnabled = false;
   wpConfig.replacementPolicy = OLDEST;
 }
 
@@ -883,7 +886,8 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
   }
 
   //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
-  if(wpConfig.isLBREnabled) {
+  if(event_id != WP_AMD_COMM && wpConfig.isLBREnabled) {
+    fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
     CreateDummyHardwareEvent();
   }
 
@@ -1829,7 +1833,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
       monitor_real_abort();
       break;
   }
-
+#if 0
   fprintf(stderr, "in OnWatchpoint at that point 2\n"); 
   if (!amd_ibs_flag)
   {
@@ -1845,10 +1849,27 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
   }
  } else {
+  //wpt->pc = reliableIP;
+  //wpt->va = (void *)-1;
+  //wpt->ctxt = context;
   tData.numActiveWatchpointTriggers++;
       retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
   fprintf(stderr, "in OnWatchpoint at that point 3\n");
 }
+#endif
+
+ if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
+    fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
+    tData.numWatchpointDropped++;
+    retVal = DISABLE_WP; // disable if unable to collect any info.
+    wp_dropped++;
+  } else {
+    //fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
+    tData.numActiveWatchpointTriggers++;
+    retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
+    //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
+  }
+
 
   // Let the client take action.
   switch (retVal) {

@@ -350,6 +350,8 @@ typedef enum WP_CLIENT_ID{
   WP_IPC_ALL_SHARING,
   WP_MAX_CLIENTS }WP_CLIENT_ID;
 
+WP_CLIENT_ID event_id;
+
 typedef struct WpClientConfig{
   WP_CLIENT_ID id;
   char * name;
@@ -1401,6 +1403,7 @@ METHOD_FN(process_event_list, int lush_metrics)
   if(theWPConfig->configOverrideCallback){
     theWPConfig->configOverrideCallback(0);
   }
+  event_id = theWPConfig->id;
   WatchpointThreadInit(theWPConfig->wpCallback);
 
   PopulateBlackListAddresses();
@@ -1437,6 +1440,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
     case WP_ALL_SHARING:
     case WP_COMDETECTIVE:
+    case WP_AMD_COMM:  
     case WP_IPC_ALL_SHARING:
       // must have a canonical load map across processes
       hpcrun_set_ipc_load_map(true);
@@ -2969,6 +2973,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
       waw_ts_matrix[index1][index2] = waw_ts_matrix[index1][index2] + increment;
+      fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
         waw_ts_core_matrix[core_id1][core_id2] = waw_ts_core_matrix[core_id1][core_id2] + increment;
@@ -2982,6 +2987,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       waw_fs_matrix[index1][index2] = waw_fs_matrix[index1][index2] + increment;
+      //fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         waw_fs_core_matrix[core_id1][core_id2] = waw_fs_core_matrix[core_id1][core_id2] + increment;
@@ -2996,12 +3002,12 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
     // tprev = ts2
     prev_timestamp = wpi->sample.bulletinBoardTimestamp;
   }
-#if 0
+//#if 0
   sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
   cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
-#endif
+//#endif
 	return ALREADY_DISABLED;
 }
 
@@ -5249,13 +5255,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                    */
                                 }
 
-#if 0	
+//#if 0	
                                 sample_val_t v = hpcrun_sample_callpath(context, measured_metric_id, SAMPLE_UNIT_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
                                 cct_node_t *node1 = hpcrun_insert_special_node(v.sample_node, joinNode);
                                 node1 = hpcrun_cct_insert_path_return_leaf(item.node, node1);
                                 // update the metricId
                                 cct_metric_data_increment(metricId, node1, (cct_metric_data_t){.i = 1});
-#endif
+//#endif
                                 // after
                               } else {
                                 // TryArmWatchpoint(T1)
