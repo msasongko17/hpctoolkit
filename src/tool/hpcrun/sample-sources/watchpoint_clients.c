@@ -4228,7 +4228,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   fprintf(stderr, "no problem 2\n");
 
   uint64_t curTime = rdtsc();
-  int accessLen;
+  int accessLen = 1;
   AccessType accessType;
   if(!amd_ibs_flag && false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
@@ -5144,6 +5144,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   ts_core_matrix_size =  max_core_num;
                                   as_core_matrix_size =  max_core_num;
                                 }
+				fprintf(stderr, "accessLen of sampled access is %d\n", accessLen);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
