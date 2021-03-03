@@ -2850,7 +2850,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-	fprintf(stderr, "AMDCommWPCallback is called\n");
+	//fprintf(stderr, "AMDCommWPCallback is called\n");
 	int metricId = -1;
   const void* joinNode;
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -2868,7 +2868,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
     as_matrix_size =  max_thread_num; // any sharing
   }
 
-  //fprintf(stderr, "wt->va: %lx, wt->accessType: %d\n", wt->va, wt->accessType);
+  fprintf(stderr, "AMDCommWPCallback is called, wt->va: %lx, wt->accessType: %d, wpi->sample.samplerAccessType: %d, wpi->sample.sampleType: %d, LOAD: %d, STORE: %d, LOAD_AND_STORE: %d\n", wt->va, wt->accessType, wpi->sample.samplerAccessType, wpi->sample.sampleType, LOAD, STORE, LOAD_AND_STORE);
   int64_t trapTime = rdtsc();
   int max_core_num = wpi->sample.first_accessing_core_id;
 
@@ -2932,6 +2932,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       metricId =  true_wr_metric_id;
       joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
+      fprintf(stderr, "true sharing is detected at WP trap\n");
       war_ts_matrix[index1][index2] = war_ts_matrix[index1][index2] + increment;
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
@@ -2946,6 +2947,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       war_fs_matrix[index1][index2] = war_fs_matrix[index1][index2] + increment;
+      fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         war_fs_core_matrix[core_id1][core_id2] = war_fs_core_matrix[core_id1][core_id2] + increment;
@@ -2973,7 +2975,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
       waw_ts_matrix[index1][index2] = waw_ts_matrix[index1][index2] + increment;
-      fprintf(stderr, "false sharing is detected at WP trap\n");
+      fprintf(stderr, "true sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
         waw_ts_core_matrix[core_id1][core_id2] = waw_ts_core_matrix[core_id1][core_id2] + increment;
@@ -2987,7 +2989,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       waw_fs_matrix[index1][index2] = waw_fs_matrix[index1][index2] + increment;
-      //fprintf(stderr, "false sharing is detected at WP trap\n");
+      fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         waw_fs_core_matrix[core_id1][core_id2] = waw_fs_core_matrix[core_id1][core_id2] + increment;
@@ -3007,6 +3009,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+  fprintf(stderr, "source code line attribution here\n");
 //#endif
 	return ALREADY_DISABLED;
 }
@@ -4236,11 +4239,17 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   uint64_t curTime = rdtsc();
   int accessLen = 1;
   AccessType accessType;
-  if(!amd_ibs_flag && false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
+  if(amd_ibs_flag) {
+	  if(mmap_data->store)
+		  accessType = STORE;
+	  else if (mmap_data->load)
+		 accessType = LOAD; 
+  }
+  else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
-  fprintf(stderr, "no problem 3\n");
+  fprintf(stderr, "in sample, accessType: %d, accessLen: %d\n", accessType, accessLen);
   if(!amd_ibs_flag && (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
     goto ErrExit; // incorrect access type
