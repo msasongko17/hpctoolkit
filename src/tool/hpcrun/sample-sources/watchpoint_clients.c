@@ -2868,7 +2868,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
     as_matrix_size =  max_thread_num; // any sharing
   }
 
-  fprintf(stderr, "AMDCommWPCallback is called, wt->va: %lx, wt->accessType: %d, wpi->sample.samplerAccessType: %d, wpi->sample.sampleType: %d, LOAD: %d, STORE: %d, LOAD_AND_STORE: %d\n", wt->va, wt->accessType, wpi->sample.samplerAccessType, wpi->sample.sampleType, LOAD, STORE, LOAD_AND_STORE);
+  //fprintf(stderr, "AMDCommWPCallback is called, wt->va: %lx, wt->accessType: %d, wpi->sample.samplerAccessType: %d, wpi->sample.sampleType: %d, LOAD: %d, STORE: %d, LOAD_AND_STORE: %d\n", wt->va, wt->accessType, wpi->sample.samplerAccessType, wpi->sample.sampleType, LOAD, STORE, LOAD_AND_STORE);
   int64_t trapTime = rdtsc();
   int max_core_num = wpi->sample.first_accessing_core_id;
 
@@ -2932,7 +2932,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       metricId =  true_wr_metric_id;
       joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
-      fprintf(stderr, "true sharing is detected at WP trap\n");
+      //fprintf(stderr, "true sharing is detected at WP trap\n");
       war_ts_matrix[index1][index2] = war_ts_matrix[index1][index2] + increment;
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
@@ -2947,7 +2947,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       war_fs_matrix[index1][index2] = war_fs_matrix[index1][index2] + increment;
-      fprintf(stderr, "false sharing is detected at WP trap\n");
+      //fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         war_fs_core_matrix[core_id1][core_id2] = war_fs_core_matrix[core_id1][core_id2] + increment;
@@ -2975,7 +2975,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
       waw_ts_matrix[index1][index2] = waw_ts_matrix[index1][index2] + increment;
-      fprintf(stderr, "true sharing is detected at WP trap\n");
+      //fprintf(stderr, "true sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
         waw_ts_core_matrix[core_id1][core_id2] = waw_ts_core_matrix[core_id1][core_id2] + increment;
@@ -2989,7 +2989,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       waw_fs_matrix[index1][index2] = waw_fs_matrix[index1][index2] + increment;
-      fprintf(stderr, "false sharing is detected at WP trap\n");
+      //fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         waw_fs_core_matrix[core_id1][core_id2] = waw_fs_core_matrix[core_id1][core_id2] + increment;
@@ -3009,7 +3009,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
-  fprintf(stderr, "source code line attribution here\n");
+  //fprintf(stderr, "source code line attribution here\n");
 //#endif
 	return ALREADY_DISABLED;
 }
@@ -3506,11 +3506,11 @@ static inline bool IsValidAddress(void * addr, void * pc){
   if( (addr == 0) )
     return false;
 
-  fprintf(stderr, "failed here 1\n");
+  //fprintf(stderr, "failed here 1\n");
   if( (pc == 0) )
     return false;
 
-  fprintf(stderr, "failed here 2\n");
+  //fprintf(stderr, "failed here 2\n");
   if(( (void*)(td-1) <= addr) && (addr < (void*)(td+2))) // td data
     return false;
   if(IsAltStackAddress(addr))
@@ -3518,7 +3518,7 @@ static inline bool IsValidAddress(void * addr, void * pc){
   if(IsFSorGS(addr))
     return false;   
 
-  fprintf(stderr, "failed here 3\n");
+  //fprintf(stderr, "failed here 3\n");
   if(IsBlackListedWatchpointAddress(addr) || IsBlackListedWatchpointAddress(pc)){
     return false;
   }
@@ -4223,18 +4223,18 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   void * data_addr = mmap_data->addr; 
   void * precisePC = (amd_ibs_flag || (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
-  fprintf(stderr, "OnSample is called %lx\n", data_addr);
+  //fprintf(stderr, "OnSample is called %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
-  fprintf(stderr, "no problem 1\n");
+  //fprintf(stderr, "no problem 1\n");
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
   }
 
-  fprintf(stderr, "no problem 2\n");
+  //fprintf(stderr, "no problem 2\n");
 
   uint64_t curTime = rdtsc();
   int accessLen = 1;
@@ -4249,12 +4249,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
-  fprintf(stderr, "in sample, accessType: %d, accessLen: %d\n", accessType, accessLen);
+  //fprintf(stderr, "in sample, accessType: %d, accessLen: %d\n", accessType, accessLen);
   if(!amd_ibs_flag && (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
     goto ErrExit; // incorrect access type
   }
-  fprintf(stderr, "no problem 4\n");
+  //fprintf(stderr, "no problem 4\n");
 
   //fprintf(stderr, "A sample is handled in OnSample\n");
   // if the context PC and precise PC are not in the same function, then the sample point is inaccurate.
@@ -4266,7 +4266,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     isSamplePointAccurate = false;
   }
 
-  fprintf(stderr, "no problem 5\n");
+  //fprintf(stderr, "no problem 5\n");
   switch (theWPConfig->id) {
     case WP_DEADSPY:{
                       if(accessType == LOAD){
@@ -5064,10 +5064,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               break;
 
     case WP_AMD_COMM:	{
-				fprintf(stderr, "WP_AMD_COMM is handled\n");
-				if(strncmp (hpcrun_id2metric(sampledMetricId)->name,"IBS_OP",6) == 0)
-					fprintf(stderr, "IBS_OP event is detected\n");
-				fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
+				//fprintf(stderr, "WP_AMD_COMM is handled\n");	
+				//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
 				int sType = -1;
                             	sample_count++;
 
@@ -5159,7 +5157,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   ts_core_matrix_size =  max_core_num;
                                   as_core_matrix_size =  max_core_num;
                                 }
-				fprintf(stderr, "accessLen of sampled access is %d\n", accessLen);
+				//fprintf(stderr, "accessLen of sampled access is %d\n", accessLen);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
@@ -5330,7 +5328,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   };
                                   // if current WPs in T are old then
                                   // Disarm any previously armed WPs
-                                  fprintf(stderr, "watchpoint is to be armed\n"); 
+                                  //fprintf(stderr, "watchpoint is to be armed\n"); 
                                   SubscribeWatchpoint(&sd, OVERWRITE, false /* capture value */);
                                 }
                               }

@@ -580,7 +580,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 	}
 
 	if(WatchpointClientActive()){
-		fprintf(stderr, "OnSample is called\n");
+		//fprintf(stderr, "OnSample is called\n");
 		OnSample(mmap_data,
 				/*hpcrun_context_pc(context)*/ context,
 				sv->sample_node,
@@ -1346,9 +1346,7 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
 		memcpy ( sample_buffer, global_buffer + offset, sizeof(ibs_op_t) );
 		offset += i * sizeof(ibs_op_t);
 		ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
-		//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid);
-		if (op_data->op_data3.reg.ibs_lin_addr_valid)
-			fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, i: %d out of %d items in buffer\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), i, num_items);
+		//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid);	
 	}
 	free (sample_buffer);
 	// after
@@ -1369,7 +1367,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
 	mmap_info->ip = op_data->op_rip;
 
-	fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
+	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
 	return 0;
 }
 

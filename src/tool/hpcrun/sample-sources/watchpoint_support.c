@@ -685,11 +685,11 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
 #if defined(FAST_BP_IOC_FLAG)
   if(modify) {
     // modification
-    fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
+    //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
     assert(wpi->fileHandle != -1);
     assert(wpi->mmapBuffer != 0 || amd_ibs_flag);
     //DisableWatchpoint(wpi);
-    fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
+    //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
     //create_wp_count++;
     CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
     //if(wpi->isActive == false) {
@@ -702,7 +702,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     //create_wp_count++;
     // fresh creation
     // Create the perf_event for this thread on all CPUs with no event group
-    fprintf(stderr, "watchpoint is created with perf_event_open\n");
+    //fprintf(stderr, "watchpoint is created with perf_event_open\n");
 
     int perf_fd = perf_event_open(&pe, 0, -1, -1 /*group*/, 0);
     if (perf_fd == -1) {
@@ -733,7 +733,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     wpi->fileHandle = perf_fd;
     // mmap the file if lbr is enabled
     if(wpConfig.isLBREnabled) {
-      fprintf(stderr, "failed at mmapBuffer\n");
+      //fprintf(stderr, "failed at mmapBuffer\n");
       wpi->mmapBuffer = MAPWPMBuffer(perf_fd);
     }
   }
@@ -744,7 +744,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
   wpi->sample = *sampleData;
   wpi->startTime = rdtsc();
   wpi->bulletinBoardTimestamp = sampleData->bulletinBoardTimestamp;
-  fprintf(stderr, "CreateWatchPoint is done\n");
+//  fprintf(stderr, "CreateWatchPoint is done\n");
 }
 
 static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sampleData, int tid, bool modify) {
@@ -1482,20 +1482,20 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
 
       if(wpConfig.dontDisassembleWPAddress == false){
         FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
-	fprintf(stderr, "before: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
+	//fprintf(stderr, "before: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
 	if(false == getEntryFromAccessTypeLengthCache(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType))) {
 		if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
           	//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
           	goto ErrExit;
         	}
-		fprintf(stderr, "entry taken from disassembly\n");
+		//fprintf(stderr, "entry taken from disassembly\n");
 		insertEntryToAccessTypeLengthCache(wpt->pc, wpt->accessLength, wpt->accessType); 
 	} else {
-		fprintf(stderr, "entry taken from AccessTypeLengthCache\n");
+		//fprintf(stderr, "entry taken from AccessTypeLengthCache\n");
 		addr = wpi->va;
 	}
 
-	fprintf(stderr, "after: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
+	//fprintf(stderr, "after: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
         if (wpt->accessLength == 0) {
           //EMSG("WP triggered 0 access length! at pc=%p\n", wpt->pc);
           goto ErrExit;
@@ -1512,11 +1512,11 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
           else
             tData.numWatchpointImpreciseAddressArbitraryLength ++;
 
-	  fprintf(stderr, "imprecise address is detected\n");
+	  //fprintf(stderr, "imprecise address is detected\n");
           tData.numWatchpointImpreciseAddressArbitraryLength ++;
           patchedAddr = wpi->va;
         } else {
-	  fprintf(stderr, "precise address is detected\n");
+	  //fprintf(stderr, "precise address is detected\n");
           patchedAddr = addr;
         }
         wpt->va = patchedAddr;
@@ -1717,22 +1717,22 @@ WatchPointInfo_t * getWPI  (int me, int location) {
 static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //volatile int x;
   //fprintf(stderr, "OnWatchPoint=%p\n", &x);
-  fprintf(stderr, "OnWatchPoint is executed\n");
+  //fprintf(stderr, "OnWatchPoint is executed\n");
   // Disable HPCRUN sampling
   // if the trap is already in hpcrun, return
   // If the interrupt came from inside our code, then drop the sample
   // and return and avoid any MSG.
   //fprintf(stderr, "in OnWatchpoint\n");
-  fprintf(stderr, "OnWatchPoint is executed 1\n");
+  //fprintf(stderr, "OnWatchPoint is executed 1\n");
   linux_perf_events_pause();
   wp_count++;
-  fprintf(stderr, "OnWatchPoint is executed 2\n");
+  //fprintf(stderr, "OnWatchPoint is executed 2\n");
   void* pc = hpcrun_context_pc(context);
   if (!hpcrun_safe_enter_async(pc)) {
     linux_perf_events_resume();
     return 0;
   }
-  fprintf(stderr, "OnWatchPoint is executed 3\n");
+  //fprintf(stderr, "OnWatchPoint is executed 3\n");
   wp_count1++;
 
   if(event_type == WP_REUSETRACKER) {
@@ -1878,7 +1878,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
       break;
     }
   }
-  fprintf(stderr, "in OnWatchpoint at this point\n");
+  //fprintf(stderr, "in OnWatchpoint at this point\n");
   // Ensure it is an active WP
   if(location == -1) {
     // before
