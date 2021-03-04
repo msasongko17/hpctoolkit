@@ -188,6 +188,79 @@ uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
 globalReuseTable_t globalReuseWPs;
 globalReuseTable_t globalStoreReuseWPs;
 
+accessTypeLengthTable_t accessTypeLengthCache;
+
+int getIndex(void * key) {
+	  return (uint64_t) key % 54121 % HASH_TABLE_SIZE;
+}
+
+bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType) {
+  int idx = getIndex(pc);
+  void * entry_pc;
+  do{
+    int64_t startCounter = accessTypeLengthCache.table[idx].counter;
+    if(startCounter & 1)
+      continue; // Some writer is updating
+
+    __sync_synchronize();
+    *accessLen = accessTypeLengthCache.table[idx].accessLength;
+    *accessType = accessTypeLengthCache.table[idx].accessType;
+    entry_pc = accessTypeLengthCache.table[idx].pc;
+    __sync_synchronize();
+    int64_t endCounter = accessTypeLengthCache.table[idx].counter;
+    if(startCounter == endCounter)
+      break;
+  }while(1);
+  if(pc == entry_pc)
+	  return true;
+  return false;
+  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    //*item_not_found = 1;
+  //return reuseBulletinBoard.hashTable[hashIndex];
+}
+
+
+#if 0
+bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType) {
+    int idx = getIndex(pc);
+    void * entry_pc;
+    int64_t counter = accessTypeLengthCache.table[idx].counter;
+    if((counter & 1) == 0) {
+
+        if(__sync_bool_compare_and_swap(&accessTypeLengthCache.table[idx].counter, counter, counter+1)) {
+                *accessLen = accessTypeLengthCache.table[idx].accessLength;
+    		*accessType = accessTypeLengthCache.table[idx].accessType;
+    		entry_pc = accessTypeLengthCache.table[idx].pc; 
+		fprintf(stderr, "retrieved: idx: %d, pc: %lx, entry_pc: %lx, accessLen: %d, accessType: %d\n", idx, pc, entry_pc, *accessLen, *accessType);
+                accessTypeLengthCache.table[idx].counter++;
+        }
+    }
+    if(pc == entry_pc)
+          return true;
+    return false;
+
+  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    //*item_not_found = 1;
+}
+#endif
+void insertEntryToAccessTypeLengthCache(void * pc, uint32_t accessLen, AccessType accessType) {
+    int idx = getIndex(pc);
+    int64_t counter = accessTypeLengthCache.table[idx].counter;
+    if((counter & 1) == 0) {
+
+    	if(__sync_bool_compare_and_swap(&accessTypeLengthCache.table[idx].counter, counter, counter+1)) {
+		accessTypeLengthCache.table[idx].pc = pc;
+    		accessTypeLengthCache.table[idx].accessLength = accessLen;
+    		accessTypeLengthCache.table[idx].accessType = accessType;
+		//fprintf(stderr, "insertion: idx: %d, pc: %lx, accessLen: %d, accessType: %d\n", idx, pc, accessLen, accessType);
+		accessTypeLengthCache.table[idx].counter++;
+	}
+    }
+    
+  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    //*item_not_found = 1;
+}
+
 globalReuseTable_t globalL3ReuseWPs[4];
 
 typedef struct FdData {
@@ -198,7 +271,7 @@ typedef struct FdData {
 
 typedef struct fdDataTableStruct{
   volatile uint64_t counter __attribute__((aligned(64)));
-  struct FdData hashTable[503];
+  struct FdData hashTable[HASH_TABLE_SIZE];
   //struct SharedData * hashTable;
 } FdDataTable_t;
 
@@ -207,7 +280,7 @@ FdDataTable_t fdDataTable = {.counter = 0};
 //extern uint64_t GetWeightedMetricDiff(cct_node_t * ctxtNode, int pebsMetricId, double proportion);
 
 int fdDataInsert(int fd, pid_t os_tid, int tid) {
-  int idx = fd % 503;
+  int idx = fd % HASH_TABLE_SIZE;
   //printf("fd: %d is inserted to index: %d\n", fd, idx);
   fdDataTable.hashTable[idx].fd = fd;
   fdDataTable.hashTable[idx].os_tid = os_tid;
@@ -216,7 +289,7 @@ int fdDataInsert(int fd, pid_t os_tid, int tid) {
 }
 
 FdData_t fdDataGet(int fd) {
-  int idx = fd % 503;
+  int idx = fd % HASH_TABLE_SIZE;
   return fdDataTable.hashTable[idx];
 }
 
@@ -465,11 +538,13 @@ __attribute__((constructor))
       wpConfig.cachelineInvalidation = false;
     }
 
-    for(int i = 0; i < 503; i++) {
+    for(int i = 0; i < HASH_TABLE_SIZE; i++) {
       for(int j = 0; j < MAX_WP_SLOTS; j++) {
         threadDataTable.hashTable[i].counter[j] = 0;	
       }
       threadDataTable.hashTable[i].os_tid = -1;
+      //accessTypeLengthCache.table[i].counter = 0;
+      //fprintf(stderr, "accessTypeLengthCache.table[%d].pc: %lx\n", i, accessTypeLengthCache.table[i].pc);
     }
     for(int i = 0; i < MAX_WP_SLOTS; i++) {
       globalWPIsUsers[i] = -1;
@@ -1407,10 +1482,20 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
 
       if(wpConfig.dontDisassembleWPAddress == false){
         FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
-        if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
-          //EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
-          goto ErrExit;
-        }
+	fprintf(stderr, "before: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
+	if(false == getEntryFromAccessTypeLengthCache(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType))) {
+		if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
+          	//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
+          	goto ErrExit;
+        	}
+		fprintf(stderr, "entry taken from disassembly\n");
+		insertEntryToAccessTypeLengthCache(wpt->pc, wpt->accessLength, wpt->accessType); 
+	} else {
+		fprintf(stderr, "entry taken from AccessTypeLengthCache\n");
+		addr = wpi->va;
+	}
+
+	fprintf(stderr, "after: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
         if (wpt->accessLength == 0) {
           //EMSG("WP triggered 0 access length! at pc=%p\n", wpt->pc);
           goto ErrExit;
@@ -1423,14 +1508,15 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
         // Hence, if the addresses do NOT overlap, merely use the Sample address!
         if(false == ADDRESSES_OVERLAP(addr, wpt->accessLength, wpi->va, wpi->sample.wpLength)) {
           if ((wpt->accessLength == sizeof(void *)) && (wpt->accessLength == wpi->sample.wpLength) &&  (((addr - wpi->va) == sizeof(void *)) || ((wpi->va - addr) == sizeof(void *))))
-            tData.numWatchpointImpreciseAddress8ByteLength ++;
+		tData.numWatchpointImpreciseAddress8ByteLength ++;
           else
             tData.numWatchpointImpreciseAddressArbitraryLength ++;
 
-
+	  fprintf(stderr, "imprecise address is detected\n");
           tData.numWatchpointImpreciseAddressArbitraryLength ++;
           patchedAddr = wpi->va;
         } else {
+	  fprintf(stderr, "precise address is detected\n");
           patchedAddr = addr;
         }
         wpt->va = patchedAddr;

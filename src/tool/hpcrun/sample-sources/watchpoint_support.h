@@ -244,6 +244,20 @@ typedef struct globalReuseTable{
   //struct SharedData * hashTable;
 } globalReuseTable_t;
 
+#define HASH_TABLE_SIZE 503
+
+typedef struct accessTypeLengthEntry{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  void * pc;
+  AccessType accessType;  
+  int accessLength; 
+  char dummy[CACHE_LINE_SZ];
+} accessTypeLengthEntry_t;
+
+typedef struct accessTypeLengthTable{
+  struct accessTypeLengthEntry table[HASH_TABLE_SIZE];
+} accessTypeLengthTable_t;
+
 #define CHANGE_THRESHOLD 100
 #define L2_MISS_RATIO_PERIOD 50
 
