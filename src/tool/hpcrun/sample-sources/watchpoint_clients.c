@@ -155,6 +155,7 @@ int used_wp_count = 0;
 int max_used_wp_count = 0;
 extern __thread int wait_threshold;
 extern int mapping_size;
+extern __thread int original_sample_count; 
 
 __thread uint64_t last_trapped_timestamp = 0;
 __thread uint64_t last_monitored_wp_timestamp = 0;
@@ -412,6 +413,7 @@ __thread uint64_t as_num = 0;
 __thread uint64_t inter_core_as_num = 0;
 __thread uint64_t line_transfer_num = 0;
 __thread uint64_t sample_count = 0;
+__thread uint64_t valid_sample_count = 0;
 __thread uint64_t trap_count = 0;
 __thread uint64_t wp_arming_count = 0;
 // ComDetective stats end
@@ -1067,6 +1069,7 @@ uint64_t val[3];
         hpcrun_stats_num_reuseTemporal_inc(mtReuseTemporal);
         hpcrun_stats_num_reuseSpatial_inc(mtReuseSpatial);
       }   break;
+    case WP_AMD_COMM:
     case WP_ALL_SHARING:
     case WP_COMDETECTIVE:
     case WP_IPC_ALL_SHARING:
@@ -1077,7 +1080,8 @@ uint64_t val[3];
       hpcrun_stats_num_trueWWIns_inc(trueWWIns);
       hpcrun_stats_num_trueRWIns_inc(trueRWIns);
       hpcrun_stats_num_trueWRIns_inc(trueWRIns);
-      //fprintf(stderr, "sample_count: %ld\n", sample_count);
+      fprintf(stderr, "sample_count: %ld\n", sample_count);
+      fprintf(stderr, "sample_count: %ld\n", original_sample_count);
 
     default:
       break;
@@ -2850,7 +2854,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-	//fprintf(stderr, "AMDCommWPCallback is called\n");
+  //fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
 	int metricId = -1;
   const void* joinNode;
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -2883,7 +2887,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
     as_core_matrix_size =  max_core_num;
   }
 
-  long global_sampling_period = 0;
+  long global_sampling_period = hpcrun_id2metric(wpi->sample.sampledMetricId)->period;
 
   int index1 = wpi->sample.first_accessing_tid; 
   int index2 = TD_GET(core_profile_trace_data.id); 
@@ -2892,38 +2896,43 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int core_id2 = sched_getcpu();  
   int flag = 0;
   // if ts2 > tprev then
+#if 0
   if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
-        global_sampling_period = global_load_sampling_period;
         flag = 1;
         number_of_caught_read_traps++;
       }
     } else if (wt->accessType == STORE && wpi->sample.samplerAccessType == STORE) {
       if(wpi->sample.sampleType == ALL_STORE) {
-        global_sampling_period = global_store_sampling_period;
         flag = 2;
         number_of_caught_write_traps++;
       }
     } else if (wt->accessType == LOAD_AND_STORE && wpi->sample.samplerAccessType == LOAD_AND_STORE){
       if(wpi->sample.sampleType == ALL_LOAD) {
-        global_sampling_period = global_load_sampling_period;
         flag = 1;
         number_of_caught_read_write_traps++;
       }
       if(wpi->sample.sampleType == ALL_STORE) {
-        global_sampling_period = global_store_sampling_period;
         flag = 2;
         number_of_caught_read_write_traps++;
       }
     }
   }
+#endif
 
+//#if 0
+  if(wt->accessType == LOAD) {
+	  flag = 1;
+  } else if (wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+	  flag = 2;
+  }
+//#endif
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
-
+    double increment = (double) valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    valid_sample_count = 0;
     // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
     if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
       int id = -1;
@@ -2932,7 +2941,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       metricId =  true_wr_metric_id;
       joinNode = joinNodes[E_TRUE_WR_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
-      //fprintf(stderr, "true sharing is detected at WP trap\n");
+      fprintf(stderr, "true sharing is detected at WP trap\n");
       war_ts_matrix[index1][index2] = war_ts_matrix[index1][index2] + increment;
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
@@ -2947,7 +2956,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       war_fs_matrix[index1][index2] = war_fs_matrix[index1][index2] + increment;
-      //fprintf(stderr, "false sharing is detected at WP trap\n");
+      fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         war_fs_core_matrix[core_id1][core_id2] = war_fs_core_matrix[core_id1][core_id2] + increment;
@@ -2964,7 +2973,8 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   }
   else if (flag == 2) { // Store trap (WAW)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    valid_sample_count = 0;
 
     // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) then
     if(GET_OVERLAP_BYTES(wpi->sample.target_va, wpi->sample.accessLength, wt->va, wt->accessLength) > 0) {
@@ -2975,7 +2985,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_TRUE_WW_SHARE][joinNodeIdx];
       ts_matrix[index1][index2] = ts_matrix[index1][index2] + increment;
       waw_ts_matrix[index1][index2] = waw_ts_matrix[index1][index2] + increment;
-      //fprintf(stderr, "true sharing is detected at WP trap\n");
+      fprintf(stderr, "true sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         ts_core_matrix[core_id1][core_id2] = ts_core_matrix[core_id1][core_id2] + increment;
         waw_ts_core_matrix[core_id1][core_id2] = waw_ts_core_matrix[core_id1][core_id2] + increment;
@@ -2989,7 +2999,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       joinNode = joinNodes[E_FALSE_WW_SHARE][joinNodeIdx];
       fs_matrix[index1][index2] = fs_matrix[index1][index2] + increment;
       waw_fs_matrix[index1][index2] = waw_fs_matrix[index1][index2] + increment;
-      //fprintf(stderr, "false sharing is detected at WP trap\n");
+      fprintf(stderr, "false sharing is detected at WP trap\n");
       if(core_id1 != core_id2) {
         fs_core_matrix[core_id1][core_id2] = fs_core_matrix[core_id1][core_id2] + increment;
         waw_fs_core_matrix[core_id1][core_id2] = waw_fs_core_matrix[core_id1][core_id2] + increment;
@@ -4229,6 +4239,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
+  valid_sample_count++;
+#if 0
+  valid_sample_count++;
+  if (!mmap_data->addr_valid) {
+    goto ErrExit; // incorrect access type
+  }
+#endif
   //fprintf(stderr, "no problem 1\n");
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
@@ -5065,7 +5082,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 
     case WP_AMD_COMM:	{
 				//fprintf(stderr, "WP_AMD_COMM is handled\n");	
-				//fprintf(stderr, " sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
+				//fprintf(stderr, "sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, load: %d, store:%d, handled by thread %ld\n", mmap_data->time, mmap_data->cpu, mmap_data->tid, mmap_data->pid, mmap_data->addr, mmap_data->load, mmap_data->store, syscall(SYS_gettid));
 				int sType = -1;
                             	sample_count++;
 
@@ -5127,7 +5144,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 if(sType == ALL_STORE) { // means that the sample is a store type (write) (WAW)
                                   global_sampling_period = (double) hpcrun_id2metric(sampledMetricId)->period;
                                   flag = 2;
-                                } 
+                                }
+			       //fprintf(stderr, "IBS_OP sample period in OnSample: %0.2lf\n", (double) global_sampling_period);	
                                 int max_thread_num = item.tid; 
                                 if(max_thread_num < me) 
                                 {   
@@ -5161,8 +5179,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
-                                  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
+                                  double increment = valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  valid_sample_count = 0;
+				  // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
                                   if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
 
                                     // ends
@@ -5210,7 +5229,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  valid_sample_count = 0;
                                   // if [M1 , M1 + δ1 ) overlaps with [M2 , M2 + δ2 ) the
                                   if(GET_OVERLAP_BYTES(item.address, item.accessLen, data_addr, accessLen) > 0) { //then ts
                                     // ends
@@ -5337,7 +5357,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 
                             // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
                             if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
-                            } else {
+                            } else if(mmap_data->addr_valid) {
                               // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
                               uint64_t bulletinCounter = bulletinBoard.counter;
                               if((bulletinCounter & 1) == 0) {
@@ -5362,6 +5382,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   int bb_flag = 0;
                                   //__sync_synchronize();
                                   hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
+				  valid_sample_count = 0;
                                   //__sync_synchronize();
                                   bulletinBoard.counter++;
                                 }

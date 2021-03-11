@@ -172,6 +172,7 @@ int n_lost_op_samples[1024];
 int op_cnt_max_to_set = 0;
 int buffer_size = 0;
 __thread char *global_buffer = NULL;
+__thread int original_sample_count = 0;
 
 // ends
 
@@ -1365,6 +1366,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->addr = op_data->dc_lin_ad;
 	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
+	mmap_info->addr_valid = op_data->op_data3.reg.ibs_lin_addr_valid;
 	mmap_info->ip = op_data->op_rip;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
@@ -1500,6 +1502,7 @@ perf_event_handler(
 	{
        		more_data = tmp / sizeof(ibs_op_t);
 		sample_buffer = malloc (sizeof(ibs_op_t));
+		//fprintf(stderr, "%d samples are detected in a counter overflow\n", more_data);
 	} 
 
 	int offset = 0;
@@ -1519,10 +1522,16 @@ perf_event_handler(
 			i++;
                 	offset += i * sizeof(ibs_op_t);
                 	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
-			if (op_data->op_data3.reg.ibs_lin_addr_valid) {
+			original_sample_count++;
+			//fprintf(stderr, "more_data: %d\n", more_data);
+			if (/*op_data->op_data3.reg.ibs_lin_addr_valid &&*/ (op_data->op_data3.reg.ibs_ld_op || op_data->op_data3.reg.ibs_st_op)) {
 				read_ibs_buffer(current, &mmap_data, op_data);
 				if(!op_data->kern_mode)
 					record_sample(current, &mmap_data, context, &sv);	
+				else
+					fprintf(stderr, "sample is discarded because it is from kernel\n");
+			} else {
+				//fprintf(stderr, "sample is discarded because it is not memory access\n");
 			}
 			more_data--;
 		} else
