@@ -98,6 +98,7 @@ typedef struct SampleData{
 	int sampledMetricId;
 	int first_accessing_tid;
 	int first_accessing_core_id;
+	int valid_sample_count;
 	uint64_t bulletinBoardTimestamp;
 	uint64_t prevStoreAccess;
 	uint64_t expirationPeriod;
@@ -204,6 +205,8 @@ extern void LoadSpyWPConfigOverride(void *v);
 extern bool WatchpointClientActive();
 //extern inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int pebsMetricId, double proportion);
 extern void DisableWatchpointWrapper(WatchPointInfo_t *wpi);
+extern bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType);
+extern void insertEntryToAccessTypeLengthCache(void * pc, uint32_t accessLen, AccessType accessType);
 
 static inline  uint64_t rdtsc(){
 	unsigned int lo,hi;

@@ -141,6 +141,7 @@ typedef struct SharedEntry{
 	void *address;
 	void *cacheLineBaseAddress; 
 	int accessLen;
+	int valid_sample_count;
 	cct_node_t * node;
 	volatile uint64_t matrix_counter __attribute__((aligned(CACHE_LINE_SZ))); 
 	char dummy[CACHE_LINE_SZ];

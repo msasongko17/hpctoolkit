@@ -123,6 +123,8 @@
 
 #include "kernel_blocking.h"  // api for predefined kernel blocking event
 
+int sched_getcpu(void);
+
 //******************************************************************************
 // macros
 //******************************************************************************
@@ -400,7 +402,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 		char filename [64];
 		et->event = event;
 		global_buffer = malloc(BUFFER_SIZE_B);
-		int my_id = TD_GET(core_profile_trace_data.id);
+		int my_id = sched_getcpu();//TD_GET(core_profile_trace_data.id);
 		sprintf(filename, "/dev/cpu/%d/ibs/op", my_id);
                 et->fd = open(filename, O_RDONLY | O_NONBLOCK);
 
@@ -1367,6 +1369,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
 	mmap_info->addr_valid = op_data->op_data3.reg.ibs_lin_addr_valid;
+	mmap_info->phy_addr_valid = op_data->op_data3.reg.ibs_phy_addr_valid;
 	mmap_info->ip = op_data->op_rip;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
@@ -1528,8 +1531,8 @@ perf_event_handler(
 				read_ibs_buffer(current, &mmap_data, op_data);
 				if(!op_data->kern_mode)
 					record_sample(current, &mmap_data, context, &sv);	
-				else
-					fprintf(stderr, "sample is discarded because it is from kernel\n");
+				//else
+					//fprintf(stderr, "sample is discarded because it is from kernel\n");
 			} else {
 				//fprintf(stderr, "sample is discarded because it is not memory access\n");
 			}

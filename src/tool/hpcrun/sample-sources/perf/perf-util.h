@@ -92,6 +92,7 @@ typedef struct perf_mmap_data_s {
   u64    period;     /* if PERF_SAMPLE_PERIOD */
 
   uint16_t addr_valid;  
+  uint16_t phy_addr_valid;
   /* if PERF_SAMPLE_READ */
   bool load;
   bool store;
