@@ -238,7 +238,7 @@ static struct event_threshold_s default_threshold = {DEFAULT_THRESHOLD, FREQUENC
  *****************************************************************************/
 extern __thread bool hpcrun_thread_suppress_sample;
 
-event_thread_t *event_thread_board[503];
+event_thread_t *event_thread_board[HASH_TABLE_SIZE];
 
 //******************************************************************************
 // private operations 
@@ -874,7 +874,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 	default_threshold = init_default_count();
 
-	for(int i = 0; i < 503; i++) {
+	for(int i = 0; i < HASH_TABLE_SIZE; i++) {
                 event_thread_board[i] = NULL;
         }
 
@@ -1365,11 +1365,15 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->cpu = op_data->cpu;
 	mmap_info->tid = op_data->tid;
 	mmap_info->pid = op_data->pid;
-	mmap_info->addr = op_data->dc_lin_ad;
 	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
 	mmap_info->addr_valid = op_data->op_data3.reg.ibs_lin_addr_valid;
+	//if(mmap_info->addr_valid)
+	mmap_info->addr = op_data->dc_lin_ad;
+
 	mmap_info->phy_addr_valid = op_data->op_data3.reg.ibs_phy_addr_valid;
+	//if(mmap_info->phy_addr_valid)
+	mmap_info->phy_addr = op_data->dc_phys_ad.reg.ibs_dc_phys_addr;
 	mmap_info->ip = op_data->op_rip;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);

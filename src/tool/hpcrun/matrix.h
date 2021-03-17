@@ -149,7 +149,7 @@ typedef struct SharedEntry{
 
 typedef struct hashTableStruct{
 	volatile uint64_t counter __attribute__((aligned(64)));
-	struct SharedEntry hashTable[503];
+	struct SharedEntry hashTable[HASH_TABLE_SIZE];
 	//struct SharedData * hashTable;
 } HashTable_t;
 

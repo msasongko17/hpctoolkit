@@ -140,14 +140,16 @@
 #include "matrix.h"
 #include "myposix.h"
 #include "mymapping.h"
-#define REUSE_HISTO 1
+#define REUSE_HISTO 0
 
 //#define MULTITHREAD_REUSE_HISTO 1
 
 #ifdef MULTITHREAD_REUSE_HISTO
 #define REUSE_HISTO 1
 #endif
+#ifdef REUSE_HISTO
 #include "reuse.h"
+#endif
 
 #define WAIT_THRESHOLD 10
 extern bool amd_ibs_flag;
@@ -378,7 +380,7 @@ typedef struct SharedData{
 SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = UNKNOWN, .tid = -1, .address = 0};
 
 HashTable_t bulletinBoard = {.counter = 0};
-ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
+//ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
 
 __thread uint64_t prev_timestamp = 0;
 
@@ -1305,9 +1307,9 @@ static inline void SetUpTrueSharingMetrics(){
 }
 
 int locality_vector[4][50];
-int l2_locality_vector[503][10];
-int thread_to_l3_mapping[503];
-int thread_to_l2_mapping[503];
+int l2_locality_vector[HASH_TABLE_SIZE][10];
+int thread_to_l3_mapping[HASH_TABLE_SIZE];
+int thread_to_l2_mapping[HASH_TABLE_SIZE];
 int context_sample_count[256][13][3];
 int context_watermark_sample_count[256][13][3];
 int l2_count = 0;
@@ -4252,13 +4254,21 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
+//#if 0
+  if (amd_ibs_flag /*&& mmap_data->store*/) {
+        valid_sample_count++;
+        valid_sample_count1++;
+  }
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
+//#endif
+#if 0
   if (amd_ibs_flag /*&& mmap_data->store*/) {
   	valid_sample_count++;
 	valid_sample_count1++;
   }
+#endif
 #if 0
   valid_sample_count++;
   if (!mmap_data->addr_valid) {
@@ -5143,6 +5153,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                         phy_addr_valid_count++;
                                         //fprintf(stderr, "valid address is detected, addr_valid: %d\n", mmap_data->addr_valid);
                                 }
+				fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
                             	if (mmap_data->store) {
                               		sType = ALL_STORE;
 					store_count++;
