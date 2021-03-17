@@ -138,4 +138,13 @@ typedef struct ibs_op {
 	int                     kern_mode;
 } ibs_op_t;
 
+typedef struct validLinearCacheLineEntry{
+  volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
+  uint64_t cacheLineBaseAddress;
+  char dummy[CACHE_LINE_SZ];
+} validLinearCacheLineEntry_t;
+
+typedef struct validLinearCacheLineTable{
+  struct validLinearCacheLineEntry table[HASH_TABLE_SIZE];
+} validLinearCacheLineTable_t;
 

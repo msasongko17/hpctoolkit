@@ -4254,21 +4254,21 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
-//#if 0
+#if 0
   if (amd_ibs_flag /*&& mmap_data->store*/) {
         valid_sample_count++;
         valid_sample_count1++;
   }
+#endif
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
-//#endif
-#if 0
+//#if 0
   if (amd_ibs_flag /*&& mmap_data->store*/) {
   	valid_sample_count++;
 	valid_sample_count1++;
   }
-#endif
+//#endif
 #if 0
   valid_sample_count++;
   if (!mmap_data->addr_valid) {
@@ -5145,6 +5145,19 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				int sType = -1;
                             	sample_count++;
 
+				// before
+#if 0
+				if(mmap_info->addr_valid && 0 == getEntryFromValidLinearCacheLineCache(mmap_data->addr)) {
+                			insertEntryToValidLinearCacheLineCache(mmap_data->addr);
+                			fprintf(stderr, "address %lx is inserted to cache\n", mmap_data->addr);
+        			}
+        			else if(0 == mmap_info->addr_valid && 0 < getEntryFromValidLinearCacheLineCache(mmap_data->addr)) {
+                			fprintf(stderr, "address %lx is found in cache\n", mmap_data->addr);
+                			mmap_info->addr_valid = 1;      
+        			}
+#endif
+				// after
+
 				if(mmap_data->addr_valid) {
 					addr_valid_count++;
 					//fprintf(stderr, "valid address is detected, addr_valid: %d\n", mmap_data->addr_valid);
@@ -5153,7 +5166,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                         phy_addr_valid_count++;
                                         //fprintf(stderr, "valid address is detected, addr_valid: %d\n", mmap_data->addr_valid);
                                 }
-				fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
+				//fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
                             	if (mmap_data->store) {
                               		sType = ALL_STORE;
 					store_count++;
@@ -5280,7 +5293,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                     metricId = false_wr_metric_id;
                                     joinNode = joinNodes[E_FALSE_WR_SHARE][joinNodeIdx];
 
-				    fprintf(stderr, "fraction of increment: %0.2lf\n", (double) (curtime - item.time) / item.expiration_period);
+				    //fprintf(stderr, "fraction of increment: %0.2lf\n", (double) (curtime - item.time) / item.expiration_period);
                                     fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
                                     war_fs_matrix[item.tid][me] = fs_matrix[item.tid][me] + increment;
                                     if(item.core_id != current_core) {
@@ -5441,6 +5454,16 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                             // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
                             if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
                             } else if(mmap_data->addr_valid) {
+#if 0
+			      if(mmap_data->addr_valid && 0 == getEntryFromValidLinearCacheLineCache((uint64_t) data_addr)) {
+                                        insertEntryToValidLinearCacheLineCache((uint64_t) data_addr);
+                                        fprintf(stderr, "address %lx is inserted to cache\n", (uint64_t) data_addr);
+                              }
+                              else if(0 == mmap_info->addr_valid && 0 < getEntryFromValidLinearCacheLineCache((uint64_t) data_addr)) {
+                              		fprintf(stderr, "address %lx is found in cache\n", (uint64_t) data_addr);
+                              		mmap_info->addr_valid = 1;      
+                              }
+#endif 
                               // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
                               uint64_t bulletinCounter = bulletinBoard.counter;
                               if((bulletinCounter & 1) == 0) {
