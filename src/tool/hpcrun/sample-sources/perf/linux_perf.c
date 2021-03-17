@@ -125,8 +125,6 @@
 
 int sched_getcpu(void);
 
-validLinearCacheLineTable_t validLinearCacheLineCache;
-
 //******************************************************************************
 // macros
 //******************************************************************************
@@ -246,46 +244,6 @@ event_thread_t *event_thread_board[HASH_TABLE_SIZE];
 // private operations 
 //******************************************************************************
 
-uint64_t getEntryFromValidLinearCacheLineCache(uint64_t addr) {
-  int idx = addr % HASH_TABLE_SIZE;
-  uint64_t cacheLine = 0;
-  do{
-    int64_t startCounter = validLinearCacheLineCache.table[idx].counter;
-    if(startCounter & 1)
-      continue; // Some writer is updating
-
-    __sync_synchronize();
-    cacheLine = validLinearCacheLineCache.table[idx].cacheLineBaseAddress;
-    __sync_synchronize();
-    int64_t endCounter = validLinearCacheLineCache.table[idx].counter;
-    if(startCounter == endCounter)
-      break;
-  }while(1);
-  if(cacheLine == ALIGN_TO_CACHE_LINE(addr)) {
-	//fprintf(stderr, "entry with address %lx is found\n", addr);
-  	return cacheLine;
-  }
-  return 0;
-  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
-    //*item_not_found = 1;
-  //return reuseBulletinBoard.hashTable[hashIndex];
-}
-
-void insertEntryToValidLinearCacheLineCache(uint64_t addr) {
-    int idx = addr % HASH_TABLE_SIZE;
-    int64_t counter = validLinearCacheLineCache.table[idx].counter;
-    if((counter & 1) == 0) {
-
-        if(__sync_bool_compare_and_swap(&validLinearCacheLineCache.table[idx].counter, counter, counter+1)) {
-                validLinearCacheLineCache.table[idx].cacheLineBaseAddress = ALIGN_TO_CACHE_LINE(addr);
-                //fprintf(stderr, "insertion: idx: %d, pc: %lx, accessLen: %d, accessType: %d\n", idx, pc, accessLen, accessType);
-                validLinearCacheLineCache.table[idx].counter++;
-        }
-    }
-
-  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
-    //*item_not_found = 1;
-}
 
 /*
  * Enable all the counters
@@ -1410,18 +1368,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
 	mmap_info->addr_valid = op_data->op_data3.reg.ibs_lin_addr_valid;
-//#if 0
-	if(1 == op_data->op_data3.reg.ibs_phy_addr_valid && 1 == mmap_info->store) {
-		if(1 == mmap_info->addr_valid && 0 == getEntryFromValidLinearCacheLineCache(op_data->dc_lin_ad)) {
-			insertEntryToValidLinearCacheLineCache(op_data->dc_lin_ad);
-			//fprintf(stderr, "address %lx is inserted to cache\n", op_data->dc_lin_ad);
-		}
-		else if(0 == mmap_info->addr_valid && 0 < getEntryFromValidLinearCacheLineCache(op_data->dc_lin_ad)) {
-			//fprintf(stderr, "address %lx is found in cache\n", op_data->dc_lin_ad);
-			mmap_info->addr_valid = 1;	
-		}
-	}
-//#endif
+	//if(mmap_info->addr_valid)
 	mmap_info->addr = op_data->dc_lin_ad;
 
 	mmap_info->phy_addr_valid = op_data->op_data3.reg.ibs_phy_addr_valid;
@@ -1585,11 +1532,9 @@ perf_event_handler(
 			original_sample_count++;
 			//fprintf(stderr, "more_data: %d\n", more_data);
 			if (/*op_data->op_data3.reg.ibs_lin_addr_valid &&*/ (op_data->op_data3.reg.ibs_ld_op || op_data->op_data3.reg.ibs_st_op)) {
-				//read_ibs_buffer(current, &mmap_data, op_data);
-				if(!op_data->kern_mode) {
-					read_ibs_buffer(current, &mmap_data, op_data);
-					record_sample(current, &mmap_data, context, &sv);
-				}
+				read_ibs_buffer(current, &mmap_data, op_data);
+				if(!op_data->kern_mode)
+					record_sample(current, &mmap_data, context, &sv);	
 				//else
 					//fprintf(stderr, "sample is discarded because it is from kernel\n");
 			} else {
