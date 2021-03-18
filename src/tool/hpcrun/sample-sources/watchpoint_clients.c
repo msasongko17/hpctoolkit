@@ -4259,6 +4259,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
         valid_sample_count++;
         valid_sample_count1++;
   }
+//#endif
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
@@ -5153,7 +5154,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                         phy_addr_valid_count++;
                                         //fprintf(stderr, "valid address is detected, addr_valid: %d\n", mmap_data->addr_valid);
                                 }
-				fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
+				//fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
                             	if (mmap_data->store) {
                               		sType = ALL_STORE;
 					store_count++;
