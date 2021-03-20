@@ -2907,7 +2907,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int core_id2 = sched_getcpu();  
   int flag = 0;
   // if ts2 > tprev then
-//#if 0
+#if 0
   if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
@@ -2930,9 +2930,9 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       }
     }
   }
-//#endif
+#endif
 
-#if 0
+//#if 0
 //if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
   if(wt->accessType == LOAD) {
 	  flag = 1;
@@ -2940,7 +2940,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
 	  flag = 2;
   }
 //}
-#endif
+//#endif
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
@@ -3039,6 +3039,42 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
   //fprintf(stderr, "source code line attribution here\n");
 //#endif
+// before
+#if 0
+  if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+                              // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
+	uint64_t bulletinCounter = bulletinBoard.counter;
+	if((bulletinCounter & 1) == 0) {
+		//bool __sync_bool_compare_and_swap (type *ptr, type oldval type newval, ...)
+  //These builtins perform an atomic compare and swap. That is, if the current value of *ptr
+  	//is oldval, then write newval into *ptr.
+	//The “bool” version returns true if the comparison is successful and newval was written.
+ 		if(__sync_bool_compare_and_swap(&bulletinBoard.counter, bulletinCounter, bulletinCounter+1)){
+			struct SharedEntry inserted_item;
+			inserted_item.time = curtime;
+               		inserted_item.tid = me;
+            		inserted_item.core_id = sched_getcpu();
+        		inserted_item.wpType = WP_RW;
+         		inserted_item.accessType = accessType;
+       			inserted_item.sampleType = sType;
+     			inserted_item.address = data_addr;
+          		inserted_item.accessLen = accessLen;
+             		inserted_item.node = node;
+  			inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
+    			inserted_item.prev_transfer_counter = 0;
+         		inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+      			inserted_item.valid_sample_count = valid_sample_count;
+ 			int bb_flag = 0;
+ 			//__sync_synchronize();
+ 			hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
+    			//valid_sample_count = 0;
+       			//__sync_synchronize();
+  			bulletinBoard.counter++;
+     		}
+   	}
+  } 
+#endif
+// after
 	return ALREADY_DISABLED;
 }
 
