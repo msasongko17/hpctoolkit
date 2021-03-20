@@ -2519,6 +2519,13 @@ static inline void GetAllFalseSharingLocations(size_t va, int accessLen, size_t 
   }
 }
 
+SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
+  int hashIndex = hashCode(cacheLineBaseAddress);
+  if(cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    *item_not_found = 1;
+  return bulletinBoard.hashTable[hashIndex];
+}
+
 static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseTrackerWPCallback\n");
   trap_count++;
@@ -2907,7 +2914,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int core_id2 = sched_getcpu();  
   int flag = 0;
   // if ts2 > tprev then
-//#if 0
+#if 0
   if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
@@ -2930,9 +2937,9 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
       }
     }
   }
-//#endif
+#endif
 
-#if 0
+//#if 0
 //if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
   if(wt->accessType == LOAD) {
 	  flag = 1;
@@ -2940,11 +2947,11 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
 	  flag = 2;
   }
 //}
-#endif
+//#endif
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) wpi->sample.valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*wpi->sample.valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0    
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -2989,7 +2996,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   }
   else if (flag == 2) { // Store trap (WAW)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) wpi->sample.valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*wpi->sample.valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -3037,6 +3044,67 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
+  // before
+//#if 0
+  void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t) wt->va);
+#if 0
+  int item_not_found = 0;
+  struct SharedEntry item;
+  do{
+  	int64_t startCounter = bulletinBoard.counter;
+   	if(startCounter & 1) {
+    		continue;
+  	}
+   	//__sync_synchronize();
+   	// entry = BulletinBoard.AtomicGet (key= L1 )
+   	item = getEntryFromBulletinBoard(cacheLineBaseAddressVar, &item_not_found);
+    	//__sync_synchronize();
+   	int64_t endCounter = bulletinBoard.counter;
+    	if(startCounter == endCounter) {
+    		break;
+ 	}
+  }while(1); 
+  if(/*(accessType == LOAD)*/ (wt->accessType == LOAD)  || ((item.cacheLineBaseAddress != -1) && ((trapTime - item.time) <= 2 * (last_sample_timestamp - prev_sample_timestamp)))) {
+	fprintf(stderr, "insertion is  aborted in wp trap\n");
+	return ALREADY_DISABLED;
+  } else {
+#endif
+	// bgin
+if(wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
+	uint64_t bulletinCounter = bulletinBoard.counter;
+        if((bulletinCounter & 1) == 0) {
+                                //bool __sync_bool_compare_and_swap (type *ptr, type oldval type newval, ...)
+                                //These builtins perform an atomic compare and swap. That is, if the current value of *ptr
+                                //is oldval, then write newval into *ptr.
+                                //The “bool” version returns true if the comparison is successful and newval was written.
+		if(__sync_bool_compare_and_swap(&bulletinBoard.counter, bulletinCounter, bulletinCounter+1)){
+         		struct SharedEntry inserted_item;
+                  	inserted_item.time = trapTime;
+                   	inserted_item.tid = index2;
+                  	inserted_item.core_id = core_id2;
+                   	inserted_item.wpType = WP_RW;
+                  	inserted_item.accessType = wt->accessType;
+                  	inserted_item.sampleType = ALL_STORE;
+                   	inserted_item.address = wt->va;
+                   	inserted_item.accessLen = wt->accessLength;
+                   	inserted_item.node = v.sample_node;
+                    	inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
+                   	inserted_item.prev_transfer_counter = 0;
+                  	inserted_item.expiration_period = (prev_sample_timestamp == 0 ? 100000000 : 10 * (last_sample_timestamp - prev_sample_timestamp));
+                  	inserted_item.valid_sample_count = valid_sample_count;
+                    	int bb_flag = 0;
+                                  //__sync_synchronize();
+			fprintf(stderr, "trying to insert in wp trap\n");
+                    	hashInsertwithTime(inserted_item, 10 * last_sample_timestamp, 10 * prev_sample_timestamp);
+                                  //valid_sample_count = 0;
+                                  //__sync_synchronize();
+                  	bulletinBoard.counter++;
+           	}
+ 	}	
+}
+	// end
+ // }
+  // after
   //fprintf(stderr, "source code line attribution here\n");
 //#endif
 	return ALREADY_DISABLED;
@@ -4215,13 +4283,14 @@ SharedEntry_t getEntryRandomlyFromBulletinBoard(int tid, uint64_t cur_time, int 
   return bulletinBoard.hashTable[hashIndex];
 }
 
+#if 0
 SharedEntry_t getEntryFromBulletinBoard(void * cacheLineBaseAddress, int * item_not_found) {
   int hashIndex = hashCode(cacheLineBaseAddress);
   if(cacheLineBaseAddress != bulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
     *item_not_found = 1;
   return bulletinBoard.hashTable[hashIndex];
 }
-
+#endif
 
 void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t prev_time) {
   void * cacheLineBaseAddress = item.cacheLineBaseAddress;
@@ -4248,7 +4317,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
   void * contextPC = hpcrun_context_pc(context); 
-  void * data_addr = mmap_data->addr; 
+  void * data_addr = amd_ibs_flag ? ((mmap_data->store || mmap_data->load) ? mmap_data->addr : NULL) : mmap_data->addr; 
   void * precisePC = (amd_ibs_flag || (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
@@ -4260,7 +4329,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
         valid_sample_count1++;
   }
 //#endif
-  if (!IsValidAddress(data_addr, precisePC)) { 
+  if (!amd_ibs_flag && !IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
 //#endif
@@ -4286,7 +4355,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   uint64_t curTime = rdtsc();
   int accessLen = 1;
   AccessType accessType;
-  if(amd_ibs_flag) {
+  if(amd_ibs_flag && data_addr) {
 	  //fprintf(stderr, "looking for precisePC: %lx in getEntryFromAccessTypeLengthCache\n", precisePC);
 	if(false == getEntryFromAccessTypeLengthCache(precisePC, (uint32_t*)(&accessLen), &accessType)) {
   		if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
@@ -4310,7 +4379,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			accessType = LOAD;
 	}	
   }
-  else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
+  else if(!amd_ibs_flag && false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
@@ -5155,6 +5224,13 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                         //fprintf(stderr, "valid address is detected, addr_valid: %d\n", mmap_data->addr_valid);
                                 }
 				//fprintf(stderr, "mmap_data->addr_valid: %d, mmap_data->phy_addr_valid: %d, mmap_data->addr: %lx, mmap_data->phy_addr: %lx\n", mmap_data->addr_valid, mmap_data->phy_addr_valid, mmap_data->addr, mmap_data->phy_addr);
+				int arm_watchpoint_flag = 0;
+				int me = TD_GET(core_profile_trace_data.id);
+				struct SharedEntry item;
+				uint64_t curtime = rdtsc();
+				void * cacheLineBaseAddressVar;
+				int64_t storeCurTime = 0;
+				if(data_addr){
                             	if (mmap_data->store) {
                               		sType = ALL_STORE;
 					store_count++;
@@ -5169,19 +5245,19 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                             	const void* joinNode;  
                             	int joinNodeIdx = isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
 
-                            	uint64_t curtime = rdtsc();
+                            	//uint64_t curtime = rdtsc();
 
-				int64_t storeCurTime = 0;
+				//int64_t storeCurTime = 0;
                             	if(sType == ALL_STORE /*accessType == STORE || accessType == LOAD_AND_STORE*/)
                               		storeCurTime = curtime;
 
 
-                            	int me = TD_GET(core_profile_trace_data.id);
+                            	//int me = TD_GET(core_profile_trace_data.id);
                             	int current_core = sched_getcpu();
                             // L1 = getCacheline ( M1 )
-                            	void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
+                            	cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
                             	int item_not_found = 0;
-                            	struct SharedEntry item;
+                            	//struct SharedEntry item;
                             	do{
                               		int64_t startCounter = bulletinBoard.counter;
                               		if(startCounter & 1) {
@@ -5197,7 +5273,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               		}
                             	}while(1);
 
-				int arm_watchpoint_flag = 0;
+				//int arm_watchpoint_flag = 0;
 
                             // if entry == NULL then // nothing was found related to cachelineBaseAddr in bb
                             if((item.cacheLineBaseAddress == -1) || (item_not_found == 1)) {
@@ -5209,7 +5285,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               //fprintf(stderr, "found\n");
                               // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
                               // if T1 != T2 and ts2 > tprev then
-                              if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
+                              if((me != item.tid) /*&& (item.time > prev_timestamp)*/ && ((curtime - item.time) <= item.expiration_period)) {
                                 int flag = 0;
                                 double global_sampling_period = 0;
                                 if(sType == ALL_LOAD /*accessType == LOAD*/) { // means that the sample is (read) (WAR)
@@ -5254,7 +5330,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = item.valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*item.valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
@@ -5309,7 +5385,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = item.valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*item.valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
@@ -5378,6 +5454,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 arm_watchpoint_flag = 1;
                               }
                             }
+				} else {
+					arm_watchpoint_flag = 1;
+				}
 
                             if (arm_watchpoint_flag) {
                               // begin watchpoints
@@ -5440,7 +5519,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                             }
 
                             // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
-                            if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
+                            if(data_addr && (sType == ALL_LOAD  || ((item.cacheLineBaseAddress != -1) && ((curtime - item.time) <= 10 * (curtime - lastTime))))) {
                             } else if(mmap_data->addr_valid) {
                               // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
                               uint64_t bulletinCounter = bulletinBoard.counter;
@@ -5462,11 +5541,12 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   inserted_item.node = node;
                                   inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
                                   inserted_item.prev_transfer_counter = 0;
-                                  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+                                  inserted_item.expiration_period = (lastTime == 0 ? 100000000 : 10 * (curtime - lastTime));
 				  inserted_item.valid_sample_count = valid_sample_count;
                                   int bb_flag = 0;
                                   //__sync_synchronize();
-                                  hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
+				  fprintf(stderr, "trying to insert to hash\n");
+                                  hashInsertwithTime(inserted_item, 10 * curtime, 10 * lastTime);
 				  //valid_sample_count = 0;
                                   //__sync_synchronize();
                                   bulletinBoard.counter++;
@@ -5477,7 +5557,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 			    if(mmap_data->addr_valid && mmap_data->store)
 				    valid_sample_count = 0;
 
+			    prev_sample_timestamp = lastTime;
                             lastTime = curtime;
+			    last_sample_timestamp = lastTime;
                             if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
                               storeLastTime = storeCurTime;  	
 			}
@@ -5546,7 +5628,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               //fprintf(stderr, "found\n");
                               // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
                               // if T1 != T2 and ts2 > tprev then
-                              if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
+                              if((me != item.tid) /*&& (item.time > prev_timestamp)*/ && ((curtime - item.time) <= item.expiration_period)) {
                                 int flag = 0;
                                 double global_sampling_period = 0;
                                 if(sType == ALL_LOAD /*accessType == LOAD*/) { // means that the sample is (read) (WAR)
