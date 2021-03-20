@@ -1531,15 +1531,15 @@ perf_event_handler(
                 	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
 			original_sample_count++;
 			//fprintf(stderr, "more_data: %d\n", more_data);
-			//if (op_data->op_data3.reg.ibs_ld_op || op_data->op_data3.reg.ibs_st_op) {
+			if (/*op_data->op_data3.reg.ibs_lin_addr_valid &&*/ (op_data->op_data3.reg.ibs_ld_op || op_data->op_data3.reg.ibs_st_op)) {
 				read_ibs_buffer(current, &mmap_data, op_data);
 				if(!op_data->kern_mode)
 					record_sample(current, &mmap_data, context, &sv);	
 				//else
 					//fprintf(stderr, "sample is discarded because it is from kernel\n");
-			//} else {
+			} else {
 				//fprintf(stderr, "sample is discarded because it is not memory access\n");
-			//}
+			}
 			more_data--;
 		} else
 		{
