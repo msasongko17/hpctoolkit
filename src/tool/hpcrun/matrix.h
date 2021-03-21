@@ -141,7 +141,6 @@ typedef struct SharedEntry{
 	void *address;
 	void *cacheLineBaseAddress; 
 	int accessLen;
-	int valid_sample_count;
 	cct_node_t * node;
 	volatile uint64_t matrix_counter __attribute__((aligned(CACHE_LINE_SZ))); 
 	char dummy[CACHE_LINE_SZ];
@@ -149,7 +148,7 @@ typedef struct SharedEntry{
 
 typedef struct hashTableStruct{
 	volatile uint64_t counter __attribute__((aligned(64)));
-	struct SharedEntry hashTable[HASH_TABLE_SIZE];
+	struct SharedEntry hashTable[503];
 	//struct SharedData * hashTable;
 } HashTable_t;
 

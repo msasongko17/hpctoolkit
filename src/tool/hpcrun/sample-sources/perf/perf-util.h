@@ -86,15 +86,11 @@ typedef struct perf_mmap_data_s {
   u32    pid, tid;   /* if PERF_SAMPLE_TID */
   u64    time;       /* if PERF_SAMPLE_TIME */
   u64    addr;       /* if PERF_SAMPLE_ADDR */
-  u64    phy_addr;
   u64    id;         /* if PERF_SAMPLE_ID */
   u64    stream_id;  /* if PERF_SAMPLE_STREAM_ID */
   u32    cpu, res;   /* if PERF_SAMPLE_CPU */
   u64    period;     /* if PERF_SAMPLE_PERIOD */
-
-  uint16_t addr_valid;  
-  uint16_t phy_addr_valid;
-  /* if PERF_SAMPLE_READ */
+                     /* if PERF_SAMPLE_READ */
   bool load;
   bool store;
   u64    nr;         /* if PERF_SAMPLE_CALLCHAIN */

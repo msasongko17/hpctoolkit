@@ -196,7 +196,7 @@ int getIndex(void * key) {
 
 bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType) {
   int idx = getIndex(pc);
-  void * entry_pc = NULL;
+  void * entry_pc;
   do{
     int64_t startCounter = accessTypeLengthCache.table[idx].counter;
     if(startCounter & 1)
@@ -211,11 +211,8 @@ bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessTyp
     if(startCounter == endCounter)
       break;
   }while(1);
-  if(pc == entry_pc) {
-	  //fprintf(stderr, "getEntryFromAccessTypeLengthCache returns true\n");
+  if(pc == entry_pc)
 	  return true;
-  }
-  //fprintf(stderr, "getEntryFromAccessTypeLengthCache returns false\n");
   return false;
   //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
     //*item_not_found = 1;
@@ -546,7 +543,7 @@ __attribute__((constructor))
         threadDataTable.hashTable[i].counter[j] = 0;	
       }
       threadDataTable.hashTable[i].os_tid = -1;
-      accessTypeLengthCache.table[i].counter = 0;
+      //accessTypeLengthCache.table[i].counter = 0;
       //fprintf(stderr, "accessTypeLengthCache.table[%d].pc: %lx\n", i, accessTypeLengthCache.table[i].pc);
     }
     for(int i = 0; i < MAX_WP_SLOTS; i++) {
@@ -1486,13 +1483,12 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
       if(wpConfig.dontDisassembleWPAddress == false){
         FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
 	//fprintf(stderr, "before: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
-	//fprintf(stderr, "looking for precisePC: %lx in getEntryFromAccessTypeLengthCache in OnWatchPoint\n", wpt->pc);
 	if(false == getEntryFromAccessTypeLengthCache(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType))) {
 		if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
           	//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
           	goto ErrExit;
         	}
-		//fprintf(stderr, "insertEntryToAccessTypeLengthCache is called in OnWatchPoint\n");
+		//fprintf(stderr, "entry taken from disassembly\n");
 		insertEntryToAccessTypeLengthCache(wpt->pc, wpt->accessLength, wpt->accessType); 
 	} else {
 		//fprintf(stderr, "entry taken from AccessTypeLengthCache\n");
