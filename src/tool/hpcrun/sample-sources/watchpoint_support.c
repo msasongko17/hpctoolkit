@@ -78,7 +78,7 @@ extern MonitoredNodeStruct_t MonitoredNode;
 
 extern int profiling_mode;
 
-//extern bool amd_ibs_flag;
+extern bool amd_ibs_flag;
 
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
@@ -196,7 +196,7 @@ int getIndex(void * key) {
 
 bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType) {
   int idx = getIndex(pc);
-  void * entry_pc;
+  void * entry_pc = NULL;
   do{
     int64_t startCounter = accessTypeLengthCache.table[idx].counter;
     if(startCounter & 1)
@@ -211,8 +211,11 @@ bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessTyp
     if(startCounter == endCounter)
       break;
   }while(1);
-  if(pc == entry_pc)
+  if(pc == entry_pc) {
+	  //fprintf(stderr, "getEntryFromAccessTypeLengthCache returns true\n");
 	  return true;
+  }
+  //fprintf(stderr, "getEntryFromAccessTypeLengthCache returns false\n");
   return false;
   //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
     //*item_not_found = 1;
@@ -543,7 +546,7 @@ __attribute__((constructor))
         threadDataTable.hashTable[i].counter[j] = 0;	
       }
       threadDataTable.hashTable[i].os_tid = -1;
-      //accessTypeLengthCache.table[i].counter = 0;
+      accessTypeLengthCache.table[i].counter = 0;
       //fprintf(stderr, "accessTypeLengthCache.table[%d].pc: %lx\n", i, accessTypeLengthCache.table[i].pc);
     }
     for(int i = 0; i < MAX_WP_SLOTS; i++) {
@@ -687,7 +690,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     // modification
     //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
     assert(wpi->fileHandle != -1);
-    assert(wpi->mmapBuffer != 0 /*|| amd_ibs_flag*/);
+    assert(wpi->mmapBuffer != 0 || amd_ibs_flag);
     //DisableWatchpoint(wpi);
     //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
     //create_wp_count++;
@@ -962,7 +965,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
   //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
   if(event_id != WP_AMD_COMM && wpConfig.isLBREnabled) {
-    //fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
+    fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
     CreateDummyHardwareEvent();
   }
 
@@ -1483,12 +1486,13 @@ static bool CollectWatchPointTriggerInfo(WatchPointInfo_t  * wpi, WatchPointTrig
       if(wpConfig.dontDisassembleWPAddress == false){
         FloatType * floatType = wpConfig.getFloatType? &wpt->floatType : 0;
 	//fprintf(stderr, "before: wpt->pc: %lx, wpt->accessLength: %d, wpt->accessType: %d, context: %lx, addr: %lx\n", wpt->pc, wpt->accessLength, wpt->accessType, context, addr);
+	//fprintf(stderr, "looking for precisePC: %lx in getEntryFromAccessTypeLengthCache in OnWatchPoint\n", wpt->pc);
 	if(false == getEntryFromAccessTypeLengthCache(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType))) {
 		if(false == get_mem_access_length_and_type_address(wpt->pc, (uint32_t*) &(wpt->accessLength), &(wpt->accessType), floatType, context, &addr)){
           	//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
           	goto ErrExit;
         	}
-		//fprintf(stderr, "entry taken from disassembly\n");
+		//fprintf(stderr, "insertEntryToAccessTypeLengthCache is called in OnWatchPoint\n");
 		insertEntryToAccessTypeLengthCache(wpt->pc, wpt->accessLength, wpt->accessType); 
 	} else {
 		//fprintf(stderr, "entry taken from AccessTypeLengthCache\n");
