@@ -417,7 +417,7 @@ __thread uint64_t as_num = 0;
 __thread uint64_t inter_core_as_num = 0;
 __thread uint64_t line_transfer_num = 0;
 __thread uint64_t sample_count = 0;
-__thread uint64_t valid_sample_count = 0;
+__thread uint64_t valid_sample_count = 1;
 __thread uint64_t valid_sample_count1 = 0;
 __thread uint64_t trap_count = 0;
 __thread uint64_t wp_arming_count = 0;
@@ -2944,7 +2944,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) wpi->sample.valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0    
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -2989,7 +2989,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   }
   else if (flag == 2) { // Store trap (WAW)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) wpi->sample.valid_sample_count * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -4256,7 +4256,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
 //#if 0
   if (amd_ibs_flag /*&& mmap_data->store*/) {
-        valid_sample_count++;
+        //valid_sample_count++;
         valid_sample_count1++;
   }
 //#endif
@@ -4288,6 +4288,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   AccessType accessType;
   if(amd_ibs_flag) {
 	  //fprintf(stderr, "looking for precisePC: %lx in getEntryFromAccessTypeLengthCache\n", precisePC);
+#if 0
 	if(false == getEntryFromAccessTypeLengthCache(precisePC, (uint32_t*)(&accessLen), &accessType)) {
   		if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
           		//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
@@ -4308,7 +4309,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 			accessType = STORE;
 		else if (mmap_data->load)
 			accessType = LOAD;
-	}	
+	}
+#endif
+	if(mmap_data->store)
+        	accessType = STORE;
+        else if (mmap_data->load)
+                accessType = LOAD;
+	accessLen = mmap_data->mem_width; 		
   }
   else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
@@ -5254,7 +5261,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = item.valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*valid_sample_count1 / valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
@@ -5309,7 +5316,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = item.valid_sample_count * global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*valid_sample_count1 / valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
@@ -5475,7 +5482,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                             }
                             // ends
 			    if(mmap_data->addr_valid && mmap_data->store)
-				    valid_sample_count = 0;
+				    valid_sample_count++;
 
                             lastTime = curtime;
                             if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)

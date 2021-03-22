@@ -276,7 +276,7 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
 	for(i=0; i<nevents; i++) {
 		//fprintf(stderr, "event %d is closed\n", i);
 		//fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
-		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+		if(amd_ibs_flag/*hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0*/){
 			ioctl(event_thread[i].fd, IBS_DISABLE);
 			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
 		}
@@ -410,7 +410,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
                         fprintf(stderr, "Could not open %s\n", filename);
                         return false;
                         //continue;
-                } else {
+                } else if(!amd_ibs_flag){
 			amd_ibs_flag = true;
 		}
 
@@ -1367,6 +1367,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->pid = op_data->pid;
 	mmap_info->load = op_data->op_data3.reg.ibs_ld_op;
 	mmap_info->store = op_data->op_data3.reg.ibs_st_op;
+	mmap_info->mem_width = op_data->op_data3.reg.ibs_op_mem_width;
 	mmap_info->addr_valid = op_data->op_data3.reg.ibs_lin_addr_valid;
 	//if(mmap_info->addr_valid)
 	mmap_info->addr = op_data->dc_lin_ad;
@@ -1377,6 +1378,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->ip = op_data->op_rip;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
+	//fprintf(stderr, "in read_ibs_buffer ibs_rip_invalid: %d, ibs_ld_op: %d, ibs_st_op: %d, ibs_lin_addr_valid: %d, ibs_op_mem_width: %d\n", op_data->op_data.reg.ibs_rip_invalid, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, op_data->op_data3.reg.ibs_lin_addr_valid, op_data->op_data3.reg.ibs_op_mem_width);
 	return 0;
 }
 
@@ -1531,15 +1533,9 @@ perf_event_handler(
                 	ibs_op_t *op_data = (ibs_op_t *) sample_buffer;
 			original_sample_count++;
 			//fprintf(stderr, "more_data: %d\n", more_data);
-			if (/*op_data->op_data3.reg.ibs_lin_addr_valid &&*/ (op_data->op_data3.reg.ibs_ld_op || op_data->op_data3.reg.ibs_st_op)) {
-				read_ibs_buffer(current, &mmap_data, op_data);
-				if(!op_data->kern_mode)
-					record_sample(current, &mmap_data, context, &sv);	
-				//else
-					//fprintf(stderr, "sample is discarded because it is from kernel\n");
-			} else {
-				//fprintf(stderr, "sample is discarded because it is not memory access\n");
-			}
+			read_ibs_buffer(current, &mmap_data, op_data);
+			//if(!op_data->kern_mode)
+			record_sample(current, &mmap_data, context, &sv);		
 			more_data--;
 		} else
 		{

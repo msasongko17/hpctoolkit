@@ -91,6 +91,7 @@ typedef struct perf_mmap_data_s {
   u64    stream_id;  /* if PERF_SAMPLE_STREAM_ID */
   u32    cpu, res;   /* if PERF_SAMPLE_CPU */
   u64    period;     /* if PERF_SAMPLE_PERIOD */
+  short  mem_width;
 
   uint16_t addr_valid;  
   uint16_t phy_addr_valid;

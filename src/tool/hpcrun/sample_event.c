@@ -216,6 +216,8 @@ hpcrun_sample_callpath(void* context, int metricId,
   // --------------------------------------
   // start of handling sample
   // --------------------------------------
+  if(td->handling_sample != 0)
+	  return ret;
   hpcrun_set_handling_sample(td);
 
   td->btbuf_cur = NULL;
