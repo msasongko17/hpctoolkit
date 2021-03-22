@@ -150,7 +150,7 @@
 #include "reuse.h"
 
 #define WAIT_THRESHOLD 10
-extern bool amd_ibs_flag;
+//extern bool amd_ibs_flag;
 int used_wp_count = 0;
 int max_used_wp_count = 0;
 extern __thread int wait_threshold;
@@ -4221,7 +4221,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
   void * contextPC = hpcrun_context_pc(context); 
   void * data_addr = mmap_data->addr; 
-  void * precisePC = (amd_ibs_flag || (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
+  void * precisePC = (/*amd_ibs_flag ||*/ (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
   // Filert out address and PC (0 or kernel address will not pass)
   //fprintf(stderr, "OnSample is called %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
@@ -4239,18 +4239,21 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   uint64_t curTime = rdtsc();
   int accessLen = 1;
   AccessType accessType;
+#if 0
   if(amd_ibs_flag) {
 	  if(mmap_data->store)
 		  accessType = STORE;
 	  else if (mmap_data->load)
 		 accessType = LOAD; 
   }
-  else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
+  else 
+#endif
+  if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
   //fprintf(stderr, "in sample, accessType: %d, accessLen: %d\n", accessType, accessLen);
-  if(!amd_ibs_flag && (accessType == UNKNOWN || accessLen == 0)){
+  if(/*!amd_ibs_flag &&*/ (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
     goto ErrExit; // incorrect access type
   }

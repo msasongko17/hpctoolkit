@@ -78,7 +78,7 @@ extern MonitoredNodeStruct_t MonitoredNode;
 
 extern int profiling_mode;
 
-extern bool amd_ibs_flag;
+//extern bool amd_ibs_flag;
 
 #define REUSE_HISTO 1
 //#define MAX_WP_SLOTS (5)
@@ -687,7 +687,7 @@ static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, 
     // modification
     //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG before fileHandle assert\n");
     assert(wpi->fileHandle != -1);
-    assert(wpi->mmapBuffer != 0 || amd_ibs_flag);
+    assert(wpi->mmapBuffer != 0 /*|| amd_ibs_flag*/);
     //DisableWatchpoint(wpi);
     //fprintf(stderr, "watchpoint is created with FAST_BP_IOC_FLAG\n");
     //create_wp_count++;
@@ -962,7 +962,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
 
   //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
   if(event_id != WP_AMD_COMM && wpConfig.isLBREnabled) {
-    fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
+    //fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
     CreateDummyHardwareEvent();
   }
 

@@ -180,7 +180,7 @@ extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
 extern int l3_reuse_distance_event_rqsts;
 int ibs_event = -1;
-bool amd_ibs_flag = false;
+//bool amd_ibs_flag = false;
 //******************************************************************************
 // type declarations
 //******************************************************************************
@@ -251,12 +251,14 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 	int i;
 	for(i=0; i<nevents; i++) {
 		//ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
+#if 0
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
                         ioctl(event_thread[i].fd, IBS_ENABLE);
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 }
                 else
-                        ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
+#endif
+        	ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
 	}
 }
 
@@ -273,11 +275,13 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
 	for(i=0; i<nevents; i++) {
 		//fprintf(stderr, "event %d is closed\n", i);
 		//fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
+#if 0
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
 			ioctl(event_thread[i].fd, IBS_DISABLE);
 			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
 		}
 		else
+#endif
 			ioctl(event_thread[i].fd, PERF_EVENT_IOC_DISABLE, 0);
 	}
 }
@@ -343,7 +347,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 		stick_this_thread_to_core(mapping_vector[TD_GET(core_profile_trace_data.id) % mapping_size]);
 	}
 
-	if(!hpcrun_ev_is(event->metric_desc->name, "IBS_OP")) {
+	//if(!hpcrun_ev_is(event->metric_desc->name, "IBS_OP")) {
 	et->num_overflows = 0;
 	et->prev_num_overflows = 0;
 	et->event = event;
@@ -351,8 +355,26 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 	// it returns -1 if it fails.
 	//fprintf(stderr, "monitoring a sample\n");
 	event->attr.wakeup_events = 1;
+
+	//before
+#if 0
+	event->attr.sample_type=PERF_SAMPLE_IP;
+        event->attr.read_format=PERF_FORMAT_GROUP|PERF_FORMAT_ID;
+        event->attr.disabled=1;
+        event->attr.pinned=1;
+        event->attr.exclude_kernel=1;
+        event->attr.exclude_hv=1;
+        event->attr.wakeup_events=1;
+	event->attr.type=PERF_TYPE_RAW;	
+	event->attr.precise_ip = 0;
+#endif
+	//after
+
 	et->fd = perf_event_open(&event->attr,
 			THREAD_SELF, CPU_ANY, GROUP_FD, PERF_FLAGS);
+	fprintf(stderr, "dbg register event %d, fd: %d, skid: %d, c: %lx, t: %d, period: %d, freq: %d",
+                        event->id, et->fd, event->attr.precise_ip, event->attr.config,
+                        event->attr.type, event->attr.sample_freq, event->attr.freq);
 	TMSG(LINUX_PERF, "dbg register event %d, fd: %d, skid: %d, c: %d, t: %d, period: %d, freq: %d",
 			event->id, et->fd, event->attr.precise_ip, event->attr.config,
 			event->attr.type, event->attr.sample_freq, event->attr.freq);
@@ -361,6 +383,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 	if (et->fd < 0) {
 		EMSG("Linux perf event open %d (%d) failed: %s",
 				event->id, event->attr.config, strerror(errno));
+		fprintf(stderr, "failed in perf_event_open\n");
 		return false;
 	}
 
@@ -394,7 +417,9 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 	}
 
 	ioctl(et->fd, PERF_EVENT_IOC_RESET, 0);
+	fprintf(stderr, "everything is fine\n");
 	return (ret >= 0);
+#if 0
 	} else {
 		char filename [64];
 		et->event = event;
@@ -425,6 +450,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 		ioctl(et->fd, ASSIGN_FD, et->fd);
 		fprintf(stderr, "everything is fine\n");
 	}
+#endif
 }
 
 
@@ -440,16 +466,20 @@ perf_thread_fini(int nevents, event_thread_t *event_thread)
 		if (event_thread[i].fd) 
 			close(event_thread[i].fd);
 
+#if 0
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0)
 		{
 			free(global_buffer);
 		}
 		else
 		{
+#endif
 			if (event_thread[i].mmap) 
 				perf_unmmap(event_thread[i].mmap);
-		}
+//#if 0
+//		}
 	}
+//#endif
 }
 
 
@@ -480,19 +510,21 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 	// for event with frequency, we need to increase the counter by its period
 	// sampling taken by perf event kernel
 	// ----------------------------------------------------------------------------
+#if 0
 	bool amd_ibs_event = false;
 	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
 			amd_ibs_event = true;
+#endif
 	uint64_t metric_inc = 1;
-	if ((amd_ibs_event || current->event->attr.freq==1) && mmap_data->period > 0)
+	if ((/*amd_ibs_event ||*/ current->event->attr.freq==1) && mmap_data->period > 0)
 		metric_inc = mmap_data->period;
 	//fprintf(stderr, "metric_inc: %ld\n", metric_inc);
 	// ----------------------------------------------------------------------------
 	// record time enabled and time running
 	// if the time enabled is not the same as running time, then it's multiplexed
 	// ----------------------------------------------------------------------------
-	u64 time_enabled = !amd_ibs_event ? current->mmap->time_enabled : 1;
-	u64 time_running = !amd_ibs_event ? current->mmap->time_running : 1;
+	u64 time_enabled = /*!amd_ibs_event ?*/ current->mmap->time_enabled /*: 1*/;
+	u64 time_running = /*!amd_ibs_event ?*/ current->mmap->time_running /*: 1*/;
 
 	// ----------------------------------------------------------------------------
 	// the estimate count = raw_count * scale_factor
@@ -686,10 +718,12 @@ METHOD_FN(start)
 	for (int i=0; i<nevents; i++)
 	{
 		int ret;
+#if 0
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
 			ret = ioctl(event_thread[i].fd, IBS_ENABLE);
 		} else
-			ret = ioctl(event_thread[i].fd, PERF_EVENT_IOC_RESET, 0);
+#endif
+		ret = ioctl(event_thread[i].fd, PERF_EVENT_IOC_RESET, 0);
 		if (ret == -1) {
 			TMSG(LINUX_PERF, "error fd %d in IOC_RESET: %s", event_thread[i].fd, strerror(errno));
 		}
@@ -928,14 +962,24 @@ METHOD_FN(process_event_list, int lush_metrics)
 
 		bool is_period = (period_type == 1);
 
+		// assign to config here 
+
 		// ------------------------------------------------------------
 		// initialize the generic perf event attributes for this event
 		// all threads and file descriptor will reuse the same attributes.
 		// ------------------------------------------------------------
-		if(!hpcrun_ev_is(name, "IBS_OP"))
-			perf_attr_init(event_attr, is_period, threshold, 0);
-		else
-			ibs_flag = true;
+		//if(!hpcrun_ev_is(name, "IBS_OP"))
+		if(hpcrun_ev_is(name, "IBS_OP")) {
+			event_attr->config = 0x0329;
+			event_attr->type = PERF_TYPE_RAW;
+		}
+		perf_attr_init(event_attr, is_period, threshold, 0);
+		if(hpcrun_ev_is(name, "IBS_OP")) {
+			event_attr->sample_type =PERF_SAMPLE_IP;
+			//event_attr->precise_ip = 1;
+		}
+		//else
+		//	ibs_flag = true;
 
 		// ------------------------------------------------------------
 		// initialize the property of the metric
@@ -1124,8 +1168,8 @@ restart_perf_event(int fd)
 	}
 
 	int ret;
-	if (!amd_ibs_flag)
-	{
+	//if (!amd_ibs_flag)
+	//{
 		ret = ioctl(fd, PERF_EVENT_IOC_RESET, 0);
 
 		if (ret == -1) {
@@ -1136,6 +1180,7 @@ restart_perf_event(int fd)
 		if (ret == -1) {
 			TMSG(LINUX_PERF, "error fd %d in IOC_REFRESH: %s", fd, strerror(errno));
 		}
+#if 0
 	} else 
 	{
 		ret = ioctl(fd, RESET_BUFFER);	
@@ -1143,6 +1188,7 @@ restart_perf_event(int fd)
                         TMSG(LINUX_PERF, "error fd %d in ioctl RESET_BUFFER: %s", fd, strerror(errno));
                 }
 	}
+#endif
 	return ret;
 }
 /***************************************************************************
@@ -1400,7 +1446,7 @@ perf_event_handler(
 	void *pc = hpcrun_context_pc(context);
 
 
-	if (! hpcrun_safe_enter_async(pc) && !amd_ibs_flag) {
+	if (! hpcrun_safe_enter_async(pc) /*&& !amd_ibs_flag*/) {
 		hpcrun_stats_num_samples_blocked_async_inc();
 		restart_perf_event(siginfo->si_int);
 		fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
@@ -1413,7 +1459,7 @@ perf_event_handler(
 	// ----------------------------------------------------------------------------
 	// check #1: check if signal generated by kernel for profiling
 	// ----------------------------------------------------------------------------
-	if (siginfo->si_code < 0 && !amd_ibs_flag) {
+	if (siginfo->si_code < 0 /*&& !amd_ibs_flag*/) {
 		TMSG(LINUX_PERF, "signal si_code %d < 0 indicates not from kernel", 
 				siginfo->si_code);
 		fprintf(stderr, "quit 1\n");
@@ -1434,13 +1480,15 @@ perf_event_handler(
 	//fprintf(stderr, "in perf_event_handler\n");
 	int fd;
 	//if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
+#if 0
 	if(amd_ibs_flag)
         {
 		fd = siginfo->si_int;
 	} else 
 	{
+#endif
 		fd = siginfo->si_fd;
-	}
+//	}
 
 	//fprintf(stderr, "in perf_event_handler fd: %d\n", fd);
 	// ----------------------------------------------------------------------------
@@ -1482,25 +1530,26 @@ perf_event_handler(
 
 
 	int tmp = 0;
+#if 0
 	bool amd_ibs_event = false;
 	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
 	{
 		amd_ibs_event = true;
 		tmp = read(fd, global_buffer, BUFFER_SIZE_B);
 	}
-
+#endif
 	// Increment the number of overflows for the current event
 	current->num_overflows++;
 	// ----------------------------------------------------------------------------
 	// parse the buffer until it finishes reading all buffers
 	// ----------------------------------------------------------------------------
 	int more_data = 0;
-	char * sample_buffer;
+	/*char * sample_buffer;
 	if(amd_ibs_event)
 	{
        		more_data = tmp / sizeof(ibs_op_t);
 		sample_buffer = malloc (sizeof(ibs_op_t));
-	} 
+	}*/ 
 
 	int offset = 0;
 	//fprintf(stderr, "event with name %s is about to be read\n", current->event->metric_desc->name);
@@ -1513,6 +1562,7 @@ perf_event_handler(
 		 sample_val_t sv;
 		 memset(&sv, 0, sizeof(sample_val_t));
 		// reading info from mmapped buffer
+#if 0
 		if(amd_ibs_event)
 		{
 			memcpy ( sample_buffer, global_buffer + offset, sizeof(ibs_op_t) );
@@ -1527,14 +1577,16 @@ perf_event_handler(
 			more_data--;
 		} else
 		{
+#endif
 			more_data = read_perf_buffer(current, &mmap_data);
 
                 	if (mmap_data.header_type == PERF_RECORD_SAMPLE)
                         	record_sample(current, &mmap_data, context, &sv);
 
 			kernel_block_handler(current, sv, &mmap_data);
-		}
+		//}
 		//fprintf(stderr, "event with name %s has been read\n", current->event->metric_desc->name);
+		fprintf(stderr, "a sample from instruction %lx occurs\n");
 		TMSG(LINUX_PERF, "record buffer: sid: %d, ip: %p, addr: %p, id: %d", mmap_data.sample_id, mmap_data.ip, mmap_data.addr, mmap_data.id);
 
 #if 0
@@ -1549,10 +1601,12 @@ perf_event_handler(
 
 	} while (more_data > 0);
 
+#if 0
 	if(amd_ibs_event)
         {
                 free(sample_buffer);
         }
+#endif
 	hpcrun_safe_exit();
 
 	restart_perf_event(fd);
