@@ -4220,15 +4220,40 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
   void * contextPC = hpcrun_context_pc(context); 
-  void * data_addr = mmap_data->addr; 
-  void * precisePC = (/*amd_ibs_flag ||*/ (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
+  void * data_addr = theWPConfig->id == WP_AMD_COMM ? 0 : mmap_data->addr; 
+  void * precisePC = (theWPConfig->id == WP_AMD_COMM || (mmap_data->header_misc & PERF_RECORD_MISC_EXACT_IP)) ? mmap_data->ip : 0;
+
+  // before
+  int accessLen = 1;
+  AccessType accessType;
+  FloatType * floatType = 0;
+  //fprintf(stderr, "OnSample is called 1 pc: %lx\n", precisePC);
+  if(theWPConfig->id == WP_AMD_COMM)
+  {
+  	void *  addr1 = (void *)-1;
+	//fprintf(stderr, "before GetPatchedIP\n");
+	void * patchedIP = GetPatchedIP(contextPC);
+        if(!IsPCSane(contextPC, patchedIP)) {
+            //EMSG("PERF_SAMPLE_IP imprecise: %p failed to patch in  WP handler, WP dropped\n", tmpIP);
+            goto ErrExit;
+        }
+	precisePC = patchedIP;
+	//fprintf(stderr, "before get_mem_access_length_and_type_address\n");
+  	if(false == get_mem_access_length_and_type_address(precisePC, (uint32_t*) &(accessLen), &(accessType), floatType, context, &data_addr)){
+          	//fprintf(stderr, "WP triggered on a non Load/Store add = %p\n", precisePC);
+          	goto ErrExit;
+        }
+  }
+
+  // after
   // Filert out address and PC (0 or kernel address will not pass)
-  //fprintf(stderr, "OnSample is called %lx\n", data_addr);
+  //fprintf(stderr, "OnSample is called data_addr 0: %lx\n", data_addr);
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS\n");
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
+  //fprintf(stderr, "OnSample is called data_addr 1: %lx\n", data_addr);
   //fprintf(stderr, "no problem 1\n");
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
@@ -4237,21 +4262,14 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   //fprintf(stderr, "no problem 2\n");
 
   uint64_t curTime = rdtsc();
+#if 0
   int accessLen = 1;
   AccessType accessType;
-#if 0
-  if(amd_ibs_flag) {
-	  if(mmap_data->store)
-		  accessType = STORE;
-	  else if (mmap_data->load)
-		 accessType = LOAD; 
-  }
-  else 
-#endif
   if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
+#endif
   //fprintf(stderr, "in sample, accessType: %d, accessLen: %d\n", accessType, accessLen);
   if(/*!amd_ibs_flag &&*/ (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
@@ -5072,9 +5090,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				int sType = -1;
                             	sample_count++;
 
-                            	if (mmap_data->store)
+                            	if (accessType == STORE || accessType == LOAD_AND_STORE)
                               		sType = ALL_STORE;
-                            	else if(mmap_data->load)
+                            	else if(accessType == LOAD)
                               		sType = ALL_LOAD;
 				int metricId = -1;
                             	const void* joinNode;  

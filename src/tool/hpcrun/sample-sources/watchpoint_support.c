@@ -1354,7 +1354,7 @@ SkipBuffer(struct perf_event_mmap_page *hdr, size_t sz){
   hdr->data_tail += sz;
 }
 
-static inline bool IsPCSane(void * contextPC, void *possiblePC){
+bool IsPCSane(void * contextPC, void *possiblePC){
   if( (possiblePC==0) || ((possiblePC > contextPC) ||  (contextPC-possiblePC > 15))){
     return false;
   }
@@ -1377,7 +1377,7 @@ double ProportionOfWatchpointAmongOthersSharingTheSameContext(WatchPointInfo_t *
 #endif
 }
 
-static inline void *  GetPatchedIP(void *  contextIP) {
+void *  GetPatchedIP(void *  contextIP) {
   void * patchedIP;
   void * excludeList[MAX_WP_SLOTS] = {0};
   int numExcludes = 0;

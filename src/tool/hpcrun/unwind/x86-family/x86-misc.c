@@ -147,10 +147,12 @@ static inline xed_error_enum_t decode(xed_decoded_inst_t *xedd, void *ip)
 		XedInit();
 	}
 	xed_decoded_inst_zero_set_mode(xedd, &xedState);
+	//fprintf(stderr, "before xed_decode ip: %lx\n", ip);
 	if(XED_ERROR_NONE != xed_decode(xedd, (const xed_uint8_t*)(ip), MAX_BYTES_TO_DECODE)) {
 		printf("get_len_float_operand failed to disassemble instruction\n");
 		return -1;
 	}
+	//fprintf(stderr, "after xed_decode\n");
 	return XED_ERROR_NONE;
 }
 
@@ -204,15 +206,19 @@ AccessType get_access_type(void * ip)
 bool get_mem_access_length_and_type_address(void * ip, uint32_t *accessLen, AccessType *accessType, FloatType * floatType, void * context, void** address)
 {
 	xed_decoded_inst_t xedd;
+	//fprintf(stderr, "before decode\n");
 	if(XED_ERROR_NONE != decode(&xedd, ip)) {
 		return false;
 	}
+	//fprintf(stderr, "after decode\n");
+	//fprintf(stderr, "before xed_decoded_inst_number_of_memory_operands\n");
 	xed_uint_t numMemOps = xed_decoded_inst_number_of_memory_operands(&xedd);
 	if (numMemOps != 1) {
 		//TODO: Milind: Handle XED_CATEGORY_STRINGOP that have 2 mem ops
 		//printf("get_mem_access_length_and_type: numMemOps=%d, pc = %p\n",numMemOps, ip);
 		return false;
 	}
+	//fprintf(stderr, "after xed_decoded_inst_number_of_memory_operands\n");
 
 	xed_bool_t isOpRead =  xed_decoded_inst_mem_read(&xedd, 0);
 	xed_bool_t isOpWritten =  xed_decoded_inst_mem_written(&xedd, 0);

@@ -1586,7 +1586,7 @@ perf_event_handler(
 			kernel_block_handler(current, sv, &mmap_data);
 		//}
 		//fprintf(stderr, "event with name %s has been read\n", current->event->metric_desc->name);
-		fprintf(stderr, "a sample from instruction %lx occurs\n");
+		//fprintf(stderr, "a sample from instruction %lx occurs\n");
 		TMSG(LINUX_PERF, "record buffer: sid: %d, ip: %p, addr: %p, id: %d", mmap_data.sample_id, mmap_data.ip, mmap_data.addr, mmap_data.id);
 
 #if 0

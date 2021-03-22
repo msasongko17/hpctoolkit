@@ -258,6 +258,9 @@ typedef struct accessTypeLengthTable{
   struct accessTypeLengthEntry table[HASH_TABLE_SIZE];
 } accessTypeLengthTable_t;
 
+void *  GetPatchedIP(void *  contextIP);
+bool IsPCSane(void * contextPC, void *possiblePC);
+
 #define CHANGE_THRESHOLD 100
 #define L2_MISS_RATIO_PERIOD 50
 
