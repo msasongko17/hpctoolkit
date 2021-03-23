@@ -2908,18 +2908,20 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int flag = 0;
   // if ts2 > tprev then
 //#if 0
-  if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
+if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
         flag = 1;
         number_of_caught_read_traps++;
       }
-    } else if (wt->accessType == STORE && wpi->sample.samplerAccessType == STORE) {
+    } else if ((wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) && wpi->sample.samplerAccessType == STORE) {
       if(wpi->sample.sampleType == ALL_STORE) {
         flag = 2;
         number_of_caught_write_traps++;
       }
-    } else if (wt->accessType == LOAD_AND_STORE && wpi->sample.samplerAccessType == LOAD_AND_STORE){
+    }
+ #if 0 
+    else if (wt->accessType == LOAD_AND_STORE && wpi->sample.samplerAccessType == LOAD_AND_STORE){
       if(wpi->sample.sampleType == ALL_LOAD) {
         flag = 1;
         number_of_caught_read_write_traps++;
@@ -2929,7 +2931,8 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
         number_of_caught_read_write_traps++;
       }
     }
-  }
+#endif
+}
 //#endif
 
 #if 0
