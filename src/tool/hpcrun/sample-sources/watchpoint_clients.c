@@ -5451,7 +5451,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 
                             // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
                             if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
-                            } else if(mmap_data->addr_valid) {
+                            } else /*if(mmap_data->addr_valid)*/ {
                               // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
                               uint64_t bulletinCounter = bulletinBoard.counter;
                               if((bulletinCounter & 1) == 0) {
