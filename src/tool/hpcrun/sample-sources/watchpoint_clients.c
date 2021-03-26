@@ -326,6 +326,7 @@ uint64_t detected_store_counter = 0;
 #define WP_REUSE_EVENT_NAME "WP_REUSE"
 #define WP_REUSETRACKER_EVENT_NAME "WP_REUSETRACKER"
 #define WP_AMD_COMM_EVENT_NAME "WP_AMD_COMM"
+#define WP_AMD_REUSE_EVENT_NAME "WP_AMD_REUSE"
 #define WP_TEMPORAL_REUSE_EVENT_NAME "WP_TEMPORAL_REUSE"
 #define WP_SPATIAL_REUSE_EVENT_NAME "WP_SPATIAL_REUSE"
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
@@ -344,6 +345,7 @@ typedef enum WP_CLIENT_ID{
   WP_REUSE,
   WP_REUSETRACKER,
   WP_AMD_COMM,
+  WP_AMD_REUSE,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -714,6 +716,7 @@ static WPTriggerActionType LoadLoadWPCallback(WatchPointInfo_t *wpi, int startOf
 static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AllSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TrueSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType IPCFalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -808,6 +811,14 @@ static WpClientConfig_t wpClientConfig[] = {
     .wpCallback = AMDCommWPCallback,
     .preWPAction = DISABLE_WP,
     .configOverrideCallback = AMDCommWPConfigOverride
+  },
+  /**** AMD Communication ***/
+  {
+    .id = WP_AMD_REUSE,
+    .name = WP_AMD_REUSE_EVENT_NAME,
+    .wpCallback = AMDReuseWPCallback,
+    .preWPAction = DISABLE_WP,
+    .configOverrideCallback = AMDReuseWPConfigOverride
   },
   /**** Contention ***/
   {
@@ -1036,6 +1047,7 @@ static void ClientTermination(){
         hpcrun_stats_num_reuseTemporal_inc(reuseTemporal);
         hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
       }   break;
+    case WP_AMD_REUSE:
     case WP_REUSETRACKER:
       {
         /*
@@ -1622,6 +1634,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 
       }
       break;
+    case WP_AMD_REUSE:
     case WP_REUSETRACKER:
       {
         //reuse_profile_type = REUSE_TEMPORAL;
@@ -1873,6 +1886,8 @@ METHOD_FN(display_events)
   printf("%s\n", WP_REUSETRACKER_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_AMD_COMM_EVENT_NAME);
+  printf("---------------------------------------------------------------------------\n");
+  printf("%s\n", WP_AMD_REUSE_EVENT_NAME); 
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_TEMPORAL_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
@@ -2867,6 +2882,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
   return ALREADY_DISABLED;
+}
+
+static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+	return ALREADY_DISABLED;
 }
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
@@ -6048,7 +6067,7 @@ void dump_profiling_metrics() {
     dump_waw_as_matrix();
     dump_waw_as_core_matrix();
   }
-  if(theWPConfig->id == WP_REUSETRACKER) {
+  if(theWPConfig->id == WP_REUSETRACKER || theWPConfig->id == WP_AMD_REUSE) {
 #ifdef REUSE_HISTO
     uint64_t val[3];
     //fprintf(stderr, "FINAL_COUNTING:");

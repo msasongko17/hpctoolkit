@@ -136,6 +136,7 @@ typedef enum WP_CLIENT_ID{
   WP_REUSE,
   WP_REUSETRACKER,
   WP_AMD_COMM,
+  WP_AMD_REUSE,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -603,6 +604,14 @@ void AMDCommWPConfigOverride(void *v){
   wpConfig.replacementPolicy = OLDEST;
 }
 
+void AMDReuseWPConfigOverride(void *v){
+  // replacement policy is OLDEST forced.
+  //wpConfig.dontFixIP = true;
+  //wpConfig.dontDisassembleWPAddress = true;
+  //wpConfig.isLBREnabled = false;
+  wpConfig.replacementPolicy = OLDEST;
+}
+
 void ReuseWPConfigOverride(void *v){
   // dont fix IP
   //wpConfig.dontFixIP = true;
@@ -964,7 +973,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
   }
 
   //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
-  if(event_id != WP_AMD_COMM && wpConfig.isLBREnabled) {
+  if(event_id != WP_AMD_COMM && event_id != WP_AMD_REUSE && wpConfig.isLBREnabled) {
     fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
     CreateDummyHardwareEvent();
   }

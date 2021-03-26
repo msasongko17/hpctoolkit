@@ -276,7 +276,7 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
 	for(i=0; i<nevents; i++) {
 		//fprintf(stderr, "event %d is closed\n", i);
 		//fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
-		if(amd_ibs_flag/*hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0*/){
+		if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
 			ioctl(event_thread[i].fd, IBS_DISABLE);
 			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
 		}
@@ -1324,7 +1324,7 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
     //fprintf(stderr, "sig_event_handler is called\n");
     int my_id = TD_GET(core_profile_trace_data.id);
     if (n == SIGNEW && my_id >= 0) {
-        fd = info->si_int;
+        fd = info->si_fd;//info->si_int;
         //printf ("Received signal from kernel : Value =  %u\n", check);
         //read(check, read_buf, 1024);
         //printf("signal %d from file with fd %d\n", n, fd);
@@ -1413,7 +1413,7 @@ perf_event_handler(
 
 	if (! hpcrun_safe_enter_async(pc) && !amd_ibs_flag) {
 		hpcrun_stats_num_samples_blocked_async_inc();
-		restart_perf_event(siginfo->si_int);
+		restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
 		fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
 		perf_start_all(nevents, event_thread);
 		return 0; // tell monitor the signal has been handled.
@@ -1445,6 +1445,7 @@ perf_event_handler(
 	//fprintf(stderr, "in perf_event_handler\n");
 	int fd;
 	//if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
+#if 0
 	if(amd_ibs_flag)
         {
 		fd = siginfo->si_int;
@@ -1452,6 +1453,8 @@ perf_event_handler(
 	{
 		fd = siginfo->si_fd;
 	}
+#endif
+	fd = siginfo->si_fd;
 
 	//fprintf(stderr, "in perf_event_handler fd: %d\n", fd);
 	// ----------------------------------------------------------------------------
