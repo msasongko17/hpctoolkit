@@ -2118,6 +2118,11 @@ static inline cct_node_t *getConcatenatedNode(cct_node_t *bottomNode, cct_node_t
   return node;
 }
 
+double thread_coefficient(int as_matrix_size) {
+	double thread_count = (double) as_matrix_size + 1;
+	return 50.6 * pow(thread_count, -0.434);
+}
+
 static WPTriggerActionType DeadStoreWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   if(!wt->pc) {
     // if the ip is 0, let's drop the WP
@@ -2947,7 +2952,7 @@ if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sa
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ thread_coefficient(as_matrix_size) * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0    
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -2992,7 +2997,7 @@ if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sa
   }
   else if (flag == 2) { // Store trap (WAW)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
-    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
+    double increment = (double) /*valid_sample_count1 / valid_sample_count **/ thread_coefficient(as_matrix_size) * CACHE_LINE_SZ/MAX_WP_LENGTH / wpConfig.maxWP * global_sampling_period; 
 #if 0
     if(global_thread_count > 2)
     	valid_sample_count = 0;
@@ -4241,11 +4246,12 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
    return 2.31 * pow(thread_count, -0.869);
    }*/
 
+#if 0
 double thread_coefficient(int as_matrix_size) {
   double thread_count = (double) as_matrix_size + 1;
-  return 2.87 * pow(thread_count, -0.9);
+  return 50.6 * pow(thread_count, -0.434);
 }
-
+#endif
 
 bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, cct_node_t *node, int sampledMetricId) {
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
@@ -5264,7 +5270,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 if(flag == 1) {  // if sType is all_loads (WAR)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = /*valid_sample_count1 / valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*valid_sample_count1 / valid_sample_count **/ thread_coefficient(as_matrix_size) * global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
@@ -5319,7 +5325,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                 else if(flag == 2) {  // if sType is all_stores (WAW)
                                   int id = -1;
                                   int metricId = -1;
-                                  double increment = /*valid_sample_count1 / valid_sample_count **/ global_sampling_period; //* thread_coefficient(as_matrix_size);
+                                  double increment = /*valid_sample_count1 / valid_sample_count **/ thread_coefficient(as_matrix_size) * global_sampling_period; //* thread_coefficient(as_matrix_size);
 #if 0
 				  if(global_thread_count > 2)
 				  	valid_sample_count = 0;
