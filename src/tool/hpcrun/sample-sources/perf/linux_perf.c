@@ -383,7 +383,10 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 
 	// need to set PERF_SIGNAL to this file descriptor
 	// to avoid POLL_HUP in the signal handler
-	ret = fcntl(et->fd, F_SETSIG, PERF_SIGNAL);
+	if(hpcrun_ev_is(event->metric_desc->name, "AMD_L1_DATA_ACCESS"))
+		ret = fcntl(et->fd, F_SETSIG, SIGNEW);
+	else
+		ret = fcntl(et->fd, F_SETSIG, PERF_SIGNAL);
 	if (ret == -1) {
 		EMSG("Can't set signal for event %d, fd: %d: %s",
 				event->id, et->fd, strerror(errno));
@@ -1430,6 +1433,7 @@ perf_event_handler(
 
                 return 1; // tell monitor the signal has not been handled.
         }
+	fprintf(stderr, "sample of event with name %s is detected\n", current->event->metric_desc->name);
 	//fprintf(stderr, "in perf_event_handler 1\n");
 
 	// ----------------------------------------------------------------------------
