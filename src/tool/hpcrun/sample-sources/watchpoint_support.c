@@ -1748,7 +1748,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //fprintf(stderr, "OnWatchPoint is executed 3\n");
   wp_count1++;
 
-  if(event_type == WP_REUSETRACKER /*|| event_type == WP_AMD_REUSE*/) {
+  if(event_type == WP_REUSETRACKER || event_type == WP_AMD_REUSE) {
     tData.numWatchpointTriggers++;
 
     int location = -1;

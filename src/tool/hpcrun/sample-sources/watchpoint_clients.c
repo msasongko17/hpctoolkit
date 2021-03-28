@@ -2885,6 +2885,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   return ALREADY_DISABLED;
 }
 
+#if 0
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseWPCallback\n");
   fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
@@ -2987,10 +2988,11 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 #endif
   return ALREADY_DISABLED;
 }
+#endif
 
-#if 0
+//#if 0
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-	fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
+	//fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
 	trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
@@ -3037,7 +3039,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
           //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
           globalReuseWPs.table[wt->location].active = false;
           handle_trap = true;
-  	  fprintf(stderr, "critical region is entered at trap\n");	  
+  	  //fprintf(stderr, "critical region is entered at trap\n");	  
         }
         if(globalReuseWPs.table[wt->location].sharedActive) {
           post_inc_flag = true;	
@@ -3077,7 +3079,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 
       //fprintf(stderr, "before time_distance\n");
       time_distance = rdtsc() - wpi->startTime;
-      fprintf(stderr, "private reuse %ld is detected me: %d, monitored_tid: %d\n", rd, me, monitored_tid);
+      //fprintf(stderr, "private reuse %ld is detected me: %d, monitored_tid: %d\n", rd, me, monitored_tid);
       ReuseAddDistance(rd, inc);
       reuse_type = wpi->sample.reuseType;
       attributed_rd = rd;
@@ -3335,7 +3337,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 #endif
 	return ALREADY_DISABLED;
 }
-#endif
+//#endif
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
@@ -5430,6 +5432,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                           }
                           break;
     case WP_AMD_REUSE:{
+#if 0
 			   //fprintf(stderr, "WP_REUSE in OnSample\n");
 #ifdef REUSE_HISTO
 #else
@@ -5516,8 +5519,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                      //fprintf(stderr, "watchpoints are about to be armed from OnSample\n");
                      SubscribeWatchpoint(&sd, OVERWRITE, false );
                      //fprintf(stderr, "here6\n");
-
-#if 0
+#endif
+//#if 0
 			    sample_count++;
                             int me = TD_GET(core_profile_trace_data.id);
 
@@ -5525,7 +5528,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             /*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
                               fprintf(stderr, "l2 miss sample happens1\n");*/	
                             //fprintf(stderr, "thread %d is sampled in core %d\n", me, sched_getcpu());
-                            fprintf(stderr, "sample type: %s in thread %d, sample_count: %d as WP_AMD_REUSE\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
+                            //fprintf(stderr, "sample type: %s in thread %d, sample_count: %d as WP_AMD_REUSE\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
                             int64_t storeCurTime = 0;
                             if(accessType == STORE || accessType == LOAD_AND_STORE) {
                               storeCurTime = curTime;
@@ -5589,7 +5592,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             else if(mmap_data->load) {
                             	sType = ALL_LOAD;
                             	load_count++;
-                                        //fprintf(stderr, "load sample is detected, load: %d\n", mmap_data->load);
+                                //fprintf(stderr, "load sample is detected, load: %d\n", mmap_data->load);
                             }                            
 			    //fprintf(stderr, "threads are selected here\n");
                             //fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
@@ -5598,6 +5601,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             int location = -1;
                             bool steal_wp_slot = false;
 
+			    //fprintf(stderr, "used_wp_count: %d, MIN(global_thread_count, wpConfig.maxWP): %d\n", used_wp_count, MIN(global_thread_count, wpConfig.maxWP));
                             if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
                               uint64_t theCounter = globalReuseWPs.counter;
                               if((theCounter & 1) == 0) {
@@ -5605,6 +5609,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   // before
                                   for(int j = 0; j < wpConfig.maxWP; j++) {
                                     if(me == globalWPIsUsers[j]) {
+				      //fprintf(stderr, "thread %d owns the watchpoint at location %d\n", me, j);
                                       location = j;
                                       break;
                                     }
@@ -5616,6 +5621,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                         location = j;
                                         steal_wp_slot = true;
                                         globalWPIsUsers[j] = me;
+					//fprintf(stderr, "thread %d takes over the watchpoint at location %d\n", me, j);
                                         break; 
                                       }
                                     }
@@ -5713,7 +5719,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 break;
                               }
                             }
-
+#if 0
                             if(location ==  -1) {
                               uint64_t timestamp = MonitoredNode.timestamp;
                               if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
@@ -5723,13 +5729,13 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 last_trapped_timestamp = timestamp;
                               }
                               else if(last_monitored_wp_timestamp != timestamp) {
-                                //fprintf(stderr, "monitored_node is replaced, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld\n", location, last_monitored_wp_timestamp, timestamp);
+                                fprintf(stderr, "monitored_node is replaced, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld\n", location, last_monitored_wp_timestamp, timestamp);
                                 monitored_node = node;
                                 monitored_metric = MonitoredNode.metricId;
                                 last_monitored_wp_timestamp = timestamp;	
                               }
                             }	      
-
+#endif
                             /*if(globalReuseWPs.table[location].tid == me) {
                               if (sample_count > wait_threshold) {
                               globalWPIsUsers[location] = -1;
@@ -5746,12 +5752,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             }*/
                             if ((location != -1) && (sample_count > wait_threshold)) {
                               globalWPIsUsers[location] = -1;
-                              globalReuseWPs.table[location].tid = -1; 
+                              globalReuseWPs.table[location].tid = -1;
+
                               //globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
                               //fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
                               if(MonitoredNode.tid == me)
                                 MonitoredNode.tid = -1;
+			      //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold);
                               location = -1;
+			      //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold);
                               used_wp_count--;                                                                     
                             }
 
@@ -5841,7 +5850,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   //assert(linux_perf_read_event_counter_l1( amd_reuse_distance_event, val, false) >= 0);
 //#endif
                                 // this
-				fprintf(stderr, "val[0]: %ld val[1]: %ld in thread %d\n", val[0], val[1], me);
+				//fprintf(stderr, "val[0]: %ld val[1]: %ld in thread %d\n", val[0], val[1], me);
                                 //val[1] = 0;
                                 memcpy(sd.reuseDistance[0], val, sizeof(uint64_t)*3);
                                 //pmu_counter += val[0];
@@ -5944,7 +5953,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                   }
                                   sd.type = WP_WRITE;
                                 }
-                                //fprintf(stderr, "a wp is armed in thread %d\n",me);
+                                //fprintf(stderr, "wp in thread %d is armed by thread %d\n",indices[i], me);
                                 SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
                               }
 //#endif
@@ -5956,7 +5965,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }*/ 
 //#endif
                             lastTime = curTime;
-#endif
+//#endif
                           }
                           break;
     case WP_SPATIAL_REUSE:{
