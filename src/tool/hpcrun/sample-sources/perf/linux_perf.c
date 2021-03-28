@@ -871,6 +871,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	extern int *reuse_distance_events;
 	extern int reuse_distance_num_events;
 	extern int l3_reuse_distance_event;
+	extern int amd_reuse_distance_event;
 	//extern int l3_reuse_distance_event_rqsts;
 	reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
 	reuse_distance_num_events = 0;
@@ -879,6 +880,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		return;
 	}
 	l3_reuse_distance_event = 0;
+	amd_reuse_distance_event = 0;
 	l3_reuse_distance_event_rqsts = 0;
 
 	int i=0;
@@ -948,7 +950,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = 0x430729;
+                        	event_attr->config = 0x0329;//0x430729;
                         	event_attr->type = PERF_TYPE_RAW;
                 	}
 			perf_attr_init(event_attr, is_period, threshold, 0);
@@ -1000,6 +1002,15 @@ METHOD_FN(process_event_list, int lush_metrics)
                         {
                                 l3_reuse_distance_event_rqsts = i;
                                 fprintf(stderr, "assignment to L2_RQSTS.MISS happens here\n");
+                        }
+		#ifdef REUSE_HISTO
+                if ((strstr(name, "AMD_L1_DATA_ACCESS") != NULL) || (strstr(name, "AMD_L1_DATA_ACCESS") != NULL))
+#else
+                        if ((strstr(name, "AMD_L1_DATA_ACCESS") != NULL) || (strstr(name, "AMD_L1_DATA_ACCESS") != NULL)) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                amd_reuse_distance_event = i;
+                                fprintf(stderr, "assignment to AMD_L1_DATA_ACCESS happens here\n");
                         }
 		/**************************************************/
 
@@ -1275,6 +1286,44 @@ int linux_perf_read_event_counter_l1(int event_index, uint64_t *val, bool use){
         }
 }
 
+int linux_perf_read_event_counter_l1_amd(int event_index, uint64_t *val){
+        //fprintf(stderr, "this function is executed\n");
+        sample_source_t *self = &obj_name();
+        event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+
+        event_thread_t *current = &(event_thread[event_index]);
+
+        int ret = perf_read_event_counter(current, val);
+
+        if (ret < 0) {
+                //fprintf(stderr, "problem here 1\n");
+                return -1; // something wrong here
+        }
+
+        uint64_t sample_period = current->event->attr.sample_period;
+        if (sample_period == 0){ // counting event
+                return 0;
+        } else {
+                // overflow event
+                //assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
+                int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
+                //fprintf(stderr, "original counter value %ld\n", scaled_val);
+                if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+                                || scaled_val < 0){
+                        //jqswang: TODO: it does not filter out all the invalid values
+                        //fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
+                        hpcrun_stats_num_corrected_reuse_distance_inc(1);
+			scaled_val = 0;
+                }
+                val[0] = current->num_overflows * sample_period + scaled_val;
+                //val[0] = current->num_overflows * sample_period + scaled_val;
+                //fprintf(stderr, "val[0]: %ld\n", val[0]);
+                //current->prev_num_overflows = current->num_overflows;
+                val[1] = scaled_val;
+                val[2] = 0;
+                return 0;
+        }
+}
 
 int linux_perf_read_event_counter_shared(int event_index, uint64_t *val, int tid){
 	//fprintf(stderr, "this function is executed\n");
@@ -1433,7 +1482,7 @@ perf_event_handler(
 
                 return 1; // tell monitor the signal has not been handled.
         }
-	fprintf(stderr, "sample of event with name %s is detected\n", current->event->metric_desc->name);
+	//fprintf(stderr, "sample of event with name %s is detected\n", current->event->metric_desc->name);
 	//fprintf(stderr, "in perf_event_handler 1\n");
 
 	// ----------------------------------------------------------------------------
@@ -1552,7 +1601,7 @@ perf_event_handler(
 	} 
 
 	int offset = 0;
-	fprintf(stderr, "event with name %s is about to be read\n", current->event->metric_desc->name);
+	//fprintf(stderr, "event with name %s is about to be read\n", current->event->metric_desc->name);
 	int i = 0;
 
 	do {
@@ -1572,13 +1621,15 @@ perf_event_handler(
 			//fprintf(stderr, "more_data: %d\n", more_data);
 			read_ibs_buffer(current, &mmap_data, op_data);
 			//if(!op_data->kern_mode)
+			//fprintf(stderr, "event with name %s is handled here\n", current->event->metric_desc->name);
 			record_sample(current, &mmap_data, context, &sv);		
 			more_data--;
 		} else
 		{
 			more_data = read_perf_buffer(current, &mmap_data);
 
-                	if (mmap_data.header_type == PERF_RECORD_SAMPLE)
+			//fprintf(stderr, "event with name %s is handled there\n", current->event->metric_desc->name);
+                	if (mmap_data.header_type == PERF_RECORD_SAMPLE && !hpcrun_ev_is(current->event->metric_desc->name, "AMD_L1_DATA_ACCESS"))
                         	record_sample(current, &mmap_data, context, &sv);
 
 			kernel_block_handler(current, sv, &mmap_data);

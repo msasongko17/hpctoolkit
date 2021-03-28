@@ -608,7 +608,7 @@ void AMDReuseWPConfigOverride(void *v){
   // replacement policy is OLDEST forced.
   //wpConfig.dontFixIP = true;
   //wpConfig.dontDisassembleWPAddress = true;
-  //wpConfig.isLBREnabled = false;
+  wpConfig.isLBREnabled = false;
   wpConfig.replacementPolicy = OLDEST;
 }
 
@@ -797,7 +797,7 @@ static void CreateWatchPointShared(WatchPointInfo_t * wpi, SampleData_t * sample
 #if defined(FAST_BP_IOC_FLAG)
   if(modify) {
     assert(wpi->fileHandle != -1);
-    assert(wpi->mmapBuffer != 0);
+    //assert(wpi->mmapBuffer != 0);
     //fprintf(stderr, "this region is reached\n");
     CHECK(ioctl(wpi->fileHandle, FAST_BP_IOC_FLAG, (unsigned long) (&pe)));
   } else 
@@ -994,7 +994,7 @@ void WatchpointThreadTerminate(){
   int me = TD_GET(core_profile_trace_data.id);
   dynamic_global_thread_count--;
   ThreadData_t threadData;
-  if(event_type == WP_REUSETRACKER) {
+  if(event_type == WP_REUSETRACKER || event_type == WP_AMD_COMM) {
 
     // before
     int location = -1;
@@ -1748,7 +1748,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //fprintf(stderr, "OnWatchPoint is executed 3\n");
   wp_count1++;
 
-  if(event_type == WP_REUSETRACKER) {
+  if(event_type == WP_REUSETRACKER /*|| event_type == WP_AMD_REUSE*/) {
     tData.numWatchpointTriggers++;
 
     int location = -1;
@@ -1798,6 +1798,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         }	
 
 	  //fprintf(stderr, "watchpoint trap happens\n");
+#if 0
         if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
             tData.numWatchpointDropped++;
             retVal = DISABLE_WP; // disable if unable to collect any info.
@@ -1805,7 +1806,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             wpt.location = location;
             retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
           }
-
+#endif
+	retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
         switch (retVal) {
           case DISABLE_WP: {
                              if(wpi->isActive){
@@ -1957,6 +1959,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 }
 #endif
 
+#if 0
  if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
     fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
     tData.numWatchpointDropped++;
@@ -1968,6 +1971,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
     //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
   }
+#endif
+  retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
 
 
   // Let the client take action.
@@ -2141,14 +2146,17 @@ bool SubscribeWatchpointShared(SampleData_t * sampleData, OverwritePolicy overwr
           CaptureValue(sampleData, &threadDataTable.hashTable[me].watchPointArray[location]);
         }
         //fprintf(stderr, "Thread %d is arming thread %d in location %d\n", TD_GET(core_profile_trace_data.id), me, location);
+//#if 0
         if(ArmWatchPointShared(&threadDataTable.hashTable[me].watchPointArray[location] , sampleData, me) == false){
           //LOG to hpcrun log
           EMSG("ArmWatchPoint failed for address %p", sampleData->va);
           threadDataTable.hashTable[me].counter[location]++;
           return false;
         }
+//#endif
         threadDataTable.hashTable[me].counter[location]++;
         return true;
+//#endif
       }
     }	
   }

@@ -142,7 +142,7 @@
 #include "mymapping.h"
 #define REUSE_HISTO 0
 
-//#define MULTITHREAD_REUSE_HISTO 1
+#define MULTITHREAD_REUSE_HISTO 1
 
 #ifdef MULTITHREAD_REUSE_HISTO
 #define REUSE_HISTO 1
@@ -206,6 +206,7 @@ int reuse_store_buffer_metric_id = -1; // store the last time we get an availabl
 int *reuse_distance_events = NULL;
 int reuse_distance_num_events = 0;
 int l3_reuse_distance_event = 0;
+int amd_reuse_distance_event = 0;
 int l3_reuse_distance_event_rqsts = 0;
 
 uint64_t inter_thread_invalidation_count = 0;
@@ -382,7 +383,7 @@ typedef struct SharedData{
 SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = UNKNOWN, .tid = -1, .address = 0};
 
 HashTable_t bulletinBoard = {.counter = 0};
-//ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
+ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
 
 __thread uint64_t prev_timestamp = 0;
 
@@ -2885,8 +2886,456 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 }
 
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+  //fprintf(stderr, "in ReuseWPCallback\n");
+  fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
+#if 0  // jqswang:TODO, how to handle it?
+  if(!wt->pc) {
+    // if the ip is 0, let's drop the WP
+    //return RETAIN_WP;
+    return ALREADY_DISABLED;
+  }
+#endif //jqswang
+
+  uint64_t val[2][3];
+  //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+    assert(linux_perf_read_event_counter(amd_reuse_distance_event /*reuse_distance_events[i]*/, val[0]) >= 0);
+    //assert(linux_perf_read_event_counter_l1_amd( amd_reuse_distance_event, val[0]) >= 0);
+    //fprintf(stderr, "USE: %lu %lu %lu,  REUSE: %lu %lu %lu\n", wpi->sample.reuseDistance[i][0], wpi->sample.reuseDistance[i][1], wpi->sample.reuseDistance[i][2], val[i][0], val[i][1], val[i][2]);
+    //fprintf(stderr, "DIFF: %lu\n", val[i][0] - wpi->sample.reuseDistance[i][0]);
+    for(int j=0; j < 3; j++){
+      if (val[0][j] >= wpi->sample.reuseDistance[0][j]){
+        //fprintf(stderr, "before subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
+        val[0][j] -= wpi->sample.reuseDistance[0][j];
+        //fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
+      }
+      /*else { //Something wrong happens here and the record is not reliable. Drop it!
+        return ALREADY_DISABLED;
+      }*/
+    }
+  //}
+  // Report a reuse
+  // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp 
+  double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+  fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
+  uint64_t numDiffSamples = 100000; //GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+  uint64_t inc = numDiffSamples;
+  //fprintf(stderr, "inc: %ld\n", inc);
+  int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+  uint64_t time_distance = rdtsc() - wpi->startTime;
+
+#ifdef REUSE_HISTO
+  //fprintf(stderr, "inside REUSE_HISTO\n");
+  //cct_node_t *reuseNode = getPreciseNode(wt->ctxt, wt->pc, temporal_reuse_metric_id );
+  //sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+  //cct_node_t *reuseNode = v.sample_node;
+#if 0
+  if (reuse_output_trace){
+    WriteWitchTraceOutput("REUSE_DISTANCE: %d %d %lu,", hpcrun_cct_persistent_id(wpi->sample.node), hpcrun_cct_persistent_id(reuseNode), inc);
+    for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
+      WriteWitchTraceOutput(" %lu %lu %lu,", val[i][0], val[i][1], val[i][2]);
+    }
+    WriteWitchTraceOutput("\n");
+  } else{
+#endif
+    uint64_t rd = 0;
+    //for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
+      //assert(val[0][1] == 0 && val[0][2] == 0); // no counter multiplexing allowed
+      rd += val[0][0];
+    //}
+    fprintf(stderr, "reuse distance %ld is detected %d times\n", rd, inc);
+    ReuseAddDistance(rd, inc);
+  //}
+
+#else
+
+  cct_node_t *reusePairNode;
+  if (wpi->sample.reuseType == REUSE_TEMPORAL){
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+    }
+  }
+  else { // REUSE_SPATIAL
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0/*skipInner*/, 1/*isSync*/, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode /*bottomNode*/, wpi->sample.node /*topNode*/, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx] /* joinNode*/);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node /*bottomNode*/, reuseNode /*topNode*/, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx] /* joinNode*/);
+    }
+  }
+  cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (val[0][0] + val[1][0]) });
+  //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+  cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+
+  reuseTemporal += inc;
+  if (wpi->sample.reuseType == REUSE_TEMPORAL){
+    cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+  } else {
+    cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = inc});
+    //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+  }
+  cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
+  cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+#endif
+  return ALREADY_DISABLED;
+}
+
+#if 0
+static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+	fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
+	trap_count++;
+#if 0  // jqswang:TODO, how to handle it?
+  if(!wt->pc) {
+    // if the ip is 0, let's drop the WP
+    //return RETAIN_WP;
+    return ALREADY_DISABLED;
+  }
+#endif //jqswang
+
+  int reuse_type = REUSE_NONE;
+  bool l3_inc_attribute = false;
+  bool time_distance_attribute = false;
+
+  uint64_t numDiffSamples = 0;
+  bool comm_reuse = false;
+  int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
+
+  bool source_code_line_attribution = false;
+  uint64_t attributed_rd = 0;
+  uint64_t attributed_inc = 0;
+  uint64_t l3_attributed_rd = 0;
+  uint64_t l3_attributed_inc = 0;
+  uint64_t time_distance;
+  int me = TD_GET(core_profile_trace_data.id);
+  int monitored_tid = globalReuseWPs.table[wt->location].monitored_tid; 
+
+  if(me == monitored_tid) {
+    double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+    numDiffSamples = GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+    double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+    uint64_t inc = numDiffSamples * inc_scale;
+    uint64_t trapTime = rdtsc();
+    // before
+    bool handle_trap = false;
+    bool post_inc_flag = false;
+    uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
+    if((theCounter & 1) == 0) {
+      if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+        if(globalReuseWPs.table[wt->location].active) {
+
+          //globalReuseWPs.table[wt->location].trap_just_happened = true;
+          if(profiling_mode == L1 || profiling_mode == MIXED)
+            numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+          //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+          globalReuseWPs.table[wt->location].active = false;
+          handle_trap = true;
+  	  fprintf(stderr, "critical region is entered at trap\n");	  
+        }
+        if(globalReuseWPs.table[wt->location].sharedActive) {
+          post_inc_flag = true;	
+        }
+        globalReuseWPs.table[wt->location].counter++;
+      }
+    }
+    // after
+
+    if(handle_trap) {
+      uint64_t rd = 0;
+      uint64_t val[2][3];
+
+      //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+        assert(linux_perf_read_event_counter_l1_amd( amd_reuse_distance_event, val[0]) >= 0); 
+        //val[0][1] = 0; 
+        //wpi->sample.reuseDistance[0][1] = 0;
+
+        for(int j=0; j < 3; j++){
+          if (val[0][j] >= wpi->sample.reuseDistance[0][j]){
+            val[0][j] -= wpi->sample.reuseDistance[0][j];
+          }
+          /*else { //Something wrong happens here and the record is not reliable. Drop it! 
+            return ALREADY_DISABLED;
+          }*/
+        }
+      //}
+
+      //for(int i=0; i < MIN(2, reuse_distance_num_events); i++){
+        //fprintf(stderr, "before assert %d\n", i);
+        //assert(val[0][1] == 0 && val[0][2] == 0); // no counter multiplexing allowed
+        //fprintf(stderr, "after assert %d\n", i);
+        rd += val[0][0];
+      //}
+      // Report a reuse
+      // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp
+
+      //fprintf(stderr, "before time_distance\n");
+      time_distance = rdtsc() - wpi->startTime;
+      fprintf(stderr, "private reuse %ld is detected me: %d, monitored_tid: %d\n", rd, me, monitored_tid);
+      ReuseAddDistance(rd, inc);
+      reuse_type = wpi->sample.reuseType;
+      attributed_rd = rd;
+      attributed_inc = inc;	
+      source_code_line_attribution = true;
+    }
+    if(post_inc_flag) {
+      globalReuseWPs.table[wt->location].inc = inc;
+      //fprintf(stderr, "inc is posted, sharedReuse: %d, published_rd: %d\n", globalReuseWPs.table[wt->location].sharedActive, globalReuseWPs.table[wt->location].rd);
+    } else if(globalReuseWPs.table[wt->location].rd > 0) {
+      SharedReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+      if(globalReuseWPs.table[wt->location].is_rar == false) {
+        CommunicationReuseAddDistance(globalReuseWPs.table[wt->location].rd, inc);
+        comm_reuse = true;
+      }
+      if(profiling_mode == L3)
+        numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+      l3_attributed_inc = inc;
+      l3_attributed_rd = globalReuseWPs.table[wt->location].rd;
+      l3_inc_attribute = true;	
+    }
+    globalReuseWPs.table[wt->location].self_trap = false;
+    theCounter = MonitoredNode.counter;
+    if((theCounter & 1) == 0) {
+      if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
+        if(globalReuseWPs.table[wt->location].time == MonitoredNode.timestamp) {
+          MonitoredNode.self_trap = false;
+          MonitoredNode.trap_timestamp = trapTime;
+        }
+        MonitoredNode.counter++;
+      }
+    }
+  } else {
+    if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/ wpi->sample.type == WP_WRITE) {
+      uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
+      if((theCounter & 1) == 0) {
+        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+          if(globalReuseWPs.table[wt->location].active) {
+
+            //globalReuseWPs.table[wt->location].trap_just_happened = true;
+            if(profiling_mode == L1 || profiling_mode == MIXED)
+              numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+            //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+            //fprintf(stderr, "L1 invalidation is detected in the same L3\n");
+            globalReuseWPs.table[wt->location].active = false;
+          }
+          globalReuseWPs.table[wt->location].counter++;
+        }
+      }
+    }
+
+    if(profiling_mode == L3 || profiling_mode == MIXED) {
+      int affinity_l3 = 0;
+      int my_core = sched_getcpu();
+      if(l3_count > 1)
+        affinity_l3 = thread_to_l3_mapping[my_core];
+      bool post_rd_flag = false;
+      bool handle_trap = false;
+      uint64_t theCounter = globalReuseWPs.table[wt->location].counter;
+      if((theCounter & 1) == 0) {
+        if(__sync_bool_compare_and_swap(&globalReuseWPs.table[wt->location].counter, theCounter, theCounter+1)) {
+          if(globalReuseWPs.table[wt->location].sharedActive) {
+
+            //globalReuseWPs.table[wt->location].trap_just_happened = true;
+            //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+            if((l3_count == 1) || (wpi->sample.L3Id == affinity_l3)) {
+              globalReuseWPs.table[wt->location].sharedActive = false;
+              handle_trap = true;
+              if(globalReuseWPs.table[wt->location].inc == 0) {
+                post_rd_flag = true;
+              }
+              /*if(wpi->sample.type == WP_WRITE)
+                fprintf(stderr, "L1 invalidation is detected in the same L3\n");*/
+            } else if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/wpi->sample.type == WP_WRITE) {
+              //fprintf(stderr, "invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
+              globalReuseWPs.table[wt->location].sharedActive = false;
+              //fprintf(stderr, "L3 invalidation is detected\n");
+            }
+
+          }
+          globalReuseWPs.table[wt->location].counter++;
+        }
+      }
+
+      if(handle_trap) {
+        double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+        numDiffSamples = hpcrun_id2metric(wpi->sample.sampledMetricId)->period; //GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+        double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+        uint64_t inc = numDiffSamples * inc_scale;
+        uint64_t rd = 0;
+        uint64_t val[2][3];
+        //uint64_t global_val[3];
+        for(int i=0; i < 2; i++) {
+          for(int j=0; j < 3; j++) {
+            val[i][j] = 0;
+            //global_val[i] = 0;
+          }
+        }
+
+        //fprintf(stderr, "a trap happens in the same L3\n");
+        // fprintf(stderr, "a trap due to load use happens in thread %d mapped to core %d located in L3 %d armed by thread %d in L3 %d\n", me, my_core, affinity_l3, globalReuseWPs.table[wt->location].tid, wpi->sample.L3Id);
+        // before
+        int cur_global_thread_count = global_thread_count;
+        for(int i = 0; i < cur_global_thread_count; i++) {
+          if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
+            //for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
+              uint64_t val1[3];
+              linux_perf_read_event_counter_shared( amd_reuse_distance_event, val1, i/*locality_vector[affinity_l3][i+1]*/);
+              for(int k=0; k < 3; k++) {
+                val[0][k] += val1[k];
+              }
+            //}
+          }
+        }
+        // after	
+
+        // before
+        //for(int i=0; i < 2; i++) {
+          if(val[0][0] >= wpi->sample.sharedReuseDistance[0][0]) {
+
+            val[0][0] -= wpi->sample.sharedReuseDistance[0][0];
+          }
+          rd += val[0][0];
+        //}
+
+        if (wpi->sample.reuseType == REUSE_TEMPORAL)
+          reuse_type = L3_REUSE_TEMPORAL;
+        else if (wpi->sample.reuseType == REUSE_SPATIAL)
+          reuse_type = L3_REUSE_SPATIAL;	
+
+        if(post_rd_flag) {
+          globalReuseWPs.table[wt->location].rd = rd;
+          if(wpi->sample.accessType == LOAD /*&& wt->accessType == LOAD*/)	
+            globalReuseWPs.table[wt->location].is_rar = true;
+        } else if(globalReuseWPs.table[wt->location].inc > 0) {
+          SharedReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+          if(wpi->sample.accessType != LOAD /*|| wt->accessType != LOAD*/) {
+            CommunicationReuseAddDistance(rd, globalReuseWPs.table[wt->location].inc);
+            comm_reuse = true;
+          }
+          if(profiling_mode == L3)
+            numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
+          //shared_reuse_counter++;
+          l3_attributed_inc = globalReuseWPs.table[wt->location].inc;
+          l3_attributed_rd = rd;
+          l3_inc_attribute = true;	
+        }
+        //attributed_inc = inc;
+        source_code_line_attribution = true;
+        attributed_rd = rd; //rd_with_store;
+        time_distance = rdtsc() - wpi->startTime;
+        // after
+      }
+      // after
+    }
+
+  }
+#if 0
+  cct_node_t *reusePairNode;
+  cct_node_t *commReusePairNode;
+  if (reuse_type == REUSE_TEMPORAL){
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
+    }
+  }
+  else if (reuse_type == REUSE_SPATIAL) { // REUSE_SPATIAL
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_SPATIALLY_REUSED_BY][joinNodeIdx]);
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+    }
+  } else if (reuse_type == L3_REUSE_TEMPORAL){
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, l3_temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    sample_val_t v1 = hpcrun_sample_callpath(wt->ctxt, comm_temporal_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *commReuseNode = v1.sample_node;
+    //fprintf(stderr, "reuse of REUSE_TEMPORAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_L3_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+      if (comm_reuse) {
+        commReusePairNode = getConcatenatedNode(commReuseNode, wpi->sample.node, joinNodes[E_COMM_TEMPORALLY_REUSED_BY][joinNodeIdx]);
+      }
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_L3_TEMPORALLY_REUSED_FROM][joinNodeIdx]);
+      if (comm_reuse) {
+        commReusePairNode = getConcatenatedNode(wpi->sample.node, commReuseNode, joinNodes[E_COMM_TEMPORALLY_REUSED_FROM][joinNodeIdx]); 
+      }
+    }
+    globalReuseWPs.table[wt->location].reusePairNode = reusePairNode;
+    globalReuseWPs.table[wt->location].commReusePairNode = commReusePairNode;
+  }
+  else if (reuse_type == L3_REUSE_SPATIAL) { // REUSE_SPATIAL
+    sample_val_t v = hpcrun_sample_callpath(wt->ctxt, l3_spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *reuseNode = v.sample_node;
+    sample_val_t v1 = hpcrun_sample_callpath(wt->ctxt, comm_spatial_reuse_metric_id, SAMPLE_NO_INC, 0, 1, NULL);
+    cct_node_t *commReuseNode = v1.sample_node;
+    //fprintf(stderr, "reuse of REUSE_SPATIAL is detected\n");
+    if (reuse_concatenate_use_reuse){
+      reusePairNode = getConcatenatedNode(reuseNode, wpi->sample.node, joinNodes[E_L3_SPATIALLY_REUSED_BY][joinNodeIdx]);
+      if(comm_reuse) {
+        commReusePairNode = getConcatenatedNode(commReuseNode, wpi->sample.node, joinNodes[E_COMM_SPATIALLY_REUSED_BY][joinNodeIdx]);
+      }
+    }else{
+      reusePairNode = getConcatenatedNode(wpi->sample.node, reuseNode, joinNodes[E_L3_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+      if(comm_reuse) {
+        commReusePairNode = getConcatenatedNode(wpi->sample.node, commReuseNode, joinNodes[E_COMM_SPATIALLY_REUSED_FROM][joinNodeIdx]);
+      }
+    }
+    globalReuseWPs.table[wt->location].reusePairNode = reusePairNode;
+    globalReuseWPs.table[wt->location].commReusePairNode = commReusePairNode;
+  }
+  if ((reuse_type == REUSE_TEMPORAL) || (reuse_type == REUSE_SPATIAL)) {
+    cct_metric_data_increment(reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (attributed_rd) });
+    //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+    cct_metric_data_increment(reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+  } else if ((reuse_type == L3_REUSE_TEMPORAL) || (reuse_type == L3_REUSE_SPATIAL)) {
+    cct_metric_data_increment(l3_reuse_memory_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = (attributed_rd) });
+    //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+    cct_metric_data_increment(l3_reuse_memory_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+    if(comm_reuse) {
+      cct_metric_data_increment(comm_reuse_memory_distance_metric_id, commReusePairNode, (cct_metric_data_t){.i = (l3_attributed_rd) });
+      //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+      cct_metric_data_increment(comm_reuse_memory_distance_count_metric_id, commReusePairNode, (cct_metric_data_t){.i = 1});
+    }
+  }
+
+  reuseTemporal += attributed_inc;
+  if (reuse_type == REUSE_TEMPORAL){
+    cct_metric_data_increment(temporal_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = attributed_inc});
+    //fprintf(stderr, "reuse distance temporal: %ld\n", inc);
+  } else if (reuse_type == REUSE_SPATIAL) {
+    cct_metric_data_increment(spatial_reuse_metric_id, reusePairNode, (cct_metric_data_t){.i = attributed_inc});
+    //fprintf(stderr, "reuse distance spatial: %ld\n", inc);
+  } else if ((wpi->sample.reuseType == REUSE_TEMPORAL) && l3_inc_attribute) {
+    cct_metric_data_increment(l3_temporal_reuse_metric_id, globalReuseWPs.table[wt->location].reusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+    if(comm_reuse) {
+      cct_metric_data_increment(comm_temporal_reuse_metric_id, globalReuseWPs.table[wt->location].commReusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+    }
+  } else if ((wpi->sample.reuseType == REUSE_SPATIAL) && l3_inc_attribute) {
+    cct_metric_data_increment(l3_spatial_reuse_metric_id, globalReuseWPs.table[wt->location].reusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+    if(comm_reuse) {
+      cct_metric_data_increment(comm_spatial_reuse_metric_id, globalReuseWPs.table[wt->location].commReusePairNode, (cct_metric_data_t){.i = l3_attributed_inc});
+    }
+  }
+  cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
+  cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
+#endif
 	return ALREADY_DISABLED;
 }
+#endif
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
@@ -4978,6 +5427,536 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 fprintf(stderr, "owner tid is the same as monitored tid on sample\n");
                                 }*/ 
                             lastTime = curTime;
+                          }
+                          break;
+    case WP_AMD_REUSE:{
+			   //fprintf(stderr, "WP_REUSE in OnSample\n");
+#ifdef REUSE_HISTO
+#else
+                     if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
+#endif
+                     long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
+                     accessedIns += metricThreshold;
+                     SampleData_t sd= {
+                       .node = node,
+                       .type=WP_RW,  //jqswang: Setting it to WP_READ causes segment fault
+                       .accessType=accessType,
+                       //.wpLength = accessLen, // set later
+                       .accessLength= accessLen,
+                       .sampledMetricId=sampledMetricId,
+                       .isSamplePointAccurate = isSamplePointAccurate,
+                       .preWPAction=theWPConfig->preWPAction,
+                       .isBackTrace = false,
+                     };
+#ifdef REUSE_HISTO
+                     sd.wpLength = 1;
+#else
+                     sd.wpLength = GetFloorWPLength(accessLen);
+                     sd.type = WP_RW;//reuse_trap_type;
+                     //fprintf(stderr, "here1\n");
+#endif
+                     bool isProfileSpatial;
+                     if (reuse_profile_type == REUSE_TEMPORAL){
+                       isProfileSpatial = false;
+                     } else if (reuse_profile_type == REUSE_SPATIAL){
+                       isProfileSpatial = true;
+                     } else {
+                       //fprintf(stderr, "50 50\n");
+                       isProfileSpatial = (rdtsc() & 1);
+                     }
+
+                     //fprintf(stderr, "here2 data_addr: %lx\n", (uint64_t) data_addr);
+                     if (isProfileSpatial) {// detect spatial reuse
+                       int wpSizes[] = {8, 4, 2, 1};
+                       FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
+                       int numFSLocs = 0;
+                       GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                       if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
+                         sd.va = data_addr;
+                         sd.reuseType = REUSE_TEMPORAL;
+                         //fprintf(stderr, "REUSE_TEMPORAL is activated\n");
+                       } else {
+                         int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
+                         sd.va = (void *)falseSharingLocs[idx].va;
+                         sd.reuseType = REUSE_SPATIAL;
+                         //fprintf(stderr, "REUSE_SPATIAL is activated\n");
+#if 0
+                         int offset = ((uint64_t)data_addr - aligned_pc) / accessLen;
+                         int bound = CACHE_LINE_SZ / accessLen;
+                         int r = rdtsc() % bound;
+                         if (r == offset) r = (r+1) % bound;
+                         sd.va = aligned_pc + (r * accessLen);
+#endif
+                       }
+                     } else {
+                       sd.va = data_addr;
+                       sd.reuseType = REUSE_TEMPORAL;
+                       //fprintf/(stderr, "REUSE_TEMPORAL is activated\n");
+                     }
+                     //fprintf(stderr, "here3\n");
+                     if (!IsValidAddress(sd.va, precisePC)) {
+                       goto ErrExit; // incorrect access type
+                     }
+
+                     //fprintf(stderr, "here4\n");
+                     // Read the reuse distance event counters
+                     // We assume the reading event is load, store or both.
+                     //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+                       uint64_t val[3];
+                       //fprintf(stderr, "before assert\n");
+                       assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
+                       //fprintf(stderr, "after assert\n");
+                       //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
+                       //fprintf(stderr, "USE %lx -- ", val[0]);
+                       memcpy(sd.reuseDistance[0], val, sizeof(uint64_t)*3);;
+                     //}
+                     //fprintf(stderr, "here5\n");
+                     //fprintf(stderr, "\n");
+                     // register the watchpoint
+                     //fprintf(stderr, "watchpoints are about to be armed from OnSample\n");
+                     SubscribeWatchpoint(&sd, OVERWRITE, false );
+                     //fprintf(stderr, "here6\n");
+
+#if 0
+			    sample_count++;
+                            int me = TD_GET(core_profile_trace_data.id);
+
+                            int my_core = sched_getcpu();
+                            /*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+                              fprintf(stderr, "l2 miss sample happens1\n");*/	
+                            //fprintf(stderr, "thread %d is sampled in core %d\n", me, sched_getcpu());
+                            fprintf(stderr, "sample type: %s in thread %d, sample_count: %d as WP_AMD_REUSE\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
+                            int64_t storeCurTime = 0;
+                            if(accessType == STORE || accessType == LOAD_AND_STORE) {
+                              storeCurTime = curTime;
+                              storeOlderTime = storeLastTime;
+                              storeLastTime = storeCurTime;
+                            }
+
+#ifdef REUSE_HISTO
+#else
+                            if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
+#endif
+                            long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
+                            accessedIns += metricThreshold;
+                            SampleData_t sd= {
+                              .node = node,
+                              //.type=WP_RW,  //jqswang: Setting it to WP_READ causes segment fault
+                              .accessType=accessType,
+                              //.wpLength = accessLen, // set later
+                              .accessLength= accessLen,
+                              .sampledMetricId=sampledMetricId,
+                              .isSamplePointAccurate = isSamplePointAccurate,
+                              .preWPAction=theWPConfig->preWPAction,
+                              .first_accessing_tid =me,
+                              .isBackTrace = false,
+                              .L3StoreUse = false
+                            };
+#ifdef REUSE_HISTO
+                            //fprintf(stderr, "WP_REUSETRACKER in OnSample\n");
+                            sd.wpLength = 1;
+#else
+                            sd.wpLength = GetFloorWPLength(accessLen);
+                            sd.type = WP_RW;//reuse_trap_type;
+                            //fprintf(stderr, "here1\n");
+#endif
+                            if (reuse_profile_type == REUSE_SPATIAL){
+                              sd.reuseType = REUSE_SPATIAL;
+                            } else {
+                              sd.reuseType = REUSE_TEMPORAL;
+                            }
+
+                            //fprintf(stderr, "here3\n");
+                            if (!IsValidAddress(data_addr, precisePC)) {
+                              goto ErrExit; // incorrect access type
+                            }
+
+                            /*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
+                              fprintf(stderr, "l2 miss sample happens2\n");*/
+
+                            //fprintf(stderr, "sample type: %s\n", hpcrun_id2metric(sampledMetricId)->name);
+                            //fprintf(stderr, "here4\n");
+                            // Read the reuse distance event counters
+                            // We assume the reading event is load, store or both.
+
+                            int sType = -1;
+
+                            if (mmap_data->store) {
+                            	sType = ALL_STORE;
+                            	store_count++;
+                            	//fprintf(stderr, "store sample is detected, store: %d\n", mmap_data->store);
+                            }
+                            else if(mmap_data->load) {
+                            	sType = ALL_LOAD;
+                            	load_count++;
+                                        //fprintf(stderr, "load sample is detected, load: %d\n", mmap_data->load);
+                            }                            
+			    //fprintf(stderr, "threads are selected here\n");
+                            //fprintf(stderr, "sampledMetricId: %d\n", sampledMetricId);
+                            prev_sample_timestamp = last_sample_timestamp;
+                            last_sample_timestamp = curTime;
+                            int location = -1;
+                            bool steal_wp_slot = false;
+
+                            if(used_wp_count < MIN(global_thread_count, wpConfig.maxWP)) {
+                              uint64_t theCounter = globalReuseWPs.counter;
+                              if((theCounter & 1) == 0) {
+                                if(__sync_bool_compare_and_swap(&globalReuseWPs.counter, theCounter, theCounter+1)) {
+                                  // before
+                                  for(int j = 0; j < wpConfig.maxWP; j++) {
+                                    if(me == globalWPIsUsers[j]) {
+                                      location = j;
+                                      break;
+                                    }
+                                  }
+                                  if (location == -1) {
+                                    for(int j = 0; j < wpConfig.maxWP; j++) {
+                                      if(globalWPIsUsers[j] == -1) {
+                                        used_wp_count++;
+                                        location = j;
+                                        steal_wp_slot = true;
+                                        globalWPIsUsers[j] = me;
+                                        break; 
+                                      }
+                                    }
+                                  }
+                                  // after       	
+                                  globalReuseWPs.counter++;
+                                }
+                              } 
+                            }
+
+                            if(steal_wp_slot) {
+
+                              if(max_used_wp_count < used_wp_count)
+                                max_used_wp_count = used_wp_count;
+                              globalReuseWPs.table[location].tid = me;
+                              wait_threshold = sample_count + CHANGE_THRESHOLD;
+                              // some code
+                              /*if (globalReuseWPs.table[location].residueSampleCountInPrevThread > 0)
+                                {
+                                uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+                              //fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
+                              if(sampleCountDiff > globalReuseWPs.table[location].residueSampleCountInPrevThread) {
+                              //fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d lala\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
+                              UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevThread);
+                              //GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
+                              }
+                              }*/
+                            } 
+
+                            int item_not_found_flag = 0;
+                            sd.sampleTime=curTime;
+
+                            int monitored_location = -1;
+
+                            for(int j = 0; j < used_wp_count; j++) {
+                              if(me == globalReuseWPs.table[j].monitored_tid) {
+                                monitored_location = j;
+                                break;
+                              }
+                            }
+//#if 0
+                            if(monitored_location != -1 && (profiling_mode == L3 || profiling_mode == MIXED)) {
+                              if(!globalReuseWPs.table[monitored_location].sharedActive && globalReuseWPs.table[monitored_location].self_trap && (globalReuseWPs.table[monitored_location].rd > 0)) {
+                                WatchPointInfo_t * wpi = getWPI(me, monitored_location);
+                                if(wpi && wpi->sample.node) {
+                                  double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
+                                  uint64_t numDiffSamples = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, myProportion); //hpcrun_id2metric(sampledMetricId)->period;
+                                  double inc_scale = dynamic_global_thread_count / (double) max_used_wp_count;
+                                  uint64_t inc = numDiffSamples * inc_scale;
+                                  bool comm_reuse = false;
+                                  //uint64_t theCounter = shared_reuse_counter;
+                                  //if((theCounter & 1) == 0) {
+                                  //if(__sync_bool_compare_and_swap(&shared_reuse_counter, theCounter, theCounter+1)) {
+                                  SharedReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+                                  if(globalReuseWPs.table[monitored_location].is_rar == false) {
+                                    CommunicationReuseAddDistance(globalReuseWPs.table[monitored_location].rd, inc);
+                                    comm_reuse = true;
+                                  }
+                                  if(profiling_mode == L3)
+                                    numWatchpointArmingAttempt[monitored_location] = SAMPLES_POST_FULL_RESET_VAL;
+                                  cct_metric_data_increment(l3_reuse_memory_distance_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = (globalReuseWPs.table[monitored_location].rd) });
+                                  //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+                                  cct_metric_data_increment(l3_reuse_memory_distance_count_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = 1});
+                                  if(comm_reuse) {
+                                    cct_metric_data_increment(comm_reuse_memory_distance_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = (globalReuseWPs.table[monitored_location].rd) });
+                                    //fprintf(stderr, "reuse distance: %ld\n", (val[0][0] + val[1][0]));
+                                    cct_metric_data_increment(comm_reuse_memory_distance_count_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = 1});
+                                  }
+                                  if (reuse_profile_type == REUSE_TEMPORAL) {
+                                    cct_metric_data_increment(l3_temporal_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+                                    if(comm_reuse) {
+                                      cct_metric_data_increment(comm_temporal_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+                                    }
+                                  } else if (reuse_profile_type == REUSE_SPATIAL) {
+                                    cct_metric_data_increment(l3_spatial_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+                                    if(comm_reuse) {
+                                      cct_metric_data_increment(comm_spatial_reuse_metric_id, globalReuseWPs.table[monitored_location].reusePairNode, (cct_metric_data_t){.i = inc});
+                                    }	
+                                  }
+                                  //fprintf(stderr, "histogram is updated by %ld, rd: %ld, me: %d, monitored_tid: %d\n", inc, globalReuseWPs.table[monitored_location].rd, me, globalReuseWPs.table[monitored_location].monitored_tid);
+                                  globalReuseWPs.table[monitored_location].rd = 0;
+                                  //shared_reuse_counter++;
+                                  //}
+                                  //}
+                                }
+                                // update shared reuse histogram
+                              }
+                            } 
+
+                            location = -1;
+
+                            for(int j = 0; j < used_wp_count; j++) {
+                              if(me == globalWPIsUsers[j]) {
+                                location = j;
+                                break;
+                              }
+                            }
+
+                            if(location ==  -1) {
+                              uint64_t timestamp = MonitoredNode.timestamp;
+                              if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
+                                //reset context scaling count in monitored_node
+                                //fprintf(stderr, "inc is reset because of approximation, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld, last_trapped_timestamp: %ld, self_trap: %d\n", location, last_monitored_wp_timestamp, timestamp, last_trapped_timestamp, MonitoredNode.self_trap);
+                                GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
+                                last_trapped_timestamp = timestamp;
+                              }
+                              else if(last_monitored_wp_timestamp != timestamp) {
+                                //fprintf(stderr, "monitored_node is replaced, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld\n", location, last_monitored_wp_timestamp, timestamp);
+                                monitored_node = node;
+                                monitored_metric = MonitoredNode.metricId;
+                                last_monitored_wp_timestamp = timestamp;	
+                              }
+                            }	      
+
+                            /*if(globalReuseWPs.table[location].tid == me) {
+                              if (sample_count > wait_threshold) {
+                              globalWPIsUsers[location] = -1;
+                              globalReuseWPs.table[location].tid = -1;
+                            //uint64_t sampleCountDiff = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+                            //globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
+                            //fprintf(stderr, "residueSampleCountInPrevThread is assigned with %ld in thread %d\n", sampleCountDiff, me);
+                            //wait_threshold = sample_count + CHANGE_THRESHOLD;
+                            used_wp_count--;
+                            //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold); 
+                            }
+                            numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;     
+                            //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
+                            }*/
+                            if ((location != -1) && (sample_count > wait_threshold)) {
+                              globalWPIsUsers[location] = -1;
+                              globalReuseWPs.table[location].tid = -1; 
+                              //globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
+                              //fprintf(stderr, "residueSampleCountInPrevThread is %ld when thread %d is releasing a global WP\n", globalReuseWPs.table[location].residueSampleCountInPrevThread, me);
+                              if(MonitoredNode.tid == me)
+                                MonitoredNode.tid = -1;
+                              location = -1;
+                              used_wp_count--;                                                                     
+                            }
+
+
+                            //fprintf(stderr, "location: %d, thread: %d\n", location, me);
+                            if((location != -1) && ArmWatchPointProb(&location, curTime, me)) {
+
+                              uint64_t theCounter = MonitoredNode.counter;
+                              if((theCounter & 1) == 0) {
+                                if(__sync_bool_compare_and_swap(&MonitoredNode.counter, theCounter, theCounter+1)) {
+
+                                  if((MonitoredNode.tid == -1) || ((MonitoredNode.self_trap == true) && (MonitoredNode.tid == me)) || ((MonitoredNode.self_trap == false) && ((curTime - MonitoredNode.trap_timestamp) >= (2 * (curTime - lastTime))))) {
+                                    //fprintf(stderr, "published monitored node is changed, MonitoredNode.tid: %d, self trap: %d, me: %d, time_gap: %ld, expiry period: %ld\n", MonitoredNode.tid, MonitoredNode.self_trap, me, (curTime - MonitoredNode.trap_timestamp), (2 * (curTime - lastTime)));
+                                    MonitoredNode.timestamp = curTime;
+                                    MonitoredNode.trap_timestamp = 0;
+                                    MonitoredNode.metricId = sampledMetricId;
+                                    MonitoredNode.self_trap = true;
+                                    MonitoredNode.tid = me;
+                                  }
+                                  MonitoredNode.counter++;
+                                }
+                              }	
+
+                              // before
+                              int affinity_l3;
+                              int affinity_l2;
+                              if(l2_count > 1) {
+                                affinity_l3 = thread_to_l3_mapping[my_core]; 
+                                sd.L3Id = affinity_l3;
+                                affinity_l2 = thread_to_l2_mapping[my_core];
+                                sd.L2Id = affinity_l2;
+                              }
+
+                              for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+                                for(int j=0; j < 3; j++) {
+                                  sd.sharedReuseDistance[0][j] = 0;
+                                }
+                              }
+
+                              int cur_global_thread_count = global_thread_count;
+                              if(profiling_mode == L3 || profiling_mode == MIXED) {
+                                for(int i = 0; i < cur_global_thread_count; i++) {
+                                  if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
+#if 0
+                                    for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
+                                      uint64_t val[3];  
+                                      linux_perf_read_event_counter_shared( reuse_distance_events[j], val, i/*locality_vector[affinity_l3][i+1]*/);
+                                      for(int k=0; k < 3; k++) {
+                                        sd.sharedReuseDistance[j][k] += val[k];
+                                      }
+                                    }
+#endif
+				    uint64_t val[3];  
+                                    linux_perf_read_event_counter_shared( amd_reuse_distance_event, val, i/*locality_vector[affinity_l3][i+1]*/);
+                                    for(int k=0; k < 3; k++) {
+                                    	sd.sharedReuseDistance[0][k] += val[k];
+                                    }
+                                  }
+                                }
+                              }
+
+
+                              // after
+                              int indices[cur_global_thread_count];
+                              for (int i = 0; i < cur_global_thread_count; i++) {
+                                indices[i] = i;
+                              }
+
+                              int wp_index = cur_global_thread_count;
+                              while (wp_index) { 
+                                int index = rdtsc() % wp_index;
+                                wp_index--;
+                                int swap = indices[index];
+                                indices[index] = indices[wp_index];
+                                indices[wp_index] = swap;
+                              }
+
+
+                              //uint64_t pmu_counter = 0;
+                              sd.L1Sample = true;
+                              //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+                                uint64_t val[3];
+//#if 0
+                                //if(sType == ALL_LOAD || sType == ALL_STORE)
+                                assert(linux_perf_read_event_counter_l1_amd( amd_reuse_distance_event, val) >= 0);
+                                //else
+                                  //assert(linux_perf_read_event_counter_l1( amd_reuse_distance_event, val, false) >= 0);
+//#endif
+                                // this
+				fprintf(stderr, "val[0]: %ld val[1]: %ld in thread %d\n", val[0], val[1], me);
+                                //val[1] = 0;
+                                memcpy(sd.reuseDistance[0], val, sizeof(uint64_t)*3);
+                                //pmu_counter += val[0];
+                              //}	
+
+                              FalseSharingLocs falseSharingLocs[CACHE_LINE_SZ];
+                              int numFSLocs = 0;
+                              if (reuse_profile_type == REUSE_SPATIAL){
+                                int wpSizes[] = {8, 4, 2, 1};
+                                GetAllFalseSharingLocations((size_t)data_addr, accessLen, ALIGN_TO_CACHE_LINE((size_t)(data_addr)), CACHE_LINE_SZ, wpSizes, 0 /*curWPSizeIdx*/ , 4 /*totalWPSizes*/, falseSharingLocs, &numFSLocs);
+                              }
+
+                              //void * original_va = sd.va;
+                              int original_wpLength = sd.wpLength;
+//#if 0
+                              for(int i = 0; i < cur_global_thread_count; i++) {
+                                /*if(indices[i] == me) {
+                                //if(wpConfig.cachelineInvalidation) {
+                                sd.va = original_va;
+                                sd.wpLength = original_wpLength;
+                                //fprintf(stderr, "address: %lx, length: %ld\n", sd.va, sd.wpLength);
+                                //}
+                                sd.type = WP_RW;
+                                } else {
+                                if(wpConfig.cachelineInvalidation) {
+                                int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                sd.wpLength = MAX_WP_LENGTH;
+                                //fprintf(stderr, "This region is executed\n");
+                                }
+                                sd.type = WP_WRITE;
+                                }
+                                SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);*/
+                                int core_id;
+                                if(mapping_size > 0) {
+                                  core_id = mapping_vector[indices[i] % mapping_size];	
+                                }
+                                if((mapping_size == 0) || (thread_to_l3_mapping[core_id] == affinity_l3)) {
+                                  //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect reuse\n", indices[i], me);
+                                  if(indices[i] == me || profiling_mode == L3 || profiling_mode == MIXED) { 
+                                    if (reuse_profile_type == REUSE_SPATIAL){ 
+                                      if (numFSLocs == 0) { // No location is found. It is probably due to the access length already occupies one cache line. So we just monitor the temporal reuse instead.
+                                        sd.va = data_addr;
+                                        sd.reuseType = REUSE_TEMPORAL;
+                                        sd.wpLength = 1;
+                                        //fprintf(stderr, "REUSE_TEMPORAL is activated\n");
+                                      } else {
+                                        //fprintf(stderr, "false sharing is searched\n");
+                                        int idx = rdtsc() % numFSLocs; //randomly choose one location to monitor
+                                        sd.va = (void *)falseSharingLocs[idx].va;
+                                        sd.wpLength = falseSharingLocs[idx].wpLen;
+                                        sd.reuseType = REUSE_SPATIAL;
+                                      }
+                                    } else {
+
+                                      sd.reuseType = REUSE_TEMPORAL;
+                                      sd.va = data_addr;
+                                      sd.wpLength = 1;
+                                      //fprintf(stderr, "sample tries to detect temporal reuse in L3\n");
+                                    }
+                                    if(indices[i] == me || profiling_mode == L3) {
+                                      sd.type = WP_RW;
+                                    } else if (profiling_mode == MIXED) {
+                                      if((rdtsc() % 100) >= 50) {
+                                        sd.type = WP_WRITE;
+                                      } else {
+                                        sd.type = WP_RW;
+                                      }
+                                    }
+
+                                  } else if (profiling_mode == L1) {
+                                    if(wpConfig.cachelineInvalidation) {
+                                      int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                      int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                      sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                      sd.wpLength = MAX_WP_LENGTH;
+                                      //fprintf(stderr, "This region is executed\n");
+                                      //fprintf(stderr, "sample tries to detect L1 cache line invalidation\n");
+                                    } else {
+                                      //fprintf(stderr, "sample tries to detect true sharing\n");
+                                      sd.va = data_addr;
+                                      sd.wpLength = MAX_WP_LENGTH;
+                                    }
+                                    sd.type = WP_WRITE;
+                                  } 
+                                } else {
+                                  //fprintf(stderr, "a wp in thread %d is armed by thread %d to detect invalidation\n", indices[i], me);
+                                  if(wpConfig.cachelineInvalidation) {
+                                    int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
+                                    int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
+                                    sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
+                                    sd.wpLength = MAX_WP_LENGTH;
+                                    //fprintf(stderr, "This region is executed\n");
+                                    //fprintf(stderr, "sample tries to detect L3 cache line invalidation\n");
+                                  } else {
+                                    //fprintf(stderr, "sample tries to detect true sharing\n");
+                                    sd.va = data_addr;
+                                    sd.wpLength = MAX_WP_LENGTH;
+                                  }
+                                  sd.type = WP_WRITE;
+                                }
+                                //fprintf(stderr, "a wp is armed in thread %d\n",me);
+                                SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
+                              }
+//#endif
+                            } /*else {
+                                if(globalReuseWPs.table[wt->location].monitored_tid != globalReuseWPs.table[wt->location].tid)
+                                fprintf(stderr, "owner tid is different from monitored tid on sample\n");
+                                else
+                                fprintf(stderr, "owner tid is the same as monitored tid on sample\n");
+                                }*/ 
+//#endif
+                            lastTime = curTime;
+#endif
                           }
                           break;
     case WP_SPATIAL_REUSE:{
