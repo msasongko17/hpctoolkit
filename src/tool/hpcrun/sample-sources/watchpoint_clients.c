@@ -2908,9 +2908,9 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
         val[0][j] -= wpi->sample.reuseDistance[0][j];
         //fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
       }
-      /*else { //Something wrong happens here and the record is not reliable. Drop it!
+      else { //Something wrong happens here and the record is not reliable. Drop it!
         return ALREADY_DISABLED;
-      }*/
+      }
     }
   //}
   // Report a reuse
