@@ -67,6 +67,8 @@ __thread long number_of_caught_read_write_traps = 0;
 __thread long number_of_bulletin_board_updates_before = 0;
 __thread long number_of_bulletin_board_updates = 0;
 __thread long number_of_residues = 0;
+//extern __thread int mem_access_sample;
+//extern __thread int sample_count; 
 // after
 
 int consecutive_access_count_array[50];
@@ -105,6 +107,39 @@ double waw_cache_line_transfer_millions;
 double waw_cache_line_transfer_gbytes;
 
 // comdetective stats end
+
+void adjust_communication_volume(double scale_ratio) {
+	//double scale_ratio = mem_access_sample / sample_count;
+          //fprintf(stderr, "scale_ratio: %0.2lf\n", scale_ratio);
+	  //printf("as_matrix_size: %d\n", as_matrix_size);
+          for(int i = 0; i <= as_matrix_size; i++) {
+                  for(int j = 0; j <= as_matrix_size; j++) {
+                        as_matrix[i][j] = as_matrix[i][j] * scale_ratio;
+                        //fprintf(stderr, "%0.2lf ", as_matrix[i][j]);
+                  }
+                  //fprintf(stderr, "\n");
+          }
+          for(int i = 0; i <= as_core_matrix_size; i++) {
+                  for(int j = 0; j <= as_core_matrix_size; j++)
+                        as_core_matrix[i][j] = as_core_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= fs_matrix_size; i++) {
+                  for(int j = 0; j <= fs_matrix_size; j++)
+                        fs_matrix[i][j] = fs_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= fs_core_matrix_size; i++) {
+                  for(int j = 0; j <= fs_core_matrix_size; j++)
+                        fs_core_matrix[i][j] = fs_core_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= ts_matrix_size; i++) {
+                  for(int j = 0; j <= ts_matrix_size; j++)
+                        ts_matrix[i][j] = ts_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= ts_core_matrix_size; i++) {
+                  for(int j = 0; j <= ts_core_matrix_size; j++)
+                        ts_core_matrix[i][j] = ts_core_matrix[i][j] * scale_ratio;
+          }
+}
 
 	void 
 dump_fs_matrix()
@@ -235,7 +270,7 @@ dump_as_matrix()
 	sprintf(file_name, "%s/%s-%ld-as_matrix.csv", output_directory, hpcrun_files_executable_name(), getpid() );
 
 	fp = fopen (file_name, "w+");
-	//printf("as_matrix_size: %d\n", as_matrix_size);
+	printf("as_matrix_size: %d\n", as_matrix_size);
 	double total = 0;
 	//printf("all sharing matrix:\n");
 	for(int i = as_matrix_size; i >= 0; i--)

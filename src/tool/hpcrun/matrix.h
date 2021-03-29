@@ -91,7 +91,7 @@ void dump_waw_as_matrix();
 void dump_waw_fs_core_matrix();
 void dump_waw_ts_core_matrix();
 void dump_waw_as_core_matrix();
-
+void adjust_communication_volume(double scale_ratio);
 
 void dump_matrix();
 
