@@ -1324,7 +1324,7 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
     //fprintf(stderr, "sig_event_handler is called\n");
     int my_id = TD_GET(core_profile_trace_data.id);
     if (n == SIGNEW && my_id >= 0) {
-        fd = info->si_int;
+        fd = info->si_fd;
         //printf ("Received signal from kernel : Value =  %u\n", check);
         //read(check, read_buf, 1024);
         //printf("signal %d from file with fd %d\n", n, fd);
@@ -1413,7 +1413,7 @@ perf_event_handler(
 
 	if (! hpcrun_safe_enter_async(pc) && !amd_ibs_flag) {
 		hpcrun_stats_num_samples_blocked_async_inc();
-		restart_perf_event(siginfo->si_int);
+		restart_perf_event(siginfo->si_fd);
 		fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
 		perf_start_all(nevents, event_thread);
 		return 0; // tell monitor the signal has been handled.
@@ -1447,7 +1447,7 @@ perf_event_handler(
 	//if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
 	if(amd_ibs_flag)
         {
-		fd = siginfo->si_int;
+		fd = siginfo->si_fd;
 	} else 
 	{
 		fd = siginfo->si_fd;
@@ -1481,7 +1481,7 @@ perf_event_handler(
 	if (current == NULL) {
 		// signal not from perf event
 		TMSG(LINUX_PERF, "signal si_code %d with fd %d: unknown perf event",
-				siginfo->si_int, fd);
+				siginfo->si_fd, fd);
 		fprintf(stderr, "signal si_code %d with fd %d: unknown perf event\n", siginfo->si_code, fd);
 		hpcrun_safe_exit();
 
