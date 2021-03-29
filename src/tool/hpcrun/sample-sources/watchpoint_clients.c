@@ -6032,7 +6032,7 @@ ErrExit:
 void dump_profiling_metrics() {
 //#if 0
   if(theWPConfig->id == WP_AMD_COMM) {
-	  double scale_ratio = mem_access_sample / sample_count;
+	  double scale_ratio = mem_access_sample / store_count;
 	  fprintf(stderr, "scale_ratio: %0.2lf\n", scale_ratio);
 	  adjust_communication_volume(scale_ratio);
 #if 0
