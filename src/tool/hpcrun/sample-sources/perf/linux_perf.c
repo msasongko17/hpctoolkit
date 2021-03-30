@@ -1377,6 +1377,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	mmap_info->phy_addr = op_data->dc_phys_ad.reg.ibs_dc_phys_addr;
 	mmap_info->ip = op_data->op_rip;
 	mmap_info->mem_access_sample = op_data->mem_access_sample;
+	mmap_info->valid_mem_access_sample = op_data->valid_mem_access_sample;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
 	//fprintf(stderr, "in read_ibs_buffer ibs_rip_invalid: %d, ibs_ld_op: %d, ibs_st_op: %d, ibs_lin_addr_valid: %d, ibs_op_mem_width: %d\n", op_data->op_data.reg.ibs_rip_invalid, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, op_data->op_data3.reg.ibs_lin_addr_valid, op_data->op_data3.reg.ibs_op_mem_width);

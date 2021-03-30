@@ -222,6 +222,7 @@ __thread int store_count = 0;
 __thread int addr_valid_count = 0;
 __thread int phy_addr_valid_count = 0;
 __thread int mem_access_sample = 0;
+__thread int valid_mem_access_sample = 0;
 //uint64_t global_store_count = 0;
 uint64_t sample_count_counter = 0;
 extern uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
@@ -5163,6 +5164,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				int sType = -1;
                             	sample_count++;
 				mem_access_sample = mmap_data->mem_access_sample;
+				valid_mem_access_sample = mmap_data->valid_mem_access_sample;
 
 				if(mmap_data->addr_valid) {
 					addr_valid_count++;
@@ -6032,8 +6034,8 @@ ErrExit:
 void dump_profiling_metrics() {
 //#if 0
   if(theWPConfig->id == WP_AMD_COMM) {
-	  double scale_ratio = mem_access_sample / store_count;
-	  fprintf(stderr, "scale_ratio: %0.2lf\n", scale_ratio);
+	  double scale_ratio = (double) mem_access_sample / store_count/*valid_mem_access_sample*/;
+	  fprintf(stderr, "mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
 	  adjust_communication_volume(scale_ratio);
 #if 0
 	  for(int i = 0; i < as_matrix_size; i++) {

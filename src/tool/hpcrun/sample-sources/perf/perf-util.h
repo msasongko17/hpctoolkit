@@ -93,6 +93,7 @@ typedef struct perf_mmap_data_s {
   u64    period;     /* if PERF_SAMPLE_PERIOD */
   short  mem_width;
   int	 mem_access_sample;
+  int	 valid_mem_access_sample;
 
   uint16_t addr_valid;  
   uint16_t phy_addr_valid;
