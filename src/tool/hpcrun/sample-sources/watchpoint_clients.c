@@ -420,7 +420,6 @@ __thread uint64_t as_num = 0;
 __thread uint64_t inter_core_as_num = 0;
 __thread uint64_t line_transfer_num = 0;
 __thread uint64_t sample_count = 0;
-__thread uint64_t mem_access_sample = 0;
 __thread uint64_t valid_sample_count = 1;
 __thread uint64_t valid_sample_count1 = 0;
 __thread uint64_t trap_count = 0;
@@ -3341,8 +3340,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 //#endif
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
-//#if 0
-      	//fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
+  //fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
 	int metricId = -1;
   const void* joinNode;
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -3512,13 +3510,13 @@ if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sa
     // tprev = ts2
     prev_timestamp = wpi->sample.bulletinBoardTimestamp;
   }
-#if 0
+//#if 0
   sample_val_t v = hpcrun_sample_callpath(wt->ctxt, measured_metric_id, SAMPLE_UNIT_INC, 0, 1, NULL);
   cct_node_t *node = hpcrun_insert_special_node(v.sample_node, joinNode);
   node = hpcrun_cct_insert_path_return_leaf(wpi->sample.node, node);
   cct_metric_data_increment(metricId, node, (cct_metric_data_t){.i = 1});
   //fprintf(stderr, "source code line attribution here\n");
-#endif
+//#endif
 	return ALREADY_DISABLED;
 }
 
@@ -6170,7 +6168,6 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				//fprintf(stderr, "global_thread_count: %d\n", global_thread_count);
 				int sType = -1;
                             	sample_count++;
-				mem_access_sample = mmap_data->mem_access_sample;
 
 				if(mmap_data->addr_valid) {
 					addr_valid_count++;
@@ -7038,41 +7035,6 @@ ErrExit:
 }
 
 void dump_profiling_metrics() {
-
-  if(theWPConfig->id == WP_AMD_COMM) {
-	  double scaled_ratio = (double) mem_access_sample/sample_count;
-	  for(int i = 0; i < as_matrix_size; i++) {
-		  for(int j = 0; j < as_matrix_size; j++) {
-			  as_matrix[i][j] = scaled_ratio * as_matrix[i][j];
-		  }
-	  }
-	  for(int i = 0; i < as_core_matrix_size; i++) {
-                  for(int j = 0; j < as_core_matrix_size; j++) {
-                          as_core_matrix[i][j] = scaled_ratio * as_core_matrix[i][j];
-                  }       
-          }
-	  for(int i = 0; i < fs_matrix_size; i++) {
-                  for(int j = 0; j < fs_matrix_size; j++) {
-                          fs_matrix[i][j] = scaled_ratio * fs_matrix[i][j];
-                  }
-          }
-          for(int i = 0; i < fs_core_matrix_size; i++) {
-                  for(int j = 0; j < fs_core_matrix_size; j++) {
-                          fs_core_matrix[i][j] = scaled_ratio * fs_core_matrix[i][j];
-                  }
-          }
-	  for(int i = 0; i < ts_matrix_size; i++) {
-                  for(int j = 0; j < ts_matrix_size; j++) {
-                          ts_matrix[i][j] = scaled_ratio * ts_matrix[i][j];
-                  }
-          }
-          for(int i = 0; i < ts_core_matrix_size; i++) {
-                  for(int j = 0; j < ts_core_matrix_size; j++) {
-                          ts_core_matrix[i][j] = scaled_ratio * ts_core_matrix[i][j];
-                  }
-          }
-  }
-
   if(theWPConfig->id == WP_COMDETECTIVE || theWPConfig->id == WP_AMD_COMM) {
     dump_fs_matrix();
     dump_fs_core_matrix();
