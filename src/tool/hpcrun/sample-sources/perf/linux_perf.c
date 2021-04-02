@@ -280,8 +280,10 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
 			ioctl(event_thread[i].fd, IBS_DISABLE);
 			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
 		}
-		else
+		else {
+			//fprintf(stderr, "event %s has been disabled\n", event_thread[i].event->metric_desc->name);
 			ioctl(event_thread[i].fd, PERF_EVENT_IOC_DISABLE, 0);
+		}
 	}
 }
 
@@ -323,11 +325,36 @@ static void
 ibs_perf_init()
 {
 	perf_mmap_init();
+#if 0
 	struct sigaction act;
         sigemptyset(&act.sa_mask);
         act.sa_flags = (SA_SIGINFO | SA_RESTART);
         act.sa_sigaction = perf_event_handler; //sig_event_handler;
-        sigaction(SIGNEW, &act, NULL);
+        sigaction(/*PERF_SIGNAL*/ SIGNEW, &act, NULL);
+#endif
+//#if 0
+	sigemptyset(&sig_mask);
+        sigaddset(&sig_mask, /*PERF_SIGNAL*/ SIGNEW);
+
+        // Setup the signal handler
+        sigset_t block_mask;
+        sigfillset(&block_mask);
+
+        struct sigaction sa1 = {
+                .sa_sigaction = perf_event_handler,
+                .sa_mask = block_mask,
+                //.sa_flags = SA_SIGINFO | SA_RESTART | SA_NODEFER | SA_ONSTACK
+                .sa_flags =  SA_ONSTACK
+        };
+
+        fprintf(stderr, "perf_event_handler is set up \n");
+        if(monitor_sigaction(/*PERF_SIGNAL*/ SIGNEW, perf_event_handler, 0 /*flags*/, &sa1) == -1) {
+                fprintf(stderr, "Failed to set PERF_SIGNAL handler: %s\n", strerror(errno));
+                monitor_real_abort();
+        }
+
+        monitor_real_pthread_sigmask(SIG_UNBLOCK, &sig_mask, NULL);
+//#endif
 }
 
 
@@ -384,7 +411,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 	// need to set PERF_SIGNAL to this file descriptor
 	// to avoid POLL_HUP in the signal handler
 	if(hpcrun_ev_is(event->metric_desc->name, "AMD_L1_DATA_ACCESS"))
-		ret = fcntl(et->fd, F_SETSIG, SIGNEW);
+		ret = fcntl(et->fd, F_SETSIG, /*PERF_SIGNAL*/SIGNEW);
 	else
 		ret = fcntl(et->fd, F_SETSIG, PERF_SIGNAL);
 	if (ret == -1) {
@@ -950,7 +977,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = 0x0329;//0x430729;
+                        	event_attr->config = /*0x0c0;0x4300c1;0x0329;*/0x430729;
                         	event_attr->type = PERF_TYPE_RAW;
                 	}
 			perf_attr_init(event_attr, is_period, threshold, 0);
@@ -1390,7 +1417,7 @@ sig_event_handler(int n, siginfo_t *info, void *unused)
 	int fd;
     //fprintf(stderr, "sig_event_handler is called\n");
     int my_id = TD_GET(core_profile_trace_data.id);
-    if (n == SIGNEW && my_id >= 0) {
+    if (n == /*PERF_SIGNAL*/SIGNEW && my_id >= 0) {
         fd = info->si_fd;//info->si_int;
         //printf ("Received signal from kernel : Value =  %u\n", check);
         //read(check, read_buf, 1024);
@@ -1443,6 +1470,8 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	//if(mmap_info->phy_addr_valid)
 	mmap_info->phy_addr = op_data->dc_phys_ad.reg.ibs_dc_phys_addr;
 	mmap_info->ip = op_data->op_rip;
+	mmap_info->mem_access_sample = op_data->mem_access_sample;
+	mmap_info->valid_mem_access_sample = op_data->valid_mem_access_sample;
 
 	//fprintf(stderr, "in read_ibs_buffer sampling timestamp: %ld, cpu: %d, tid: %d, pid: %d, sampled address: %lx, ld_op: %d, st_op:%d, handled by thread %ld, kern_mode: %d\n", op_data->tsc, op_data->cpu, op_data->tid, op_data->pid, op_data->dc_lin_ad, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, syscall(SYS_gettid), op_data->kern_mode);
 	//fprintf(stderr, "in read_ibs_buffer ibs_rip_invalid: %d, ibs_ld_op: %d, ibs_st_op: %d, ibs_lin_addr_valid: %d, ibs_op_mem_width: %d\n", op_data->op_data.reg.ibs_rip_invalid, op_data->op_data3.reg.ibs_ld_op, op_data->op_data3.reg.ibs_st_op, op_data->op_data3.reg.ibs_lin_addr_valid, op_data->op_data3.reg.ibs_op_mem_width);
@@ -1465,7 +1494,55 @@ perf_event_handler(
 
 	int nevents = self->evl.nevents;
 
+	for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint -1: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                        }
+                }
+        }
+        for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint -2: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                        }
+                }
+        }
+
 	perf_stop_all(nevents, event_thread);
+
+// check counter here 1
+	for(int i=0; i<nevents; i++) {
+		event_thread_t *current = &(event_thread[i]);
+		if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+			uint64_t val[3];
+			int ret = perf_read_event_counter(current, val);
+			if (ret >= 0) {
+			       int64_t scaled_val = (int64_t) val[0];
+		       		fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);	       
+			}
+		}
+	}
+	for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                        }
+                }
+        }
+// check counter here 2
 
 	int fd;
 	fd = siginfo->si_fd;

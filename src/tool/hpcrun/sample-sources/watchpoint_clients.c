@@ -222,6 +222,8 @@ __thread int load_count = 0;
 __thread int store_count = 0;
 __thread int addr_valid_count = 0;
 __thread int phy_addr_valid_count = 0;
+__thread int mem_access_sample = 0;
+__thread int valid_mem_access_sample = 0;
 //uint64_t global_store_count = 0;
 uint64_t sample_count_counter = 0;
 extern uint64_t numWatchpointArmingAttempt[MAX_WP_SLOTS];
@@ -422,6 +424,7 @@ __thread uint64_t line_transfer_num = 0;
 __thread uint64_t sample_count = 0;
 __thread uint64_t valid_sample_count = 1;
 __thread uint64_t valid_sample_count1 = 0;
+__thread uint64_t valid_sample_count2 = 0;
 __thread uint64_t trap_count = 0;
 __thread uint64_t wp_arming_count = 0;
 // ComDetective stats end
@@ -578,7 +581,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
 void ExpandSharedReuseBinList(){
@@ -1083,6 +1086,12 @@ uint64_t val[3];
         CloseWitchTraceOutput();
 #endif
          */
+	fprintf(stderr, "original_sample_count: %ld\n", original_sample_count);
+	fprintf(stderr, "valid_sample_count1: %ld\n", valid_sample_count1);
+	fprintf(stderr, "valid_sample_count2: %ld\n", valid_sample_count2);
+	fprintf(stderr, "sample_count: %ld\n", sample_count);
+	fprintf(stderr, "mem_access_sample: %ld\n", mem_access_sample);
+	fprintf(stderr, "valid_mem_access_sample: %ld\n", valid_mem_access_sample);
         hpcrun_stats_num_accessedIns_inc(accessedIns);
         hpcrun_stats_num_reuseTemporal_inc(mtReuseTemporal);
         hpcrun_stats_num_reuseSpatial_inc(mtReuseSpatial);
@@ -2885,10 +2894,10 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
   return ALREADY_DISABLED;
 }
 
-#if 0
+//#if 0
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseWPCallback\n");
-  fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
+  fprintf(stderr, "trap in AMDReuseWPCallback happens on address %lx\n", wpi->sample.va);
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
     // if the ip is 0, let's drop the WP
@@ -2906,8 +2915,9 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
     for(int j=0; j < 3; j++){
       if (val[0][j] >= wpi->sample.reuseDistance[0][j]){
         //fprintf(stderr, "before subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
+	fprintf(stderr, "before subtraction: val[0][%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", j, val[0][j], j, wpi->sample.reuseDistance[0][j]);
         val[0][j] -= wpi->sample.reuseDistance[0][j];
-        //fprintf(stderr, "after subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
+        //fprintf(stderr, "after subtraction: val[0][%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", j, val[0][j], j, wpi->sample.reuseDistance[0][j]);
       }
       else { //Something wrong happens here and the record is not reliable. Drop it!
         return ALREADY_DISABLED;
@@ -2988,9 +2998,9 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 #endif
   return ALREADY_DISABLED;
 }
-#endif
+//#endif
 
-//#if 0
+#if 0
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
 	//fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
 	trap_count++;
@@ -3337,7 +3347,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 #endif
 	return ALREADY_DISABLED;
 }
-//#endif
+#endif
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
@@ -4742,6 +4752,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   if (!IsValidAddress(data_addr, precisePC)) { 
     goto ErrExit; // incorrect access type
   }
+
+  if (amd_ibs_flag /*&& mmap_data->store*/) {
+        //valid_sample_count++;
+        valid_sample_count2++;
+  }
 //#endif
 #if 0
   if (amd_ibs_flag /*&& mmap_data->store*/) {
@@ -5432,12 +5447,15 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                           }
                           break;
     case WP_AMD_REUSE:{
-#if 0
-			   //fprintf(stderr, "WP_REUSE in OnSample\n");
+//#if 0
+		     fprintf(stderr, "WP_REUSE in OnSample on address: %lx\n", data_addr);
 #ifdef REUSE_HISTO
 #else
                      if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
 #endif
+		     mem_access_sample = mmap_data->mem_access_sample;
+		     valid_mem_access_sample = mmap_data->valid_mem_access_sample;
+		     sample_count++;
                      long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
                      accessedIns += metricThreshold;
                      SampleData_t sd= {
@@ -5496,12 +5514,12 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                        sd.reuseType = REUSE_TEMPORAL;
                        //fprintf/(stderr, "REUSE_TEMPORAL is activated\n");
                      }
-                     //fprintf(stderr, "here3\n");
+                     fprintf(stderr, "here3\n");
                      if (!IsValidAddress(sd.va, precisePC)) {
                        goto ErrExit; // incorrect access type
                      }
 
-                     //fprintf(stderr, "here4\n");
+                     fprintf(stderr, "here4\n");
                      // Read the reuse distance event counters
                      // We assume the reading event is load, store or both.
                      //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
@@ -5516,11 +5534,11 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                      //fprintf(stderr, "here5\n");
                      //fprintf(stderr, "\n");
                      // register the watchpoint
-                     //fprintf(stderr, "watchpoints are about to be armed from OnSample\n");
-                     SubscribeWatchpoint(&sd, OVERWRITE, false );
+                     fprintf(stderr, "watchpoints are about to be armed from OnSample on address %lx\n", sd.va);
+                     SubscribeWatchpointAlwaysReplace(&sd, OVERWRITE, false );
                      //fprintf(stderr, "here6\n");
-#endif
-//#if 0
+//#endif
+#if 0
 			    sample_count++;
                             int me = TD_GET(core_profile_trace_data.id);
 
@@ -5965,7 +5983,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }*/ 
 //#endif
                             lastTime = curTime;
-//#endif
+#endif
                           }
                           break;
     case WP_SPATIAL_REUSE:{
