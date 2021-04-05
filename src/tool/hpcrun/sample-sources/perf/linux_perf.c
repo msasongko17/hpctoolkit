@@ -182,6 +182,7 @@ extern int global_thread_count;
 extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
 extern int l3_reuse_distance_event_rqsts;
+extern int amd_reuse_distance_event;
 int ibs_event = -1;
 bool amd_ibs_flag = false;
 //******************************************************************************
@@ -256,6 +257,7 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 		//ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
                         ioctl(event_thread[i].fd, IBS_ENABLE);
+			ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 }
                 else
@@ -278,12 +280,49 @@ perf_stop_all(int nevents, event_thread_t *event_thread)
 		//fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
 		if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
 			ioctl(event_thread[i].fd, IBS_DISABLE);
+			//fprintf(stderr, "IBS_OP is disabled\n");
 			//fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
 		}
 		else {
 			//fprintf(stderr, "event %s has been disabled\n", event_thread[i].event->metric_desc->name);
 			ioctl(event_thread[i].fd, PERF_EVENT_IOC_DISABLE, 0);
 		}
+	}
+}
+
+static void
+ibs_ctl_backup(int nevents, event_thread_t *event_thread)
+{
+        int i;
+        char filename[64];
+        //sprintf(filename, "/dev/cpu/%d/ibs/op", TD_GET(core_profile_trace_data.id));
+        //int fd = open(filename, O_RDONLY | O_NONBLOCK);
+        for(i=0; i<nevents; i++) {
+                //fprintf(stderr, "event %d is closed\n", i);
+                //fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
+                if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+                        ioctl(event_thread[i].fd, IBS_CTL_BACKUP);
+                        //fprintf(stderr, "IBS_OP is disabled\n");
+                        //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
+                } 
+        }
+}
+
+static void
+ibs_ctl_reload(int nevents, event_thread_t *event_thread)
+{
+        int i;
+        char filename[64];
+        //sprintf(filename, "/dev/cpu/%d/ibs/op", TD_GET(core_profile_trace_data.id));
+        //int fd = open(filename, O_RDONLY | O_NONBLOCK);
+        for(i=0; i<nevents; i++) {
+                //fprintf(stderr, "event %d is closed\n", i);
+                //fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
+                if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
+                        ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
+                        //fprintf(stderr, "IBS_OP is disabled\n");
+                        //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
+                }
 	}
 }
 
@@ -507,7 +546,7 @@ get_fd_index(int nevents, int fd, event_thread_t *event_thread)
 record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		void* context, sample_val_t* sv)
 {
-	//fprintf(stderr, "record_sample is called\n");
+	fprintf(stderr, "record_sample is called\n");
 	if (current == NULL || current->event == NULL || current->event->metric < 0)
 		return NULL;
 
@@ -520,7 +559,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
 			amd_ibs_event = true;
 	uint64_t metric_inc = 1;
-	if ((amd_ibs_event || current->event->attr.freq==1) && mmap_data->period > 0)
+	if ((!amd_ibs_event && current->event->attr.freq==1) && mmap_data->period > 0)
 		metric_inc = mmap_data->period;
 	//fprintf(stderr, "metric_inc: %ld\n", metric_inc);
 	// ----------------------------------------------------------------------------
@@ -544,7 +583,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		scale_f = 1.0;
 
 	double counter = scale_f * metric_inc;
-	//fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
+	fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
 
 	// ----------------------------------------------------------------------------
 	// set additional information for the metric description
@@ -578,7 +617,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 	} else {
 		td->precise_pc = 0;
 	}
-	//fprintf(stderr, "counter: %0.2lf\n", counter); 
+	//fprintf(stderr, "counter: %0.2lf is incremented\n", counter); 
 	*sv = hpcrun_sample_callpath(context, current->event->metric,
 			(hpcrun_metricVal_t) {.r=counter},
 			0/*skipInner*/, 0/*isSync*/, &info);
@@ -977,7 +1016,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = /*0x0c0;0x4300c1;0x0329;*/0x430729;
+                        	event_attr->config = /*0x0c0;0x4300c1;*/0x0329;//0x430729;
                         	event_attr->type = PERF_TYPE_RAW;
                 	}
 			perf_attr_init(event_attr, is_period, threshold, 0);
@@ -1218,7 +1257,76 @@ void linux_perf_events_pause(){
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 	int nevents = self->evl.nevents;
+//#if 0
+	//ibs_ctl_backup(nevents, event_thread);
+	for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint -2: event %s has count %ld before counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
+                        }
+                } else {
+                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
+
+		}
+        }
+        for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint -1: event %s has count %ld before counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
+                        }
+                } else {
+                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint -1: event %s has count %ld before counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
+
+                }
+        }	
+//#endif
+	ibs_ctl_backup(nevents, event_thread);
 	perf_stop_all(nevents, event_thread);
+
+//#if 0
+	for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint 1: event %s has count %ld after counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
+                        }
+                } else {
+                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
+
+                }
+        }
+        for(int i=0; i<nevents; i++) {
+                event_thread_t *current = &(event_thread[i]);
+                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+                        uint64_t val[3];
+                        int ret = perf_read_event_counter(current, val);
+                        if (ret >= 0) {
+                               int64_t scaled_val = (int64_t) val[0];
+                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
+                        }
+                } else {
+                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
+
+                }
+        }
+//#endif
+	
+
 }
 
 void linux_perf_events_resume(){
@@ -1226,6 +1334,7 @@ void linux_perf_events_resume(){
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 	int nevents = self->evl.nevents;
 	perf_start_all(nevents, event_thread);
+	//ibs_ctl_reload(nevents, event_thread);
 }
 
 
@@ -1254,9 +1363,9 @@ int linux_perf_read_event_counter(int event_index, uint64_t *val){
 		// overflow event
 		//assert(val[1] == val[2]); //jqswang: TODO: I have no idea how to calculate the value under multiplexing for overflow event.
 		int64_t scaled_val = (int64_t) val[0] ;//% sample_period;
-		//fprintf(stderr, "original counter value %ld\n", scaled_val);
-		if (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
-				|| scaled_val < 0){
+		//fprintf(stderr, "original counter value %ld in thread %d\n", scaled_val, TD_GET(core_profile_trace_data.id));
+		if (event_index != amd_reuse_distance_event && (scaled_val >= sample_period * 10 // The counter value can become larger than the sampling period but they are usually less than 2 * sample_period
+				|| scaled_val < 0)){
 			//jqswang: TODO: it does not filter out all the invalid values
 			//fprintf(stderr, "WEIRD_COUNTER: %ld %s\n", scaled_val, current->event->metric_desc->name);
 			hpcrun_stats_num_corrected_reuse_distance_inc(1);
@@ -1488,12 +1597,13 @@ perf_event_handler(
 	// ----------------------------------------------------------------------------
 	// disable all counters
 	// ----------------------------------------------------------------------------
-	//fprintf(stderr, "in perf_event_handler 0\n");
+	fprintf(stderr, "in perf_event_handler 0\n");
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
 	int nevents = self->evl.nevents;
-
+//#if 0
+	//ibs_ctl_backup(nevents, event_thread);
 	for(int i=0; i<nevents; i++) {
                 event_thread_t *current = &(event_thread[i]);
                 if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
@@ -1501,9 +1611,12 @@ perf_event_handler(
                         int ret = perf_read_event_counter(current, val);
                         if (ret >= 0) {
                                int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -1: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                                fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
                         }
-                }
+                } else {
+			long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+			fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
+		}
         }
         for(int i=0; i<nevents; i++) {
                 event_thread_t *current = &(event_thread[i]);
@@ -1512,14 +1625,19 @@ perf_event_handler(
                         int ret = perf_read_event_counter(current, val);
                         if (ret >= 0) {
                                int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -2: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                                fprintf(stderr, "checkpoint -1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
                         }
-                }
+                } else {
+			long ibs_count = ioctl(current->fd, GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint -1: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
+		}
         }
-
+//#endif
+	ibs_ctl_backup(nevents, event_thread);
 	perf_stop_all(nevents, event_thread);
 
 // check counter here 1
+//#if 0
 	for(int i=0; i<nevents; i++) {
 		event_thread_t *current = &(event_thread[i]);
 		if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
@@ -1527,8 +1645,11 @@ perf_event_handler(
 			int ret = perf_read_event_counter(current, val);
 			if (ret >= 0) {
 			       int64_t scaled_val = (int64_t) val[0];
-		       		fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);	       
+		       		fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);	       
 			}
+		} else {
+			long ibs_count = ioctl(current->fd, /*GET_CUR_CNT*/ GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
 		}
 	}
 	for(int i=0; i<nevents; i++) {
@@ -1538,10 +1659,14 @@ perf_event_handler(
                         int ret = perf_read_event_counter(current, val);
                         if (ret >= 0) {
                                int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops\n",current->event->metric_desc->name, scaled_val);
+                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
                         }
-                }
+                } else {
+			long ibs_count = ioctl(current->fd, /*GET_CUR_CNT*/ GET_CUR_CNT);
+                        fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
+		}
         }
+//#endif
 // check counter here 2
 
 	int fd;
@@ -1555,6 +1680,7 @@ perf_event_handler(
                 hpcrun_safe_exit();
 
                 restart_perf_event(fd);
+		//ibs_ctl_reload(nevents, event_thread);
                 perf_start_all(nevents, event_thread);
 
                 return 1; // tell monitor the signal has not been handled.
@@ -1570,11 +1696,13 @@ perf_event_handler(
 
 	void *pc = hpcrun_context_pc(context);
 
+	fprintf(stderr, "sample in addr %lx in perf_event_handler\n", pc);
 
-	if (! hpcrun_safe_enter_async(pc) && !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
+	if (! hpcrun_safe_enter_async(pc) /*&& !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")*/) {
 		hpcrun_stats_num_samples_blocked_async_inc();
 		restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
-		fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
+		//fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
+		//ibs_ctl_reload(nevents, event_thread);
 		perf_start_all(nevents, event_thread);
 		return 0; // tell monitor the signal has been handled.
 	}
@@ -1587,7 +1715,8 @@ perf_event_handler(
 	if (siginfo->si_code < 0 && !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
 		TMSG(LINUX_PERF, "signal si_code %d < 0 indicates not from kernel", 
 				siginfo->si_code);
-		fprintf(stderr, "quit 1\n");
+		//fprintf(stderr, "quit 1\n");
+		//ibs_ctl_reload(nevents, event_thread);
 		perf_start_all(nevents, event_thread);
 
 		return 1; // tell monitor the signal has not been handled.
@@ -1598,7 +1727,7 @@ perf_event_handler(
 	// if sampling disabled explicitly for this thread, skip all processing
 	// ----------------------------------------------------------------------------
 	if (hpcrun_thread_suppress_sample) {
-		fprintf(stderr, "quit 2\n");
+		//fprintf(stderr, "quit 2\n");
 		return 0;
 	}
 
@@ -1674,7 +1803,7 @@ perf_event_handler(
 	{
        		more_data = tmp / sizeof(ibs_op_t);
 		sample_buffer = malloc (sizeof(ibs_op_t));
-		//fprintf(stderr, "%d samples are detected in a counter overflow\n", more_data);
+		fprintf(stderr, "%d samples are detected in a counter overflow\n", more_data);
 	} 
 
 	int offset = 0;
@@ -1697,9 +1826,14 @@ perf_event_handler(
 			original_sample_count++;
 			//fprintf(stderr, "more_data: %d\n", more_data);
 			read_ibs_buffer(current, &mmap_data, op_data);
+
+			//if (hpcrun_safe_enter_async(mmap_data.ip) /*&& !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")*/) {	
+        		record_sample(current, &mmap_data, context, &sv);
+			//}
+
 			//if(!op_data->kern_mode)
 			//fprintf(stderr, "event with name %s is handled here\n", current->event->metric_desc->name);
-			record_sample(current, &mmap_data, context, &sv);		
+			//record_sample(current, &mmap_data, context, &sv);		
 			more_data--;
 		} else
 		{
@@ -1734,6 +1868,7 @@ perf_event_handler(
 
 	restart_perf_event(fd);
 
+	//ibs_ctl_reload(nevents, event_thread);
 	perf_start_all(nevents, event_thread);
 
 	return 0; // tell monitor the signal has been handled.

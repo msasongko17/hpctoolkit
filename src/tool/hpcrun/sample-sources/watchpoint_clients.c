@@ -581,7 +581,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
 void ExpandSharedReuseBinList(){
@@ -2068,7 +2068,7 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
-  //fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+  fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   diff.r = diff.r * proportion;
   cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
   return (uint64_t) (diffWithPeriod.r * proportion);
@@ -2897,7 +2897,7 @@ static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int sta
 //#if 0
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseWPCallback\n");
-  fprintf(stderr, "trap in AMDReuseWPCallback happens on address %lx\n", wpi->sample.va);
+  //fprintf(stderr, "trap in AMDReuseWPCallback happens on address %lx\n", wpi->sample.va);
 #if 0  // jqswang:TODO, how to handle it?
   if(!wt->pc) {
     // if the ip is 0, let's drop the WP
@@ -2908,6 +2908,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 
   uint64_t val[2][3];
   //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
+  //fprintf(stderr, "reading counter in WP Trap\n");
     assert(linux_perf_read_event_counter(amd_reuse_distance_event /*reuse_distance_events[i]*/, val[0]) >= 0);
     //assert(linux_perf_read_event_counter_l1_amd( amd_reuse_distance_event, val[0]) >= 0);
     //fprintf(stderr, "USE: %lu %lu %lu,  REUSE: %lu %lu %lu\n", wpi->sample.reuseDistance[i][0], wpi->sample.reuseDistance[i][1], wpi->sample.reuseDistance[i][2], val[i][0], val[i][1], val[i][2]);
@@ -2915,7 +2916,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
     for(int j=0; j < 3; j++){
       if (val[0][j] >= wpi->sample.reuseDistance[0][j]){
         //fprintf(stderr, "before subtraction: val[%d][%d]: %ld, wpi->sample.reuseDistance[%d][%d]: %ld\n", i, j, val[i][j], i, j, wpi->sample.reuseDistance[i][j]);
-	fprintf(stderr, "before subtraction: val[0][%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", j, val[0][j], j, wpi->sample.reuseDistance[0][j]);
+	//fprintf(stderr, "before subtraction: val[0][%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", j, val[0][j], j, wpi->sample.reuseDistance[0][j]);
         val[0][j] -= wpi->sample.reuseDistance[0][j];
         //fprintf(stderr, "after subtraction: val[0][%d]: %ld, wpi->sample.reuseDistance[0][%d]: %ld\n", j, val[0][j], j, wpi->sample.reuseDistance[0][j]);
       }
@@ -2927,8 +2928,8 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
   // Report a reuse
   // returns 1.0 now but previously returns 1/sharer s.t. sharer is #wp sharing the same context as the trapped wp 
   double myProportion = ProportionOfWatchpointAmongOthersSharingTheSameContext(wpi);
-  fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
-  uint64_t numDiffSamples = 100000; //GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
+  //fprintf(stderr, "myProportion: %0.2lf\n", myProportion);
+  uint64_t numDiffSamples = /*100000;*/ GetWeightedMetricDiffAndReset(wpi->sample.node, wpi->sample.sampledMetricId, myProportion);
   uint64_t inc = numDiffSamples;
   //fprintf(stderr, "inc: %ld\n", inc);
   int joinNodeIdx = wpi->sample.isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -2954,7 +2955,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
       //assert(val[0][1] == 0 && val[0][2] == 0); // no counter multiplexing allowed
       rd += val[0][0];
     //}
-    fprintf(stderr, "reuse distance %ld is detected %d times\n", rd, inc);
+   fprintf(stderr, "reuse distance %ld is detected %d times on address %lx\n", rd, inc, wpi->sample.va);
     ReuseAddDistance(rd, inc);
   //}
 
@@ -5448,7 +5449,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                           break;
     case WP_AMD_REUSE:{
 //#if 0
-		     fprintf(stderr, "WP_REUSE in OnSample on address: %lx\n", data_addr);
+		     //fprintf(stderr, "WP_REUSE in OnSample on address: %lx\n", data_addr);
 #ifdef REUSE_HISTO
 #else
                      if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
@@ -5514,17 +5515,18 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                        sd.reuseType = REUSE_TEMPORAL;
                        //fprintf/(stderr, "REUSE_TEMPORAL is activated\n");
                      }
-                     fprintf(stderr, "here3\n");
+                     //fprintf(stderr, "here3\n");
                      if (!IsValidAddress(sd.va, precisePC)) {
                        goto ErrExit; // incorrect access type
                      }
 
-                     fprintf(stderr, "here4\n");
+                     //fprintf(stderr, "here4\n");
                      // Read the reuse distance event counters
                      // We assume the reading event is load, store or both.
                      //for (int i=0; i < MIN(2, reuse_distance_num_events); i++){
                        uint64_t val[3];
                        //fprintf(stderr, "before assert\n");
+		       //fprintf(stderr, "reading counter in OnSample data_addr: %lx\n", data_addr);
                        assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
                        //fprintf(stderr, "after assert\n");
                        //fprintf(stderr, "USE %lu %lu %lu  -- ", val[0], val[1], val[2]);
@@ -5534,8 +5536,9 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                      //fprintf(stderr, "here5\n");
                      //fprintf(stderr, "\n");
                      // register the watchpoint
-                     fprintf(stderr, "watchpoints are about to be armed from OnSample on address %lx\n", sd.va);
-                     SubscribeWatchpointAlwaysReplace(&sd, OVERWRITE, false );
+                     //fprintf(stderr, "watchpoints are about to be armed from OnSample on address %lx\n", sd.va);
+                     //SubscribeWatchpointAlwaysReplace(&sd, OVERWRITE, false );
+		     SubscribeWatchpoint(&sd, OVERWRITE, false );
                      //fprintf(stderr, "here6\n");
 //#endif
 #if 0

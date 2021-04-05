@@ -346,7 +346,7 @@ static inline void EnableWatchpoint(int fd) {
 
 static inline void DisableWatchpoint(WatchPointInfo_t *wpi) {
   // Stop the event
-  fprintf(stderr, "watchpoint is disabled\n");
+  //fprintf(stderr, "watchpoint is disabled\n");
   assert(wpi->fileHandle != -1);
   CHECK(ioctl(wpi->fileHandle, PERF_EVENT_IOC_DISABLE, 0));
   wpi->isActive = false;
@@ -664,7 +664,7 @@ void SpatialReuseWPConfigOverride(void *v){
 static void CreateWatchPoint(WatchPointInfo_t * wpi, SampleData_t * sampleData, bool modify) {
   // Perf event settings
   create_wp_count++;
-  fprintf(stderr, "WP is armed on address: %lx\n", sampleData->va);
+  //fprintf(stderr, "WP is armed on address: %lx\n", sampleData->va);
   struct perf_event_attr pe = {
     .type                   = PERF_TYPE_BREAKPOINT,
     .size                   = sizeof(struct perf_event_attr),
@@ -1741,6 +1741,13 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   // and return and avoid any MSG.
   //fprintf(stderr, "in OnWatchpoint\n");
   //fprintf(stderr, "OnWatchPoint is executed 1\n");
+  // before
+#if 0
+  sample_source_t *self = &obj_name();
+  event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
+  int nevents = self->evl.nevents;
+#endif
+
   linux_perf_events_pause();
   wp_count++;
   //fprintf(stderr, "OnWatchPoint is executed 2\n");
@@ -1925,7 +1932,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   // Perform Pre watchpoint action
   switch (wpi->sample.preWPAction) {
     case DISABLE_WP:
-      fprintf(stderr, "in DISABLE_WP at location %d in thread %d\n", location, TD_GET(core_profile_trace_data.id));
+      //fprintf(stderr, "in DISABLE_WP at location %d in thread %d\n", location, TD_GET(core_profile_trace_data.id));
       DisableWatchpointWrapper(wpi);
       break;
     case DISABLE_ALL_WP:
@@ -2107,7 +2114,7 @@ bool SubscribeWatchpointAlwaysReplace(SampleData_t * sampleData, OverwritePolicy
     return false;
   }
   //sub_wp_count2++;
-  fprintf(stderr, "that position on address %lx\n", sampleData->va);
+  //fprintf(stderr, "that position on address %lx\n", sampleData->va);
 //#if 0
   int victimLocation = -1;
   VictimType r = EMPTY_SLOT;
@@ -2133,14 +2140,14 @@ bool SubscribeWatchpointAlwaysReplace(SampleData_t * sampleData, OverwritePolicy
     // I am not handling that corner case because ArmWatchPoint() will fail with a monitor_real_abort().
     //printf("and this region\n");
     //printf("arming watchpoints\n");
-    fprintf(stderr, "this position on address %lx\n", sampleData->va);
+    //fprintf(stderr, "this position on address %lx\n", sampleData->va);
 
     if(ArmWatchPoint(&tData.watchPointArray[victimLocation], sampleData) == false){
       //LOG to hpcrun log
       EMSG("ArmWatchPoint failed for address %p", sampleData->va);
       return false;
     }
-    fprintf(stderr, "watchpoint has been armed\n");
+    //fprintf(stderr, "watchpoint has been armed\n");
     return true;
     //return false;
   }
