@@ -609,7 +609,7 @@ void AMDReuseWPConfigOverride(void *v){
   // replacement policy is OLDEST forced.
   //wpConfig.dontFixIP = true;
   //wpConfig.dontDisassembleWPAddress = true;
-  wpConfig.isLBREnabled = false;
+  //wpConfig.isLBREnabled = false;
   wpConfig.replacementPolicy = AUTO; //RDX; //OLDEST;
 }
 
@@ -1811,7 +1811,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
         }	
 
 	  //fprintf(stderr, "watchpoint trap happens\n");
-#if 0
+//#if 0
         if( false == CollectWatchPointTriggerInfoShared(wpi, &wpt, context, me)) {
             tData.numWatchpointDropped++;
             retVal = DISABLE_WP; // disable if unable to collect any info.
@@ -1819,8 +1819,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
             wpt.location = location;
             retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
           }
-#endif
-	retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
+//#endif
+	//retVal = tData.fptr(wpi, 0, wpt.accessLength, &wpt);
         switch (retVal) {
           case DISABLE_WP: {
                              if(wpi->isActive){
@@ -1973,7 +1973,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
 }
 #endif
 
-#if 0
+//#if 0
  if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
     fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
     tData.numWatchpointDropped++;
@@ -1985,8 +1985,8 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
     retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
     //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
   }
-#endif
-  retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
+//#endif
+ //retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
 
 
   // Let the client take action.

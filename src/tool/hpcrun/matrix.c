@@ -106,6 +106,39 @@ double waw_cache_line_transfer_gbytes;
 
 // comdetective stats end
 
+void adjust_communication_volume(double scale_ratio) {
+	//double scale_ratio = mem_access_sample / sample_count;
+          fprintf(stderr, "scale_ratio: %0.2lf\n", scale_ratio);
+	  printf("as_matrix_size: %d\n", as_matrix_size);
+          for(int i = 0; i <= as_matrix_size; i++) {
+                  for(int j = 0; j <= as_matrix_size; j++) {
+                        as_matrix[i][j] = as_matrix[i][j] * scale_ratio;
+                        fprintf(stderr, "%0.2lf ", as_matrix[i][j]);
+                  }
+                  fprintf(stderr, "\n");
+          }
+          for(int i = 0; i <= as_core_matrix_size; i++) {
+                  for(int j = 0; j <= as_core_matrix_size; j++)
+                        as_core_matrix[i][j] = as_core_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= fs_matrix_size; i++) {
+                  for(int j = 0; j <= fs_matrix_size; j++)
+                        fs_matrix[i][j] = fs_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= fs_core_matrix_size; i++) {
+                  for(int j = 0; j <= fs_core_matrix_size; j++)
+                        fs_core_matrix[i][j] = fs_core_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= ts_matrix_size; i++) {
+                  for(int j = 0; j <= ts_matrix_size; j++)
+                        ts_matrix[i][j] = ts_matrix[i][j] * scale_ratio;
+          }
+          for(int i = 0; i <= ts_core_matrix_size; i++) {
+                  for(int j = 0; j <= ts_core_matrix_size; j++)
+                        ts_core_matrix[i][j] = ts_core_matrix[i][j] * scale_ratio;
+          }
+}
+
 	void 
 dump_fs_matrix()
 {

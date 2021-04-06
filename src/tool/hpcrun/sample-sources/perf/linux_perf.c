@@ -1704,8 +1704,9 @@ perf_event_handler(
 	void *pc = hpcrun_context_pc(context);
 
 	//fprintf(stderr, "sample in addr %lx in perf_event_handler\n", pc);
-
+//#if 0
 	if (! hpcrun_safe_enter_async(pc) /*&& !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")*/) {
+//#endif
 		hpcrun_stats_num_samples_blocked_async_inc();
 		restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
 		//fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
