@@ -1023,7 +1023,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = /*0x0c0;0x4300c1;*/0x0329;//0x430729;
+                        	event_attr->config = /*0x0c0;0x4300c1;0x0329;*/0x430729;
                         	event_attr->type = PERF_TYPE_RAW;
                 	}
 			perf_attr_init(event_attr, is_period, threshold, 0);
