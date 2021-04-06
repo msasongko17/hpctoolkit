@@ -322,10 +322,10 @@ ibs_ctl_reload(int nevents, event_thread_t *event_thread)
                 //fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
                 if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
                         //ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
-			long temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
+			//long temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
 			//fprintf(stderr, "value of counter in register before reload: %ld\n", temp);
 			ioctl(event_thread[i].fd, SET_CUR_CNT, ibs_count);
-			temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
+			//temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
 			//fprintf(stderr, "value of counter in register after reload: %ld\n", temp);
                         //fprintf(stderr, "IBS_OP is disabled\n");
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
