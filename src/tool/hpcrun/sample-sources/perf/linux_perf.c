@@ -175,6 +175,7 @@ int op_cnt_max_to_set = 0;
 int buffer_size = 0;
 __thread char *global_buffer = NULL;
 __thread int original_sample_count = 0;
+__thread long ibs_count = 0;
 
 // ends
 
@@ -257,7 +258,7 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 		//ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
                         ioctl(event_thread[i].fd, IBS_ENABLE);
-			ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
+			//ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 }
                 else
@@ -301,7 +302,8 @@ ibs_ctl_backup(int nevents, event_thread_t *event_thread)
                 //fprintf(stderr, "event %d is closed\n", i);
                 //fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
                 if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
-                        ioctl(event_thread[i].fd, IBS_CTL_BACKUP);
+			ibs_count = ioctl(event_thread[i].fd, GET_CUR_CNT);
+                        //ioctl(event_thread[i].fd, IBS_CTL_BACKUP);
                         //fprintf(stderr, "IBS_OP is disabled\n");
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 } 
@@ -319,7 +321,12 @@ ibs_ctl_reload(int nevents, event_thread_t *event_thread)
                 //fprintf(stderr, "event %d is closed\n", i);
                 //fprintf(stderr, "event %s is to be closed\n", event_thread[i].event->metric_desc->name);
                 if(/*amd_ibs_flag*/hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
-                        ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
+                        //ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
+			long temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
+			//fprintf(stderr, "value of counter in register before reload: %ld\n", temp);
+			ioctl(event_thread[i].fd, SET_CUR_CNT, ibs_count);
+			temp = ioctl(event_thread[i].fd, GET_CUR_CNT);
+			//fprintf(stderr, "value of counter in register after reload: %ld\n", temp);
                         //fprintf(stderr, "IBS_OP is disabled\n");
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 }
@@ -546,7 +553,7 @@ get_fd_index(int nevents, int fd, event_thread_t *event_thread)
 record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		void* context, sample_val_t* sv)
 {
-	fprintf(stderr, "record_sample is called\n");
+	//fprintf(stderr, "record_sample is called\n");
 	if (current == NULL || current->event == NULL || current->event->metric < 0)
 		return NULL;
 
@@ -583,7 +590,7 @@ record_sample(event_thread_t *current, perf_mmap_data_t *mmap_data,
 		scale_f = 1.0;
 
 	double counter = scale_f * metric_inc;
-	fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
+	//fprintf(stderr, "counter from metric_inc: %0.2lf\n", counter);
 
 	// ----------------------------------------------------------------------------
 	// set additional information for the metric description
@@ -1257,7 +1264,7 @@ void linux_perf_events_pause(){
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 	int nevents = self->evl.nevents;
-//#if 0
+#if 0
 	//ibs_ctl_backup(nevents, event_thread);
 	for(int i=0; i<nevents; i++) {
                 event_thread_t *current = &(event_thread[i]);
@@ -1289,11 +1296,11 @@ void linux_perf_events_pause(){
 
                 }
         }	
-//#endif
+#endif
 	ibs_ctl_backup(nevents, event_thread);
 	perf_stop_all(nevents, event_thread);
 
-//#if 0
+#if 0
 	for(int i=0; i<nevents; i++) {
                 event_thread_t *current = &(event_thread[i]);
                 if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
@@ -1324,7 +1331,7 @@ void linux_perf_events_pause(){
 
                 }
         }
-//#endif
+#endif
 	
 
 }
@@ -1333,8 +1340,8 @@ void linux_perf_events_resume(){
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 	int nevents = self->evl.nevents;
+	ibs_ctl_reload(nevents, event_thread);
 	perf_start_all(nevents, event_thread);
-	//ibs_ctl_reload(nevents, event_thread);
 }
 
 
@@ -1597,12 +1604,12 @@ perf_event_handler(
 	// ----------------------------------------------------------------------------
 	// disable all counters
 	// ----------------------------------------------------------------------------
-	fprintf(stderr, "in perf_event_handler 0\n");
+	//fprintf(stderr, "in perf_event_handler 0\n");
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
 	int nevents = self->evl.nevents;
-//#if 0
+#if 0
 	//ibs_ctl_backup(nevents, event_thread);
 	for(int i=0; i<nevents; i++) {
                 event_thread_t *current = &(event_thread[i]);
@@ -1632,12 +1639,12 @@ perf_event_handler(
                         fprintf(stderr, "checkpoint -1: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
 		}
         }
-//#endif
-	ibs_ctl_backup(nevents, event_thread);
+#endif
+	//ibs_ctl_backup(nevents, event_thread);
 	perf_stop_all(nevents, event_thread);
 
 // check counter here 1
-//#if 0
+#if 0
 	for(int i=0; i<nevents; i++) {
 		event_thread_t *current = &(event_thread[i]);
 		if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
@@ -1666,7 +1673,7 @@ perf_event_handler(
                         fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
 		}
         }
-//#endif
+#endif
 // check counter here 2
 
 	int fd;
@@ -1696,7 +1703,7 @@ perf_event_handler(
 
 	void *pc = hpcrun_context_pc(context);
 
-	fprintf(stderr, "sample in addr %lx in perf_event_handler\n", pc);
+	//fprintf(stderr, "sample in addr %lx in perf_event_handler\n", pc);
 
 	if (! hpcrun_safe_enter_async(pc) /*&& !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")*/) {
 		hpcrun_stats_num_samples_blocked_async_inc();
@@ -1803,7 +1810,7 @@ perf_event_handler(
 	{
        		more_data = tmp / sizeof(ibs_op_t);
 		sample_buffer = malloc (sizeof(ibs_op_t));
-		fprintf(stderr, "%d samples are detected in a counter overflow\n", more_data);
+		//fprintf(stderr, "%d samples are detected in a counter overflow\n", more_data);
 	} 
 
 	int offset = 0;

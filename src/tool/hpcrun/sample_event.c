@@ -241,7 +241,7 @@ hpcrun_sample_callpath(void* context, int metricId,
       node  = hpcrun_backtrace2cct(&(epoch->csdata), context, metricId,
                                    metricIncr, skipInner, isSync, data_aux);
      
-     fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
+     //fprintf(stderr, "sample in node: %d and thread %d\n", hpcrun_cct_persistent_id(node), TD_GET(core_profile_trace_data.id));
      /*if(metricId > 0) {
      int node_id = hpcrun_cct_persistent_id(node);
      int node_id_idx = node_id % 13;

@@ -2068,7 +2068,7 @@ static inline uint64_t GetWeightedMetricDiffAndReset(cct_node_t * ctxtNode, int 
   int catchUpMetricId = GetMatchingWatermarkId(pebsMetricId);
   hpcrun_get_weighted_metric_diff(pebsMetricId, catchUpMetricId, set, &diff, &diffWithPeriod);
   // catch up metric: up catchUpMetricId to macth pebsMetricId proportionally
-  fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
+ // fprintf(stderr, "diff.r as long: %ld, diffWithPeriod.r as long: %ld, diff.r as double: %0.2lf, diffWithPeriod.r as double: %0.2lf\n", diff.r, diffWithPeriod.r, diff.r, diffWithPeriod.r);
   diff.r = diff.r * proportion;
   cct_metric_data_increment(catchUpMetricId, ctxtNode, diff);
   return (uint64_t) (diffWithPeriod.r * proportion);
@@ -2955,7 +2955,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
       //assert(val[0][1] == 0 && val[0][2] == 0); // no counter multiplexing allowed
       rd += val[0][0];
     //}
-   fprintf(stderr, "reuse distance %ld is detected %d times on address %lx\n", rd, inc, wpi->sample.va);
+    //fprintf(stderr, "reuse distance %ld is detected %d times on address %lx\n", rd, inc, wpi->sample.va);
     ReuseAddDistance(rd, inc);
   //}
 

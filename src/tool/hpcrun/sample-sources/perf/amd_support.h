@@ -23,6 +23,7 @@
 #define IBS_DISABLE     0x1U
 #define RESET_BUFFER    0x10U
 #define GET_LOST        0xEEU
+#define SET_CUR_CNT     0x2U
 #define GET_CUR_CNT     0x3U
 #define GET_MAX_CNT     0x7U
 #define IBS_CTL_BACKUP  0x11U

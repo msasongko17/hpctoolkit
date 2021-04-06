@@ -610,7 +610,7 @@ void AMDReuseWPConfigOverride(void *v){
   //wpConfig.dontFixIP = true;
   //wpConfig.dontDisassembleWPAddress = true;
   wpConfig.isLBREnabled = false;
-  wpConfig.replacementPolicy = RDX; //OLDEST;
+  wpConfig.replacementPolicy = AUTO; //RDX; //OLDEST;
 }
 
 void ReuseWPConfigOverride(void *v){
@@ -1132,6 +1132,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
         }
       }
       //fprintf(stderr, "after empty slot found in watchpoint %d by thread %d, tData.numWatchpointArmingAttempt[0]: %ld, tData.numWatchpointArmingAttempt[1]: %ld, tData.numWatchpointArmingAttempt[2]: %ld, tData.numWatchpointArmingAttempt[3]: %ld, tData.watchPointArray[0].isActive: %d, tData.watchPointArray[1].isActive: %d, tData.watchPointArray[2].isActive: %d, tData.watchPointArray[3].isActive: %d\n", i, TD_GET(core_profile_trace_data.id), tData.numWatchpointArmingAttempt[0], tData.numWatchpointArmingAttempt[1], tData.numWatchpointArmingAttempt[2], tData.numWatchpointArmingAttempt[3], tData.watchPointArray[0].isActive, tData.watchPointArray[1].isActive, tData.watchPointArray[2].isActive, tData.watchPointArray[3].isActive);
+      //fprintf(stderr, "empty slot is found\n");
       return EMPTY_SLOT;
     }
   }
@@ -1160,7 +1161,7 @@ static VictimType GetVictim(int * location, ReplacementPolicy policy){
                 tData.samplePostFull++;
                 //fprintf(stderr, "thread id: %d, tData.samplePostFull: %ld\n", TD_GET(core_profile_trace_data.id), tData.samplePostFull);
                 //fprintf(stderr, "probabilityToReplace: %0.2lf\n", probabilityToReplace); 
-                if(/*randValue <= probabilityToReplace*/ 1) {
+                if(randValue <= probabilityToReplace) {
                   return NON_EMPTY_SLOT;
                 }
                 // this is an indication not to replace, but if the client chooses to force, they can
@@ -1932,7 +1933,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   // Perform Pre watchpoint action
   switch (wpi->sample.preWPAction) {
     case DISABLE_WP:
-      //fprintf(stderr, "in DISABLE_WP at location %d in thread %d\n", location, TD_GET(core_profile_trace_data.id));
+      //fprintf(stderr, "DISABLE_WP at location %d in thread %d in OnWatchPoint\n", location, TD_GET(core_profile_trace_data.id));
       DisableWatchpointWrapper(wpi);
       break;
     case DISABLE_ALL_WP:
@@ -2161,9 +2162,11 @@ bool SubscribeWatchpoint(SampleData_t * sampleData, OverwritePolicy overwritePol
     return false;
   }
   //sub_wp_count2++;
+  //fprintf(stderr, "before IsOveralpped\n");
   if(IsOveralpped(sampleData)){
     return false; // drop the sample if it overlaps an existing address
   }
+  //fprintf(stderr, "after IsOveralpped\n");
   sub_wp_count2++;
 
   // No overlap, look for a victim slot
