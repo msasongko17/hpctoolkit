@@ -4749,6 +4749,18 @@ double thread_coefficient(int as_matrix_size) {
 }
 #endif
 
+int ibs_get_mem_width(int mem_width) {
+        if(mem_width < 3)
+                return mem_width;
+        else if(mem_width == 3)
+                return 4;
+        else if(mem_width == 4)
+                return 8;
+        else if(mem_width == 5)
+                return 16;
+        return 1;
+}
+
 bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, cct_node_t *node, int sampledMetricId) {
   if (strncmp (hpcrun_id2metric(sampledMetricId)->name,"L2_RQSTS.MISS", 13) == 0)
     fprintf(stderr, "there is an L2_RQSTS.MISS 1\n"); 
@@ -4825,7 +4837,8 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
         	accessType = STORE;
         else if (mmap_data->load)
                 accessType = LOAD;
-	accessLen = mmap_data->mem_width; 		
+	accessLen = ibs_get_mem_width(mmap_data->mem_width);
+	fprintf(stderr, "mem_width: %d, accessLen: %d\n", mmap_data->mem_width, accessLen); 		
   }
   else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
