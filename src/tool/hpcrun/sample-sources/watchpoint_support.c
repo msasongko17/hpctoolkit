@@ -137,6 +137,7 @@ typedef enum WP_CLIENT_ID{
   WP_REUSETRACKER,
   WP_AMD_COMM,
   WP_AMD_REUSE,
+  WP_AMD_REUSETRACKER,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -613,6 +614,14 @@ void AMDReuseWPConfigOverride(void *v){
   wpConfig.replacementPolicy = AUTO; //RDX; //OLDEST;
 }
 
+void AMDReuseTrackerWPConfigOverride(void *v){
+  // replacement policy is OLDEST forced.
+  //wpConfig.dontFixIP = true;
+  //wpConfig.dontDisassembleWPAddress = true;
+  //wpConfig.isLBREnabled = false;
+  wpConfig.replacementPolicy = RDX; //OLDEST;
+}
+
 void ReuseWPConfigOverride(void *v){
   // dont fix IP
   //wpConfig.dontFixIP = true;
@@ -975,7 +984,7 @@ void WatchpointThreadInit(WatchPointUpCall_t func){
   }
 
   //if LBR is supported create a dummy PERF_TYPE_HARDWARE for Linux workaround
-  if(event_id != WP_AMD_COMM && event_id != WP_AMD_REUSE && wpConfig.isLBREnabled) {
+  if(event_id != WP_AMD_COMM && event_id != WP_AMD_REUSE && event_id != WP_AMD_REUSETRACKER && wpConfig.isLBREnabled) {
     fprintf(stderr, "failed at CreateDummyHardwareEvent amd_ibs_flag: %d\n", amd_ibs_flag);
     CreateDummyHardwareEvent();
   }
@@ -1761,7 +1770,7 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
   //fprintf(stderr, "OnWatchPoint is executed 3\n");
   wp_count1++;
 
-  if(event_type == WP_REUSETRACKER /*|| event_type == WP_AMD_REUSE*/) {
+  if(event_type == WP_REUSETRACKER || event_type == WP_AMD_REUSETRACKER) {
     tData.numWatchpointTriggers++;
 
     int location = -1;

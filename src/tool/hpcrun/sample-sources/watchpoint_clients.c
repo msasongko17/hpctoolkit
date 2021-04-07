@@ -330,6 +330,7 @@ uint64_t detected_store_counter = 0;
 #define WP_REUSETRACKER_EVENT_NAME "WP_REUSETRACKER"
 #define WP_AMD_COMM_EVENT_NAME "WP_AMD_COMM"
 #define WP_AMD_REUSE_EVENT_NAME "WP_AMD_REUSE"
+#define WP_AMD_REUSETRACKER_EVENT_NAME "WP_AMD_REUSETRACKER"
 #define WP_TEMPORAL_REUSE_EVENT_NAME "WP_TEMPORAL_REUSE"
 #define WP_SPATIAL_REUSE_EVENT_NAME "WP_SPATIAL_REUSE"
 #define WP_FALSE_SHARING_EVENT_NAME "WP_FALSE_SHARING"
@@ -349,6 +350,7 @@ typedef enum WP_CLIENT_ID{
   WP_REUSETRACKER,
   WP_AMD_COMM,
   WP_AMD_REUSE,
+  WP_AMD_REUSETRACKER,
   WP_TEMPORAL_REUSE,
   WP_SPATIAL_REUSE,
   WP_FALSE_SHARING,
@@ -721,6 +723,7 @@ static WPTriggerActionType FalseSharingWPCallback(WatchPointInfo_t *wpi, int sta
 static WPTriggerActionType ComDetectiveWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
+static WPTriggerActionType AMDReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType AllSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType TrueSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
 static WPTriggerActionType IPCFalseSharingWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt);
@@ -823,6 +826,14 @@ static WpClientConfig_t wpClientConfig[] = {
     .wpCallback = AMDReuseWPCallback,
     .preWPAction = DISABLE_WP,
     .configOverrideCallback = AMDReuseWPConfigOverride
+  },
+  /**** AMD Communication ***/
+  {
+    .id = WP_AMD_REUSETRACKER,
+    .name = WP_AMD_REUSETRACKER_EVENT_NAME,
+    .wpCallback = AMDReuseTrackerWPCallback,
+    .preWPAction = DISABLE_WP,
+    .configOverrideCallback = AMDReuseTrackerWPConfigOverride
   },
   /**** Contention ***/
   {
@@ -1052,6 +1063,7 @@ static void ClientTermination(){
         hpcrun_stats_num_reuseSpatial_inc(reuseSpatial);
       }   break;
     case WP_AMD_REUSE:
+    case WP_AMD_REUSETRACKER:
     case WP_REUSETRACKER:
       {
         /*
@@ -1645,6 +1657,7 @@ METHOD_FN(process_event_list, int lush_metrics)
       }
       break;
     case WP_AMD_REUSE:
+    case WP_AMD_REUSETRACKER:
     case WP_REUSETRACKER:
       {
         //reuse_profile_type = REUSE_TEMPORAL;
@@ -1898,6 +1911,8 @@ METHOD_FN(display_events)
   printf("%s\n", WP_AMD_COMM_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_AMD_REUSE_EVENT_NAME); 
+  printf("---------------------------------------------------------------------------\n");
+  printf("%s\n", WP_AMD_REUSETRACKER_EVENT_NAME); 
   printf("---------------------------------------------------------------------------\n");
   printf("%s\n", WP_TEMPORAL_REUSE_EVENT_NAME);
   printf("---------------------------------------------------------------------------\n");
@@ -3001,8 +3016,8 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
 }
 //#endif
 
-#if 0
-static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
+//#if 0
+static WPTriggerActionType AMDReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
 	//fprintf(stderr, "trap in AMDReuseWPCallback happens\n");
 	trap_count++;
 #if 0  // jqswang:TODO, how to handle it?
@@ -3134,7 +3149,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
             if(profiling_mode == L1 || profiling_mode == MIXED)
               numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
             //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-            //fprintf(stderr, "L1 invalidation is detected in the same L3\n");
+            //fprintf(stderr, "L1 invalidation is detected\n");
             globalReuseWPs.table[wt->location].active = false;
           }
           globalReuseWPs.table[wt->location].counter++;
@@ -3248,7 +3263,7 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
     }
 
   }
-#if 0
+//#if 0
   cct_node_t *reusePairNode;
   cct_node_t *commReusePairNode;
   if (reuse_type == REUSE_TEMPORAL){
@@ -3345,10 +3360,10 @@ static WPTriggerActionType AMDReuseWPCallback(WatchPointInfo_t *wpi, int startOf
   }
   cct_metric_data_increment(reuse_time_distance_metric_id, reusePairNode, (cct_metric_data_t){.i = time_distance});
   cct_metric_data_increment(reuse_time_distance_count_metric_id, reusePairNode, (cct_metric_data_t){.i = 1});
-#endif
+//#endif
 	return ALREADY_DISABLED;
 }
-#endif
+//#endif
 
 static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
 	//fprintf(stderr, "AMDCommWPCallback is called and sample period is %ld\n", hpcrun_id2metric(wpi->sample.sampledMetricId)->period);
@@ -5541,7 +5556,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 		     SubscribeWatchpoint(&sd, OVERWRITE, false );
                      //fprintf(stderr, "here6\n");
 //#endif
-#if 0
+                          }
+                          break;
+    case WP_AMD_REUSETRACKER:{
+//#if 0
 			    sample_count++;
                             int me = TD_GET(core_profile_trace_data.id);
 
@@ -5740,37 +5758,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 break;
                               }
                             }
-#if 0
-                            if(location ==  -1) {
-                              uint64_t timestamp = MonitoredNode.timestamp;
-                              if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
-                                //reset context scaling count in monitored_node
-                                //fprintf(stderr, "inc is reset because of approximation, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld, last_trapped_timestamp: %ld, self_trap: %d\n", location, last_monitored_wp_timestamp, timestamp, last_trapped_timestamp, MonitoredNode.self_trap);
-                                GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
-                                last_trapped_timestamp = timestamp;
-                              }
-                              else if(last_monitored_wp_timestamp != timestamp) {
-                                fprintf(stderr, "monitored_node is replaced, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld\n", location, last_monitored_wp_timestamp, timestamp);
-                                monitored_node = node;
-                                monitored_metric = MonitoredNode.metricId;
-                                last_monitored_wp_timestamp = timestamp;	
-                              }
-                            }	      
-#endif
-                            /*if(globalReuseWPs.table[location].tid == me) {
-                              if (sample_count > wait_threshold) {
-                              globalWPIsUsers[location] = -1;
-                              globalReuseWPs.table[location].tid = -1;
-                            //uint64_t sampleCountDiff = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
-                            //globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
-                            //fprintf(stderr, "residueSampleCountInPrevThread is assigned with %ld in thread %d\n", sampleCountDiff, me);
-                            //wait_threshold = sample_count + CHANGE_THRESHOLD;
-                            used_wp_count--;
-                            //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold); 
-                            }
-                            numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;     
-                            //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
-                            }*/
                             if ((location != -1) && (sample_count > wait_threshold)) {
                               globalWPIsUsers[location] = -1;
                               globalReuseWPs.table[location].tid = -1;
@@ -5825,15 +5812,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               if(profiling_mode == L3 || profiling_mode == MIXED) {
                                 for(int i = 0; i < cur_global_thread_count; i++) {
                                   if((mapping_size == 0) || (l3_count == 1) || (thread_to_l3_mapping[mapping_vector[i % mapping_size]] == affinity_l3)) {
-#if 0
-                                    for (int j=0; j < MIN(2, reuse_distance_num_events); j++){
-                                      uint64_t val[3];  
-                                      linux_perf_read_event_counter_shared( reuse_distance_events[j], val, i/*locality_vector[affinity_l3][i+1]*/);
-                                      for(int k=0; k < 3; k++) {
-                                        sd.sharedReuseDistance[j][k] += val[k];
-                                      }
-                                    }
-#endif
 				    uint64_t val[3];  
                                     linux_perf_read_event_counter_shared( amd_reuse_distance_event, val, i/*locality_vector[affinity_l3][i+1]*/);
                                     for(int k=0; k < 3; k++) {
@@ -5888,24 +5866,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               int original_wpLength = sd.wpLength;
 //#if 0
                               for(int i = 0; i < cur_global_thread_count; i++) {
-                                /*if(indices[i] == me) {
-                                //if(wpConfig.cachelineInvalidation) {
-                                sd.va = original_va;
-                                sd.wpLength = original_wpLength;
-                                //fprintf(stderr, "address: %lx, length: %ld\n", sd.va, sd.wpLength);
-                                //}
-                                sd.type = WP_RW;
-                                } else {
-                                if(wpConfig.cachelineInvalidation) {
-                                int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
-                                int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
-                                sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
-                                sd.wpLength = MAX_WP_LENGTH;
-                                //fprintf(stderr, "This region is executed\n");
-                                }
-                                sd.type = WP_WRITE;
-                                }
-                                SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);*/
                                 int core_id;
                                 if(mapping_size > 0) {
                                   core_id = mapping_vector[indices[i] % mapping_size];	
@@ -5986,9 +5946,10 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 }*/ 
 //#endif
                             lastTime = curTime;
-#endif
-                          }
-                          break;
+//#endif
+
+			  }
+			  break;
     case WP_SPATIAL_REUSE:{
                             long  metricThreshold = hpcrun_id2metric(sampledMetricId)->period;
                             accessedIns += metricThreshold;
@@ -7114,7 +7075,7 @@ void dump_profiling_metrics() {
     dump_waw_as_matrix();
     dump_waw_as_core_matrix();
   } 
-  if(theWPConfig->id == WP_REUSETRACKER || theWPConfig->id == WP_AMD_REUSE) {
+  if(theWPConfig->id == WP_REUSETRACKER) {
 #ifdef REUSE_HISTO
     uint64_t val[3];
     //fprintf(stderr, "FINAL_COUNTING:");
@@ -7160,6 +7121,68 @@ void dump_profiling_metrics() {
     fprintf(fp, "\n");
     fclose(fp);
 #endif 
+    ret = snprintf(file_name, PATH_MAX, "%s-%u.communication.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
+    FILE * fp1;
+    fp1 = fopen (file_name, "w+");
+    fprintf(fp1, "BIN_START: %lf\n", reuse_bin_start);
+    fprintf(fp1, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+    for(int i=0; i < communication_reuse_bin_size; i++){
+      fprintf(fp1, "BIN: %d %lu\n", i, communication_reuse_bin_list[i]);
+    }
+    fprintf(fp1, "COHERENCE_MISS:");
+    fprintf(fp1, " %ld\n", l3_coherence_miss_count);
+    //fprintf(stderr, "\n");
+    fprintf(fp1, "\n");
+    fclose(fp1);
+
+  }
+
+  if (theWPConfig->id == WP_AMD_REUSE || theWPConfig->id == WP_AMD_REUSETRACKER) {
+	#ifdef REUSE_HISTO
+    uint64_t val[3];
+    //fprintf(stderr, "FINAL_COUNTING:");
+    if (reuse_output_trace == false){ //dump the bin info
+      //fprintf(stderr, "the bin info is dumped\n");
+      //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+      //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+      WriteWitchTraceOutput("BIN_START: %lf\n", reuse_bin_start);
+      WriteWitchTraceOutput("BIN_RATIO: %lf\n", reuse_bin_ratio);
+
+      for(int i=0; i < reuse_bin_size; i++){
+        WriteWitchTraceOutput("BIN: %d %lu\n", i, reuse_bin_list[i]);
+      }
+    }
+
+    //fprintf(stderr, "inter_thread_invalidation_count: %ld\n", inter_thread_invalidation_count);
+    //fprintf(stderr, "inter_core_invalidation_count: %ld\n", inter_core_invalidation_count);
+    WriteWitchTraceOutput("COHERENCE_MISS:");
+    WriteWitchTraceOutput(" %ld\n", l3_coherence_miss_count);
+    WriteWitchTraceOutput("FINAL_COUNTING:");
+    //for (int i=0; i < MIN(2,reuse_distance_num_events); i++){
+    assert(linux_perf_read_event_counter(amd_reuse_distance_event, val) >= 0);
+      //fprintf(stderr, " %lu %lu %lu,", val[0], val[1], val[2]);//jqswang
+    WriteWitchTraceOutput(" %lu %lu %lu,", val[0], val[1], val[2]);
+    //}
+    //fprintf(stderr, "\n");
+    WriteWitchTraceOutput("\n");
+    //close the trace output
+    CloseWitchTraceOutput();
+
+    char file_name[PATH_MAX];
+    int ret = snprintf(file_name, PATH_MAX, "%s-%u.shared.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
+    FILE * fp;
+    fp = fopen (file_name, "w+");
+    fprintf(fp, "BIN_START: %lf\n", reuse_bin_start);
+    fprintf(fp, "BIN_RATIO: %lf\n", reuse_bin_ratio);
+    for(int i=0; i < shared_reuse_bin_size; i++){
+      fprintf(fp, "BIN: %d %lu\n", i, shared_reuse_bin_list[i]);
+    }
+    fprintf(fp, "COHERENCE_MISS:");
+    fprintf(fp, " %ld\n", l3_coherence_miss_count);
+    //fprintf(stderr, "\n");
+    fprintf(fp, "\n");
+    fclose(fp);
+#endif
     ret = snprintf(file_name, PATH_MAX, "%s-%u.communication.reuse.hpcrun", hpcrun_files_executable_name(), syscall(SYS_gettid));
     FILE * fp1;
     fp1 = fopen (file_name, "w+");
