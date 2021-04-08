@@ -1405,7 +1405,7 @@ int reading_locality_vector()
   l2_locality_vector[l2_count][0] = l2_size-1;
   l3_count++;
   l2_count++;
-  /*fprintf(stderr, "l3 affinity:\n");
+  fprintf(stderr, "l3 affinity:\n");
     for(int i = 0; i < 4; i++) {
     for(int j = 0; j < 40; j++) {
     fprintf(stderr, "%d ", locality_vector[i][j]);
@@ -1418,7 +1418,7 @@ int reading_locality_vector()
     fprintf(stderr, "%d ", l2_locality_vector[i][j]);
     }
     fprintf(stderr, "\n");
-    }*/
+    }
   return 0;
 }
 
@@ -3177,10 +3177,11 @@ static WPTriggerActionType AMDReuseTrackerWPCallback(WatchPointInfo_t *wpi, int 
               if(globalReuseWPs.table[wt->location].inc == 0) {
                 post_rd_flag = true;
               }
+	      //fprintf(stderr, "L3 reuse is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
               /*if(wpi->sample.type == WP_WRITE)
                 fprintf(stderr, "L1 invalidation is detected in the same L3\n");*/
             } else if(/*(wt->accessType == STORE) || (wt->accessType == LOAD_AND_STORE)*/wpi->sample.type == WP_WRITE) {
-              //fprintf(stderr, "invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
+              //fprintf(stderr, "L3 invalidation is detected, me: %d, monitored_tid: %d\n", me, monitored_tid);
               globalReuseWPs.table[wt->location].sharedActive = false;
               //fprintf(stderr, "L3 invalidation is detected\n");
             }
@@ -4838,7 +4839,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
         else if (mmap_data->load)
                 accessType = LOAD;
 	accessLen = ibs_get_mem_width(mmap_data->mem_width);
-	fprintf(stderr, "mem_width: %d, accessLen: %d\n", mmap_data->mem_width, accessLen); 		
+	//fprintf(stderr, "mem_width: %d, accessLen: %d\n", mmap_data->mem_width, accessLen); 		
   }
   else if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
     //EMSG("Sampled a non load store at = %p\n", precisePC);
@@ -5908,6 +5909,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                     }
                                     if(indices[i] == me || profiling_mode == L3) {
                                       sd.type = WP_RW;
+				      //fprintf(stderr, "a wp in thread %d is armed with WP_RW type by thread %d to detect reuse\n", indices[i], me);
                                     } else if (profiling_mode == MIXED) {
                                       if((rdtsc() % 100) >= 50) {
                                         sd.type = WP_WRITE;
@@ -5945,6 +5947,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                     sd.va = data_addr;
                                     sd.wpLength = MAX_WP_LENGTH;
                                   }
+				  //fprintf(stderr, "a wp in thread %d is armed with WP_WRITE type by thread %d to detect invalidation\n", indices[i], me);
                                   sd.type = WP_WRITE;
                                 }
                                 //fprintf(stderr, "wp in thread %d is armed by thread %d\n",indices[i], me);
