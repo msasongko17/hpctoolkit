@@ -98,6 +98,7 @@ typedef struct perf_mmap_data_s {
   /* if PERF_SAMPLE_READ */
   bool load;
   bool store;
+  int micro_op_sample;
   int mem_access_sample;
   int valid_mem_access_sample;
   u64    nr;         /* if PERF_SAMPLE_CALLCHAIN */

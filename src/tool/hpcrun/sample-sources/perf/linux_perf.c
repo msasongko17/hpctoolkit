@@ -184,6 +184,7 @@ extern int dynamic_global_thread_count;
 extern long global_l2_miss_sampling_period;
 extern int l3_reuse_distance_event_rqsts;
 extern int amd_reuse_distance_event;
+//extern int amd_micro_op_event;
 int ibs_event = -1;
 bool amd_ibs_flag = false;
 //******************************************************************************
@@ -456,7 +457,7 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 
 	// need to set PERF_SIGNAL to this file descriptor
 	// to avoid POLL_HUP in the signal handler
-	if(hpcrun_ev_is(event->metric_desc->name, "AMD_L1_DATA_ACCESS"))
+	if(hpcrun_ev_is(event->metric_desc->name, "AMD_L1_DATA_ACCESS") || hpcrun_ev_is(event->metric_desc->name, "AMD_MICRO_OP_RETIRED"))
 		ret = fcntl(et->fd, F_SETSIG, /*PERF_SIGNAL*/SIGNEW);
 	else
 		ret = fcntl(et->fd, F_SETSIG, PERF_SIGNAL);
@@ -885,15 +886,10 @@ METHOD_FN(supports_event, const char *ev_str)
 		return true;
 	}
 
-	if (hpcrun_ev_is(ev_tmp, "IBS_OP")) {
+	if (hpcrun_ev_is(ev_tmp, "IBS_OP") || hpcrun_ev_is(ev_tmp, "AMD_L1_DATA_ACCESS") || hpcrun_ev_is(ev_tmp, "AMD_MICRO_OP_RETIRED")) {
 		fprintf(stderr, "event %s is supported with period: %ld\n", ev_tmp, thresh);
 		return true;
 	}
-
-	if (hpcrun_ev_is(ev_tmp, "AMD_L1_DATA_ACCESS")) {
-                fprintf(stderr, "event %s is supported with period: %ld\n", ev_tmp, thresh);
-                return true;
-        }	
 
 	// this is not a predefined event, we need to consult to perfmon (if enabled)
 #ifdef ENABLE_PERFMON
@@ -945,6 +941,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	extern int reuse_distance_num_events;
 	extern int l3_reuse_distance_event;
 	extern int amd_reuse_distance_event;
+	//extern int amd_micro_op_event;
 	//extern int l3_reuse_distance_event_rqsts;
 	reuse_distance_events = (int *) hpcrun_malloc(sizeof(int) * num_events);
 	reuse_distance_num_events = 0;
@@ -954,6 +951,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 	}
 	l3_reuse_distance_event = 0;
 	amd_reuse_distance_event = 0;
+	//amd_micro_op_event = 0;
 	l3_reuse_distance_event_rqsts = 0;
 
 	int i=0;
@@ -1008,7 +1006,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		struct perf_event_attr *event_attr = &(event_desc[i].attr);
 
 		int isPMU = pfmu_getEventAttribute(name, event_attr);
-		if (isPMU < 0 && !hpcrun_ev_is(name, "IBS_OP") && !hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
+		if (isPMU < 0 && !hpcrun_ev_is(name, "IBS_OP") && !hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS") && !hpcrun_ev_is(name, "AMD_MICRO_OP_RETIRED")) {
 			fprintf(stderr, "%s is an unknown event\n", name);
 			// case for unknown event
 			// it is impossible to be here, unless the code is buggy
@@ -1023,11 +1021,14 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = /*0x0c0;0x4300c1;0x0329;*/0x430729;
+                        	event_attr->config = /*0x0c0;0x4300c1;*/0x0329;/*0x0229;0x430729;*/
                         	event_attr->type = PERF_TYPE_RAW;
-                	}
+                	} else if(hpcrun_ev_is(name, "AMD_MICRO_OP_RETIRED")) {
+                                event_attr->config = 0x4300c1;
+                                event_attr->type = PERF_TYPE_RAW;
+                        }
 			perf_attr_init(event_attr, is_period, threshold, 0);
-			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
+			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS") || hpcrun_ev_is(name, "AMD_MICRO_OP_RETIRED")) {
 				event_attr->sample_type =PERF_SAMPLE_IP;
 			}
 		} else
@@ -1084,6 +1085,15 @@ METHOD_FN(process_event_list, int lush_metrics)
                         {
                                 amd_reuse_distance_event = i;
                                 fprintf(stderr, "assignment to AMD_L1_DATA_ACCESS happens here\n");
+                        }
+#ifdef REUSE_HISTO
+		if ((strstr(name, "AMD_MICRO_OP_RETIRED") != NULL) || (strstr(name, "AMD_MICRO_OP_RETIRED") != NULL))
+#else
+                        if ((strstr(name, "AMD_MICRO_OP_RETIRED") != NULL) || (strstr(name, "AMD_MICRO_OP_RETIRED") != NULL)) //jqswang: TODO // && threshold == 0)
+#endif
+                        {
+                                amd_reuse_distance_event = i;
+                                fprintf(stderr, "assignment to AMD_MICRO_OP_RETIRED happens here\n");
                         }
 		/**************************************************/
 
@@ -1586,6 +1596,7 @@ read_ibs_buffer(event_thread_t *current, perf_mmap_data_t *mmap_info, ibs_op_t *
 	//if(mmap_info->phy_addr_valid)
 	mmap_info->phy_addr = op_data->dc_phys_ad.reg.ibs_dc_phys_addr;
 	mmap_info->ip = op_data->op_rip;
+	mmap_info->micro_op_sample = op_data->micro_op_sample;
 	mmap_info->mem_access_sample = op_data->mem_access_sample;
 	mmap_info->valid_mem_access_sample = op_data->valid_mem_access_sample;
 
@@ -1848,7 +1859,7 @@ perf_event_handler(
 			more_data = read_perf_buffer(current, &mmap_data);
 
 			//fprintf(stderr, "event with name %s is handled there\n", current->event->metric_desc->name);
-                	if (mmap_data.header_type == PERF_RECORD_SAMPLE && !hpcrun_ev_is(current->event->metric_desc->name, "AMD_L1_DATA_ACCESS"))
+                	if (mmap_data.header_type == PERF_RECORD_SAMPLE && !hpcrun_ev_is(current->event->metric_desc->name, "AMD_L1_DATA_ACCESS") && !hpcrun_ev_is(current->event->metric_desc->name, "AMD_MICRO_OP_RETIRED"))
                         	record_sample(current, &mmap_data, context, &sv);
 
 			kernel_block_handler(current, sv, &mmap_data);

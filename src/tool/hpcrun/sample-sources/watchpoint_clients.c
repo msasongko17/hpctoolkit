@@ -185,6 +185,7 @@ int false_wr_metric_id = -1;
 int true_ww_metric_id = -1;
 int true_rw_metric_id = -1;
 int true_wr_metric_id = -1;
+double amd_global_sampling_period = 0;
 
 int temporal_reuse_metric_id = -1;
 int spatial_reuse_metric_id = -1;
@@ -222,6 +223,7 @@ __thread int load_count = 0;
 __thread int store_count = 0;
 __thread int addr_valid_count = 0;
 __thread int phy_addr_valid_count = 0;
+__thread int micro_op_sample = 0;
 __thread int mem_access_sample = 0;
 __thread int valid_mem_access_sample = 0;
 //uint64_t global_store_count = 0;
@@ -1102,6 +1104,7 @@ uint64_t val[3];
 	fprintf(stderr, "valid_sample_count1: %ld\n", valid_sample_count1);
 	fprintf(stderr, "valid_sample_count2: %ld\n", valid_sample_count2);
 	fprintf(stderr, "sample_count: %ld\n", sample_count);
+	fprintf(stderr, "micro_op_sample: %ld\n", micro_op_sample);
 	fprintf(stderr, "mem_access_sample: %ld\n", mem_access_sample);
 	fprintf(stderr, "valid_mem_access_sample: %ld\n", valid_mem_access_sample);
         hpcrun_stats_num_accessedIns_inc(accessedIns);
@@ -5483,6 +5486,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 #else
                      if ( accessType != reuse_monitor_type && reuse_monitor_type != LOAD_AND_STORE) break;
 #endif
+		     micro_op_sample = mmap_data->micro_op_sample;
 		     mem_access_sample = mmap_data->mem_access_sample;
 		     valid_mem_access_sample = mmap_data->valid_mem_access_sample;
 		     sample_count++;
@@ -6166,6 +6170,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				//fprintf(stderr, "global_thread_count: %d\n", global_thread_count);
 				int sType = -1;
                             	sample_count++;
+				micro_op_sample = mmap_data->micro_op_sample;
 				mem_access_sample = mmap_data->mem_access_sample;
 				valid_mem_access_sample = mmap_data->valid_mem_access_sample;
 
@@ -6232,6 +6237,9 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               //fprintf(stderr, "found\n");
                               // < M2 , δ2 , ts2 , T2 > = getEntryAttributes (entry)
                               // if T1 != T2 and ts2 > tprev then
+				if(amd_global_sampling_period == 0) {
+					amd_global_sampling_period = (double) hpcrun_id2metric(sampledMetricId)->period;
+				}
                               if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
                                 int flag = 0;
                                 double global_sampling_period = 0;
@@ -7037,8 +7045,14 @@ ErrExit:
 void dump_profiling_metrics() {
   //#if 0
   if(theWPConfig->id == WP_AMD_COMM) {
-	  double scale_ratio = (double) mem_access_sample / store_count/*valid_mem_access_sample*/;
-	  fprintf(stderr, "mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
+	  uint64_t val[3] = {0};
+          //fprintf(stderr, "before assert\n");
+          //fprintf(stderr, "reading counter in OnSample data_addr: %lx\n", data_addr);
+          assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
+          fprintf(stderr, "load and store counter: %ld\n", val[0]);
+
+	  double scale_ratio = (double) val[0]/amd_global_sampling_period / micro_op_sample;//mem_access_sample; //mem_access_sample / store_count;
+	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
 	  adjust_communication_volume(scale_ratio);
 #if 0
 	  for(int i = 0; i < as_matrix_size; i++) {
