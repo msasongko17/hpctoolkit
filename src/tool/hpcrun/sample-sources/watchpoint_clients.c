@@ -6493,7 +6493,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   inserted_item.node = node;
                                   inserted_item.cacheLineBaseAddress = cacheLineBaseAddressVar;
                                   inserted_item.prev_transfer_counter = 0;
-                                  inserted_item.expiration_period = (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
+                                  inserted_item.expiration_period = /*(lastTime == 0 ? 0 : 2 * (curtime - lastTime));*/ (storeLastTime == 0 ? 0 : (storeCurTime - storeLastTime));
 				  inserted_item.valid_sample_count = valid_sample_count;
                                   int bb_flag = 0;
                                   //__sync_synchronize();
@@ -7051,7 +7051,7 @@ void dump_profiling_metrics() {
           assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
           fprintf(stderr, "load and store counter: %ld\n", val[0]);
 
-	  double scale_ratio = (double) val[0]/amd_global_sampling_period / micro_op_sample;//mem_access_sample; //mem_access_sample / store_count;
+	  double scale_ratio = (double) val[0]/amd_global_sampling_period / /*micro_op_sample;*/mem_access_sample; //mem_access_sample / store_count;
 	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
 	  adjust_communication_volume(scale_ratio);
 #if 0
