@@ -258,7 +258,7 @@ perf_start_all(int nevents, event_thread_t *event_thread)
 	for(i=0; i<nevents; i++) {
 		//ioctl(event_thread[i].fd, PERF_EVENT_IOC_ENABLE, 0);
 		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP") && event_thread[i].fd >= 0){
-                        ioctl(event_thread[i].fd, IBS_ENABLE);
+                        //ioctl(event_thread[i].fd, IBS_ENABLE);
 			//ioctl(event_thread[i].fd, IBS_CTL_RELOAD);
                         //fprintf(stderr, "fd: %d is disabled\n", event_thread[i].fd);
                 }
@@ -1308,7 +1308,8 @@ void linux_perf_events_pause(){
         }	
 #endif
 	ibs_ctl_backup(nevents, event_thread);
-	perf_stop_all(nevents, event_thread);
+	if(!amd_ibs_flag)
+		perf_stop_all(nevents, event_thread);
 
 #if 0
 	for(int i=0; i<nevents; i++) {
@@ -1652,7 +1653,8 @@ perf_event_handler(
         }
 #endif
 	//ibs_ctl_backup(nevents, event_thread);
-	perf_stop_all(nevents, event_thread);
+	if(!amd_ibs_flag)
+		perf_stop_all(nevents, event_thread);
 
 // check counter here 1
 #if 0
