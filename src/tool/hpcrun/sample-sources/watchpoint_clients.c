@@ -7045,15 +7045,16 @@ ErrExit:
 void dump_profiling_metrics() {
   //#if 0
   if(theWPConfig->id == WP_AMD_COMM) {
-	  uint64_t val[3] = {0};
+	  //uint64_t val[3] = {0};
           //fprintf(stderr, "before assert\n");
           //fprintf(stderr, "reading counter in OnSample data_addr: %lx\n", data_addr);
-          assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
-          fprintf(stderr, "load and store counter: %ld\n", val[0]);
+          //assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
+          //fprintf(stderr, "load and store counter: %ld\n", val[0]);
 
-	  double scale_ratio = (double) val[0]/amd_global_sampling_period / /*micro_op_sample;*/mem_access_sample; //mem_access_sample / store_count;
-	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
-	  adjust_communication_volume(scale_ratio);
+	  //double scale_ratio = (double) val[0]/amd_global_sampling_period / /*micro_op_sample;*/mem_access_sample; //mem_access_sample / store_count;
+	  //fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
+	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count);
+	  //adjust_communication_volume(scale_ratio);
 #if 0
 	  for(int i = 0; i < as_matrix_size; i++) {
 		  for(int j = 0; j < as_matrix_size; j++) {
