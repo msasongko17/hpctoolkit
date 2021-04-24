@@ -405,6 +405,52 @@ ibs_perf_init()
 }
 
 
+static void cpuid(uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
+{
+            asm volatile("cpuid" : "=a" (*eax), "=b" (*ebx), "=c" (*ecx), "=d" (*edx)
+                                        : "0" (*eax), "2" (*ecx));
+}
+
+uint32_t get_deep_ibs_info(void)
+{   
+    uint32_t eax = 0x8000001b;
+    uint32_t ebx = 0, ecx = 0, edx = 0;
+    cpuid(&eax, &ebx, &ecx, &edx);
+    return eax;
+}
+
+
+void set_global_op_sample_rate(int sample_rate)
+{
+    int max_sample_rate = 0;
+    // Check for proper IBS support before we try to read the CPUID information
+    // about the maximum sample rate.
+    //check_amd_processor();
+    //check_basic_ibs_support();
+    //check_ibs_op_support();
+
+    if (sample_rate < 0x90)
+    {
+        fprintf(stderr, "Attempting to set IBS op sample rate too low - %d\n", sample_rate);
+        fprintf(stderr, "This generation core should not be set below %d\n", 0x90);
+        exit(EXIT_FAILURE);
+    }
+    uint32_t ibs_id = get_deep_ibs_info();
+    uint32_t extra_bits = (ibs_id & (1 << 6)) >> 6;
+    if (!extra_bits)
+        max_sample_rate = 1<<20;
+    else
+        max_sample_rate = 1<<27;
+
+    if (sample_rate >= max_sample_rate)
+    {
+        fprintf(stderr, "Attempting to set IBS op sample rate too high - %d\n", sample_rate);
+        fprintf(stderr, "This generation core can only support up to: %d\n", max_sample_rate-1);
+        exit(EXIT_FAILURE);
+    }
+    op_cnt_max_to_set = sample_rate >> 4;
+}
+
 
 //----------------------------------------------------------
 // initialize an event
@@ -496,7 +542,8 @@ perf_thread_init(event_info_t *event, event_thread_t *et)
 
                 ioctl(et->fd, SET_BUFFER_SIZE, BUFFER_SIZE_B);
                 //ioctl(fd[cpu], SET_POLL_SIZE, poll_size / sizeof(ibs_op_t));
-                ioctl(et->fd, SET_MAX_CNT, event->metric_desc->period);
+		set_global_op_sample_rate(event->metric_desc->period);
+                ioctl(et->fd, SET_MAX_CNT, op_cnt_max_to_set/*event->metric_desc->period*/);
 		if (ioctl(et->fd, IBS_ENABLE)) {
                         fprintf(stderr, "IBS op enable failed on cpu %d\n", my_id);
                         return false;
