@@ -204,6 +204,9 @@ struct event_threshold_s {
 static int
 restart_perf_event(int fd);
 
+static int
+ibs_restart_perf_event(int fd);
+
 static bool 
 perf_thread_init(event_info_t *event, event_thread_t *et);
 
@@ -824,7 +827,10 @@ METHOD_FN(start)
 			TMSG(LINUX_PERF, "error fd %d in IOC_RESET: %s", event_thread[i].fd, strerror(errno));
 		}
 
-		restart_perf_event( event_thread[i].fd );
+		if(hpcrun_ev_is(event_thread[i].event->metric_desc->name, "IBS_OP"))
+			ibs_restart_perf_event( event_thread[i].fd );
+		else
+			restart_perf_event( event_thread[i].fd );
 	}
 
 	thread_data_t* td = hpcrun_get_thread_data();
@@ -1068,7 +1074,7 @@ METHOD_FN(process_event_list, int lush_metrics)
 		// ------------------------------------------------------------
 		if(!hpcrun_ev_is(name, "IBS_OP")) {
 			if(hpcrun_ev_is(name, "AMD_L1_DATA_ACCESS")) {
-                        	event_attr->config = /*0x0c0;0x4300c1;*/0x0329;/*0x0229;0x430729;*/
+                        	event_attr->config = /*0x0c0;0x4300c1;0x0329;0x0229;*/0x430729;
                         	event_attr->type = PERF_TYPE_RAW;
                 	} else if(hpcrun_ev_is(name, "AMD_MICRO_OP_RETIRED")) {
                                 event_attr->config = 0x4300c1;
@@ -1285,27 +1291,32 @@ restart_perf_event(int fd)
 		return -1;
 	}
 
-	int ret;
-	if (!amd_ibs_flag)
-	{
-		ret = ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+	int ret = ioctl(fd, PERF_EVENT_IOC_RESET, 0);
 
-		if (ret == -1) {
-			TMSG(LINUX_PERF, "error fd %d in PERF_EVENT_IOC_RESET: %s", fd, strerror(errno));
-		}
+	if (ret == -1) {
+		TMSG(LINUX_PERF, "error fd %d in PERF_EVENT_IOC_RESET: %s", fd, strerror(errno));
+	}
 
-		ret = ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
-		if (ret == -1) {
-			TMSG(LINUX_PERF, "error fd %d in IOC_REFRESH: %s", fd, strerror(errno));
-		}
-	} else 
-	{
-		ret = ioctl(fd, RESET_BUFFER);	
-		if (ret < 0) {
-                        TMSG(LINUX_PERF, "error fd %d in ioctl RESET_BUFFER: %s", fd, strerror(errno));
-                }
+	ret = ioctl(fd, PERF_EVENT_IOC_REFRESH, 1);
+	if (ret == -1) {
+		TMSG(LINUX_PERF, "error fd %d in IOC_REFRESH: %s", fd, strerror(errno));
 	}
 	return ret;
+}
+
+static int
+ibs_restart_perf_event(int fd)
+{
+        if (fd < 0) {
+                TMSG(LINUX_PERF, "Unable to start event: fd is not valid");
+                return -1;
+        }
+
+        int ret = ioctl(fd, RESET_BUFFER);
+        if (ret < 0) {
+        	TMSG(LINUX_PERF, "error fd %d in ioctl RESET_BUFFER: %s", fd, strerror(errno));
+        }
+        return ret;
 }
 /***************************************************************************
  * object
@@ -1744,7 +1755,10 @@ perf_event_handler(
                 fprintf(stderr, "signal si_code %d with fd %d: unknown perf event\n", siginfo->si_code, fd);
                 hpcrun_safe_exit();
 
-                restart_perf_event(fd);
+		if(amd_ibs_flag)
+        		ibs_restart_perf_event(fd);
+		else
+                	restart_perf_event(fd);
 		//ibs_ctl_reload(nevents, event_thread);
                 perf_start_all(nevents, event_thread);
 
@@ -1766,7 +1780,10 @@ perf_event_handler(
 	if (! hpcrun_safe_enter_async(pc) /*&& !hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")*/) {
 //#endif
 		hpcrun_stats_num_samples_blocked_async_inc();
-		restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
+		if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP"))
+			ibs_restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
+		else
+			restart_perf_event(/*siginfo->si_int*/ siginfo->si_fd);
 		//fprintf(stderr, "quit perf_event_handler pc: %lx\n", pc);
 		//ibs_ctl_reload(nevents, event_thread);
 		perf_start_all(nevents, event_thread);
@@ -1932,7 +1949,10 @@ perf_event_handler(
         }
 	hpcrun_safe_exit();
 
-	restart_perf_event(fd);
+	if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP"))
+		ibs_restart_perf_event(fd);
+	else
+		restart_perf_event(fd);
 
 	//ibs_ctl_reload(nevents, event_thread);
 	perf_start_all(nevents, event_thread);

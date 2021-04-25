@@ -585,7 +585,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
 void ExpandSharedReuseBinList(){
