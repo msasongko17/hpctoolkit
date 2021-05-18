@@ -585,7 +585,7 @@ int FindReuseBinIndex(uint64_t distance){
 void ReuseAddDistance(uint64_t distance, uint64_t inc ){
   int index = FindReuseBinIndex(distance);
   reuse_bin_list[index] += inc;
-  fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
+  //fprintf(stderr, "distance %ld has happened %ld times with index %d\n", distance, inc, index);
 }
 
 void ExpandSharedReuseBinList(){
@@ -3152,7 +3152,7 @@ static WPTriggerActionType AMDReuseTrackerWPCallback(WatchPointInfo_t *wpi, int 
             if(profiling_mode == L1 || profiling_mode == MIXED)
               numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
             //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-            //fprintf(stderr, "L1 invalidation is detected\n");
+            fprintf(stderr, "L1 invalidation is detected\n");
             globalReuseWPs.table[wt->location].active = false;
           }
           globalReuseWPs.table[wt->location].counter++;
@@ -5776,6 +5776,24 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 break;
                               }
                             }
+
+
+			   if(location ==  -1) {
+                              uint64_t timestamp = MonitoredNode.timestamp;
+                              if((last_monitored_wp_timestamp == timestamp) && (last_trapped_timestamp != timestamp) && (MonitoredNode.self_trap == false)) {
+                                //reset context scaling count in monitored_node
+                                //fprintf(stderr, "inc is reset because of approximation, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld, last_trapped_timestamp: %ld, self_trap: %d\n", location, last_monitored_wp_timestamp, timestamp, last_trapped_timestamp, MonitoredNode.self_trap);
+                                GetWeightedMetricDiffAndReset(monitored_node, monitored_metric, 1.0);
+                                last_trapped_timestamp = timestamp;
+                              }
+                              else if(last_monitored_wp_timestamp != timestamp) {
+                                //fprintf(stderr, "monitored_node is replaced, location: %d, last_monitored_wp_timestamp: %ld, timestamp: %ld\n", location, last_monitored_wp_timestamp, timestamp);
+                                monitored_node = node;
+                                monitored_metric = MonitoredNode.metricId;
+                                last_monitored_wp_timestamp = timestamp;
+                              }
+                            } 
+
                             if ((location != -1) && (sample_count > wait_threshold)) {
                               globalWPIsUsers[location] = -1;
                               globalReuseWPs.table[location].tid = -1;
