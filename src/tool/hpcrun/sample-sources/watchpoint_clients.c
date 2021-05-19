@@ -3413,7 +3413,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int flag = 0;
   // if ts2 > tprev then
 //#if 0
-if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) { 
+if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <=  (2 * wpi->sample.expirationPeriod))) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
         flag = 1;
@@ -6258,7 +6258,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 				if(amd_global_sampling_period == 0) {
 					amd_global_sampling_period = (double) hpcrun_id2metric(sampledMetricId)->period;
 				}
-                              if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= item.expiration_period)) {
+                              if((me != item.tid) && (item.time > prev_timestamp) && ((curtime - item.time) <= (2 * item.expiration_period))) {
                                 int flag = 0;
                                 double global_sampling_period = 0;
                                 if(sType == ALL_LOAD /*accessType == LOAD*/) { // means that the sample is (read) (WAR)
