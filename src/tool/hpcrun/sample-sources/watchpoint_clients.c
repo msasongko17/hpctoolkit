@@ -164,6 +164,9 @@ __thread uint64_t last_monitored_wp_timestamp = 0;
 __thread cct_node_t *monitored_node;
 __thread int monitored_metric;
 
+int bb_store_count = 0;
+int all_store_count = 0;
+
 MonitoredNodeStruct_t MonitoredNode;
 
 //int wp_user_list[MAX_WP_SLOTS];
@@ -4790,18 +4793,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
         valid_sample_count2++;
   }
 //#endif
-#if 0
-  if (amd_ibs_flag /*&& mmap_data->store*/) {
-  	valid_sample_count++;
-	valid_sample_count1++;
-  }
-#endif
-#if 0
-  valid_sample_count++;
-  if (!mmap_data->addr_valid) {
-    goto ErrExit; // incorrect access type
-  }
-#endif
   //fprintf(stderr, "no problem 1\n");
   if (node == NULL) {
     goto ErrExit; // incorrect CCT
@@ -4814,29 +4805,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
   AccessType accessType;
   if(amd_ibs_flag) {
 	  //fprintf(stderr, "looking for precisePC: %lx in getEntryFromAccessTypeLengthCache\n", precisePC);
-#if 0
-	if(false == getEntryFromAccessTypeLengthCache(precisePC, (uint32_t*)(&accessLen), &accessType)) {
-  		if(false == get_mem_access_length_and_type(precisePC, (uint32_t*)(&accessLen), &accessType)){
-          		//EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
-			//fprintf(stderr, "error because of get_mem_access_length_and_type_address in OnSample\n");
-          		//goto ErrExit;
-			accessLen = 1;
-        	} 	
-		if(mmap_data->store)
-                	accessType = STORE;
-        	else if (mmap_data->load)
-                	accessType = LOAD;
-                //fprintf(stderr, "entry taken from disassembly\n");
-		//fprintf(stderr, "insertEntryToAccessTypeLengthCache of pc %lx is called here\n", precisePC);
-                insertEntryToAccessTypeLengthCache(precisePC, accessLen, accessType);
-	} else {
-		//fprintf(stderr, "getEntryFromAccessTypeLengthCache of pc %lx found an entry amd_ibs_flag: %d, accessLen: %d, accessType: %d\n", precisePC, amd_ibs_flag, accessLen, accessType);
-		if(mmap_data->store)
-			accessType = STORE;
-		else if (mmap_data->load)
-			accessType = LOAD;
-	}
-#endif
 	if(mmap_data->store)
         	accessType = STORE;
         else if (mmap_data->load)
@@ -4848,17 +4816,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
     //EMSG("Sampled a non load store at = %p\n", precisePC);
     goto ErrExit; // incorrect access type
   }
-
-#if 0
-  int accessLen1;
-  AccessType accessType1;
-  FloatType * floatType = 0;
-  void *  addr1 = (void *)-1;
-  if(false == get_mem_access_length_and_type_address(precisePC, (uint32_t*) &(accessLen1), &(accessType1), floatType, context, &addr1)){
-          //EMSG("WP triggered on a non Load/Store add = %p\n", wpt->pc);
-          goto ErrExit;
-        }
-#endif
   //fprintf(stderr, "in OnSample, sampled address: %lx, disassembled address: %lx, mmap_data->addr_valid: %d\n", data_addr, addr1, mmap_data->addr_valid);
   if(!amd_ibs_flag && (accessType == UNKNOWN || accessLen == 0)){
     //EMSG("Sampled sd.accessType = %d, accessLen=%d at precisePC = %p\n", accessType, accessLen, precisePC);
@@ -5166,17 +5123,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 max_used_wp_count = used_wp_count;
                               globalReuseWPs.table[location].tid = me;
                               wait_threshold = sample_count + CHANGE_THRESHOLD;
-                              // some code
-                              /*if (globalReuseWPs.table[location].residueSampleCountInPrevThread > 0)
-                                {
-                                uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-                              //fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
-                              if(sampleCountDiff > globalReuseWPs.table[location].residueSampleCountInPrevThread) {
-                              //fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d lala\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
-                              UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevThread);
-                              //GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
-                              }
-                              }*/
+                              // some code 
                             } 
 
                             int item_not_found_flag = 0;
@@ -5263,21 +5210,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 last_monitored_wp_timestamp = timestamp;	
                               }
                             }	      
-
-                            /*if(globalReuseWPs.table[location].tid == me) {
-                              if (sample_count > wait_threshold) {
-                              globalWPIsUsers[location] = -1;
-                              globalReuseWPs.table[location].tid = -1;
-                            //uint64_t sampleCountDiff = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
-                            //globalReuseWPs.table[location].residueSampleCountInPrevThread = GetWeightedMetricDiff(wpi->sample.node, wpi->sample.sampledMetricId, 1.0);
-                            //fprintf(stderr, "residueSampleCountInPrevThread is assigned with %ld in thread %d\n", sampleCountDiff, me);
-                            //wait_threshold = sample_count + CHANGE_THRESHOLD;
-                            used_wp_count--;
-                            //fprintf(stderr, "WP number %d is released by thread %d, sample_count: %d, wait_threshold: %d\n", location, me, sample_count, wait_threshold); 
-                            }
-                            numWatchpointArmingAttempt[location] = SAMPLES_POST_FULL_RESET_VAL;     
-                            //fprintf(stderr, "reservoir sampling counter in location %d is reset by thread %d\n", location, me);
-                            }*/
+ 
                             if ((location != -1) && (sample_count > wait_threshold)) {
                               globalWPIsUsers[location] = -1;
                               globalReuseWPs.table[location].tid = -1; 
@@ -5380,25 +5313,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
 
                               //void * original_va = sd.va;
                               int original_wpLength = sd.wpLength;
-                              for(int i = 0; i < cur_global_thread_count; i++) {
-                                /*if(indices[i] == me) {
-                                //if(wpConfig.cachelineInvalidation) {
-                                sd.va = original_va;
-                                sd.wpLength = original_wpLength;
-                                //fprintf(stderr, "address: %lx, length: %ld\n", sd.va, sd.wpLength);
-                                //}
-                                sd.type = WP_RW;
-                                } else {
-                                if(wpConfig.cachelineInvalidation) {
-                                int shuffleNums[CACHE_LINE_SZ/MAX_WP_LENGTH] = {0, 1, 2, 3, 4, 5, 6, 7};
-                                int idx = (rdtsc() % 4219) & (CACHE_LINE_SZ/MAX_WP_LENGTH -1); //randomly choose one location to monitor
-                                sd.va = (void *)ALIGN_TO_CACHE_LINE((size_t)(data_addr)) + (shuffleNums[idx] << 3);
-                                sd.wpLength = MAX_WP_LENGTH;
-                                //fprintf(stderr, "This region is executed\n");
-                                }
-                                sd.type = WP_WRITE;
-                                }
-                                SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);*/
+                              for(int i = 0; i < cur_global_thread_count; i++) { 
                                 int core_id;
                                 if(mapping_size > 0) {
                                   core_id = mapping_vector[indices[i] % mapping_size];	
@@ -5470,12 +5385,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 //fprintf(stderr, "a wp is armed in thread %d\n",me);
                                 SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
                               }
-                            } /*else {
-                                if(globalReuseWPs.table[wt->location].monitored_tid != globalReuseWPs.table[wt->location].tid)
-                                fprintf(stderr, "owner tid is different from monitored tid on sample\n");
-                                else
-                                fprintf(stderr, "owner tid is the same as monitored tid on sample\n");
-                                }*/ 
+                            } 
                             lastTime = curTime;
                           }
                           break;
@@ -5535,13 +5445,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                          sd.va = (void *)falseSharingLocs[idx].va;
                          sd.reuseType = REUSE_SPATIAL;
                          //fprintf(stderr, "REUSE_SPATIAL is activated\n");
-#if 0
-                         int offset = ((uint64_t)data_addr - aligned_pc) / accessLen;
-                         int bound = CACHE_LINE_SZ / accessLen;
-                         int r = rdtsc() % bound;
-                         if (r == offset) r = (r+1) % bound;
-                         sd.va = aligned_pc + (r * accessLen);
-#endif
                        }
                      } else {
                        sd.va = data_addr;
@@ -5582,10 +5485,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                             int me = TD_GET(core_profile_trace_data.id);
 
                             int my_core = sched_getcpu();
-                            /*if((strncmp (hpcrun_id2metric(sampledMetricId)->name,"MEM_LOAD_RETIRED.L2_MISS",24) == 0))
-                              fprintf(stderr, "l2 miss sample happens1\n");*/	
-                            //fprintf(stderr, "thread %d is sampled in core %d\n", me, sched_getcpu());
-                            //fprintf(stderr, "sample type: %s in thread %d, sample_count: %d as WP_AMD_REUSE\n", hpcrun_id2metric(sampledMetricId)->name, TD_GET(core_profile_trace_data.id), sample_count);	
                             int64_t storeCurTime = 0;
                             if(accessType == STORE || accessType == LOAD_AND_STORE) {
                               storeCurTime = curTime;
@@ -5696,16 +5595,6 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                               globalReuseWPs.table[location].tid = me;
                               wait_threshold = sample_count + CHANGE_THRESHOLD;
                               // some code
-                              /*if (globalReuseWPs.table[location].residueSampleCountInPrevThread > 0)
-                                {
-                                uint64_t sampleCountDiff = GetWeightedMetricDiff(node, sampledMetricId, 1.0);
-                              //fprintf(stderr, "sampleCountDiff is %ld\n", sampleCountDiff);
-                              if(sampleCountDiff > globalReuseWPs.table[location].residueSampleCountInPrevThread) {
-                              //fprintf(stderr, "sampleCountDiff is updated by %ld in thread %d lala\n", sampleCountDiff - globalReuseWPs.table[j].residueSampleCountInPrevThread, me);
-                              UpdateWatermarkMetric(node, sampledMetricId, sampleCountDiff - globalReuseWPs.table[location].residueSampleCountInPrevThread);
-                              //GetWeightedMetricDiffAndReset(node, sampledMetricId, 1.0);
-                              }
-                              }*/
                             } 
 
                             int item_not_found_flag = 0;
@@ -5976,12 +5865,7 @@ bool OnSample(perf_mmap_data_t * mmap_data, /*void * contextPC*/void * context, 
                                 SubscribeWatchpointShared(&sd, OVERWRITE, false, indices[i], location);
                               }
 //#endif
-                            } /*else {
-                                if(globalReuseWPs.table[wt->location].monitored_tid != globalReuseWPs.table[wt->location].tid)
-                                fprintf(stderr, "owner tid is different from monitored tid on sample\n");
-                                else
-                                fprintf(stderr, "owner tid is the same as monitored tid on sample\n");
-                                }*/ 
+                            } 
 //#endif
                             lastTime = curTime;
 //#endif
@@ -6518,9 +6402,11 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                                   hashInsertwithTime(inserted_item, storeCurTime, storeLastTime);
 				  //valid_sample_count = 0;
                                   //__sync_synchronize();
+				  bb_store_count++;
                                   bulletinBoard.counter++;
                                 }
                               }
+			      all_store_count++;
                             }
                             // ends
 			    if(mmap_data->addr_valid && mmap_data->store)
@@ -7069,6 +6955,7 @@ void dump_profiling_metrics() {
           //assert(linux_perf_read_event_counter( amd_reuse_distance_event, val) >= 0);
           //fprintf(stderr, "load and store counter: %ld\n", val[0]);
 
+	  fprintf(stderr, "bb_store_count: %d, all_store_count: %d\n", bb_store_count, all_store_count);
 	  //double scale_ratio = (double) val[0]/amd_global_sampling_period / /*micro_op_sample;*/mem_access_sample; //mem_access_sample / store_count;
 	  //fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
 	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count);
