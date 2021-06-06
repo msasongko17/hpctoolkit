@@ -224,30 +224,6 @@ bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessTyp
   //return reuseBulletinBoard.hashTable[hashIndex];
 }
 
-
-#if 0
-bool getEntryFromAccessTypeLengthCache(void * pc, uint32_t *accessLen, AccessType *accessType) {
-    int idx = getIndex(pc);
-    void * entry_pc;
-    int64_t counter = accessTypeLengthCache.table[idx].counter;
-    if((counter & 1) == 0) {
-
-        if(__sync_bool_compare_and_swap(&accessTypeLengthCache.table[idx].counter, counter, counter+1)) {
-                *accessLen = accessTypeLengthCache.table[idx].accessLength;
-    		*accessType = accessTypeLengthCache.table[idx].accessType;
-    		entry_pc = accessTypeLengthCache.table[idx].pc; 
-		fprintf(stderr, "retrieved: idx: %d, pc: %lx, entry_pc: %lx, accessLen: %d, accessType: %d\n", idx, pc, entry_pc, *accessLen, *accessType);
-                accessTypeLengthCache.table[idx].counter++;
-        }
-    }
-    if(pc == entry_pc)
-          return true;
-    return false;
-
-  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
-    //*item_not_found = 1;
-}
-#endif
 void insertEntryToAccessTypeLengthCache(void * pc, uint32_t accessLen, AccessType accessType) {
     int idx = getIndex(pc);
     int64_t counter = accessTypeLengthCache.table[idx].counter;
@@ -1957,30 +1933,6 @@ static int OnWatchPoint(int signum, siginfo_t *info, void *context){
       monitor_real_abort();
       break;
   }
-#if 0
-  fprintf(stderr, "in OnWatchpoint at that point 2\n"); 
-  if (!amd_ibs_flag)
-  {
-  if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {
-    fprintf(stderr, "in OnWatchpoint at that point 3!!!!\n");
-    tData.numWatchpointDropped++;
-    retVal = DISABLE_WP; // disable if unable to collect any info.
-    wp_dropped++;
-  } else {
-    //fprintf(stderr, "in OnWatchpoint at that point 1!!!!\n");
-    tData.numActiveWatchpointTriggers++;
-    retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
-    //fprintf(stderr, "in OnWatchpoint at that point 2!!!!\n");
-  }
- } else {
-  //wpt->pc = reliableIP;
-  //wpt->va = (void *)-1;
-  //wpt->ctxt = context;
-  tData.numActiveWatchpointTriggers++;
-      retVal = tData.fptr(wpi, 0, wpt.accessLength/* invalid*/,  &wpt);
-  fprintf(stderr, "in OnWatchpoint at that point 3\n");
-}
-#endif
 
 //#if 0
  if( false == CollectWatchPointTriggerInfo(wpi, &wpt, context)) {

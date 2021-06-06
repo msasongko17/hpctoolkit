@@ -2573,14 +2573,6 @@ static inline void GetAllFalseSharingLocations(size_t va, int accessLen, size_t 
 static WPTriggerActionType ReuseTrackerWPCallback(WatchPointInfo_t *wpi, int startOffset, int safeAccessLen, WatchPointTrigger_t * wt){
   //fprintf(stderr, "in ReuseTrackerWPCallback\n");
   trap_count++;
-#if 0  // jqswang:TODO, how to handle it?
-  if(!wt->pc) {
-    // if the ip is 0, let's drop the WP
-    //return RETAIN_WP;
-    return ALREADY_DISABLED;
-  }
-#endif //jqswang
-
   int reuse_type = REUSE_NONE;
   bool l3_inc_attribute = false;
   bool time_distance_attribute = false;
@@ -6960,35 +6952,6 @@ void dump_profiling_metrics() {
 	  //fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d, scale_ratio: %0.2lf\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count, scale_ratio);
 	  fprintf(stderr, "micro_op_sample: %d, mem_access_sample: %d, valid_mem_access_sample: %d, sample_count: %d, original_sample_count: %d, store_count: %d\n", micro_op_sample, mem_access_sample, valid_mem_access_sample, sample_count, original_sample_count, store_count);
 	  //adjust_communication_volume(scale_ratio);
-#if 0
-	  for(int i = 0; i < as_matrix_size; i++) {
-		  for(int j = 0; j < as_matrix_size; j++) {
-		  	as_matrix[i][j] = as_matrix[i][j] * scale_ratio;
-			fprintf(stderr, "%0.2lf ", as_matrix[i][j]);
-		  }
-		  fprintf(stderr, "\n");
-	  }
-	  for(int i = 0; i < as_core_matrix_size; i++) {
-                  for(int j = 0; j < as_core_matrix_size; j++)
-                        as_core_matrix[i][j] = as_core_matrix[i][j] * scale_ratio;
-          }
-	  for(int i = 0; i < fs_matrix_size; i++) {
-                  for(int j = 0; j < fs_matrix_size; j++)
-                        fs_matrix[i][j] = fs_matrix[i][j] * scale_ratio;
-          }       
-          for(int i = 0; i < fs_core_matrix_size; i++) {
-                  for(int j = 0; j < fs_core_matrix_size; j++)
-                        fs_core_matrix[i][j] = fs_core_matrix[i][j] * scale_ratio;
-          }
-	  for(int i = 0; i < ts_matrix_size; i++) {
-                  for(int j = 0; j < ts_matrix_size; j++)
-                        ts_matrix[i][j] = ts_matrix[i][j] * scale_ratio;
-          }       
-          for(int i = 0; i < ts_core_matrix_size; i++) {
-                  for(int j = 0; j < ts_core_matrix_size; j++)
-                        ts_core_matrix[i][j] = ts_core_matrix[i][j] * scale_ratio;
-          }
-#endif
   }
 //#endif
   if(theWPConfig->id == WP_COMDETECTIVE || theWPConfig->id == WP_AMD_COMM) {
