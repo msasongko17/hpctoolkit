@@ -375,13 +375,6 @@ static void
 ibs_perf_init()
 {
 	perf_mmap_init();
-#if 0
-	struct sigaction act;
-        sigemptyset(&act.sa_mask);
-        act.sa_flags = (SA_SIGINFO | SA_RESTART);
-        act.sa_sigaction = perf_event_handler; //sig_event_handler;
-        sigaction(/*PERF_SIGNAL*/ SIGNEW, &act, NULL);
-#endif
 //#if 0
 	sigemptyset(&sig_mask);
         sigaddset(&sig_mask, /*PERF_SIGNAL*/ SIGNEW);
@@ -1332,75 +1325,8 @@ void linux_perf_events_pause(){
 	sample_source_t *self = &obj_name();
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 	int nevents = self->evl.nevents;
-#if 0
-	//ibs_ctl_backup(nevents, event_thread);
-	for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -2: event %s has count %ld before counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
-
-		}
-        }
-        for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -1: event %s has count %ld before counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint -1: event %s has count %ld before counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
-
-                }
-        }	
-#endif
 	ibs_ctl_backup(nevents, event_thread);
-	perf_stop_all(nevents, event_thread);
-
-#if 0
-	for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint 1: event %s has count %ld after counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
-
-                }
-        }
-        for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting pauses in OnWatchPoint\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-                        long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in OnWatchPoint\n",current->event->metric_desc->name, ibs_count);
-
-                }
-        }
-#endif
-	
+	perf_stop_all(nevents, event_thread);	
 
 }
 
@@ -1678,71 +1604,10 @@ perf_event_handler(
 	event_thread_t *event_thread = TD_GET(ss_info)[self->sel_idx].ptr;
 
 	int nevents = self->evl.nevents;
-#if 0
-	//ibs_ctl_backup(nevents, event_thread);
-	for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-			long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-			fprintf(stderr, "checkpoint -2: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
-		}
-        }
-        for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint -1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-			long ibs_count = ioctl(current->fd, GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint -1: event %s has count %ld before counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
-		}
-        }
-#endif
 	//ibs_ctl_backup(nevents, event_thread);
 	perf_stop_all(nevents, event_thread);
 
 // check counter here 1
-#if 0
-	for(int i=0; i<nevents; i++) {
-		event_thread_t *current = &(event_thread[i]);
-		if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-			uint64_t val[3];
-			int ret = perf_read_event_counter(current, val);
-			if (ret >= 0) {
-			       int64_t scaled_val = (int64_t) val[0];
-		       		fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);	       
-			}
-		} else {
-			long ibs_count = ioctl(current->fd, /*GET_CUR_CNT*/ GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint 1: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
-		}
-	}
-	for(int i=0; i<nevents; i++) {
-                event_thread_t *current = &(event_thread[i]);
-                if(!hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP")) {
-                        uint64_t val[3];
-                        int ret = perf_read_event_counter(current, val);
-                        if (ret >= 0) {
-                               int64_t scaled_val = (int64_t) val[0];
-                                fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, scaled_val);
-                        }
-                } else {
-			long ibs_count = ioctl(current->fd, /*GET_CUR_CNT*/ GET_CUR_CNT);
-                        fprintf(stderr, "checkpoint 2: event %s has count %ld after counting stops in perf_event_handler\n",current->event->metric_desc->name, ibs_count);
-		}
-        }
-#endif
 // check counter here 2
 
 	int fd;
@@ -1817,15 +1682,6 @@ perf_event_handler(
 	//fprintf(stderr, "in perf_event_handler\n");
 	//int fd;
 	//if(hpcrun_ev_is(current->event->metric_desc->name, "IBS_OP") && current->fd >= 0)
-#if 0
-	if(amd_ibs_flag)
-        {
-		fd = siginfo->si_int;
-	} else 
-	{
-		fd = siginfo->si_fd;
-	}
-#endif
 	//fd = siginfo->si_fd;
 
 	//fprintf(stderr, "in perf_event_handler fd: %d\n", fd);
@@ -1851,21 +1707,6 @@ perf_event_handler(
 	// if the file descriptor is not on the list, we shouldn't store the 
 	// metrics. Perhaps we should throw away?
 	// ----------------------------------------------------------------------------
-#if 0
-	event_thread_t *current = get_fd_index(nevents, fd, event_thread);
-	if (current == NULL) {
-		// signal not from perf event
-		TMSG(LINUX_PERF, "signal si_code %d with fd %d: unknown perf event",
-				siginfo->si_int, fd);
-		fprintf(stderr, "signal si_code %d with fd %d: unknown perf event\n", siginfo->si_code, fd);
-		hpcrun_safe_exit();
-
-		restart_perf_event(fd);
-		perf_start_all(nevents, event_thread);
-
-		return 1; // tell monitor the signal has not been handled.
-	}
-#endif
 
 	int tmp = 0;
 	bool amd_ibs_event = false;
