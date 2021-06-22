@@ -243,7 +243,7 @@ typedef struct globalReuseTable{
   //struct SharedData * hashTable;
 } globalReuseTable_t;
 
-#define CHANGE_THRESHOLD 100
+#define CHANGE_THRESHOLD 50
 #define L2_MISS_RATIO_PERIOD 50
 
 #endif //__WP_SUPPORT__
