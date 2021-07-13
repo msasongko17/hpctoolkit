@@ -3147,7 +3147,7 @@ static WPTriggerActionType AMDReuseTrackerWPCallback(WatchPointInfo_t *wpi, int 
             if(profiling_mode == L1 || profiling_mode == MIXED)
               numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
             //numWatchpointArmingAttempt[wt->location] = SAMPLES_POST_FULL_RESET_VAL;
-            fprintf(stderr, "L1 invalidation is detected\n");
+            //fprintf(stderr, "L1 invalidation is detected\n");
             globalReuseWPs.table[wt->location].active = false;
           }
           globalReuseWPs.table[wt->location].counter++;

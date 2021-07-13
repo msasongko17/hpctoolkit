@@ -264,7 +264,7 @@ typedef struct accessTypeLengthTable{
   struct accessTypeLengthEntry table[HASH_TABLE_SIZE];
 } accessTypeLengthTable_t;
 
-#define CHANGE_THRESHOLD 100
+#define CHANGE_THRESHOLD 50
 #define L2_MISS_RATIO_PERIOD 50
 
 #endif //__WP_SUPPORT__
