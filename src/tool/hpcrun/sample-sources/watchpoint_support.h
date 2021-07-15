@@ -63,6 +63,8 @@
 #define MAX_WP_LENGTH (8L)
 #define CACHE_LINE_SZ (64)
 #define ALIGN_TO_CACHE_LINE(addr) ((uint64_t)(addr) & (~(CACHE_LINE_SZ-1)))
+#define SHORT_BYTE_SZ (16)
+#define ALIGN_TO_16_BYTE(addr) ((uint64_t)(addr) & (~(SHORT_BYTE_SZ-1)))
 #define IS_WP_CLIENT_ENABLED(wpi, idx) ((wpi)->isClientRequested[(idx)])
 #define WP_BASE_ADDRESS(a) (uintptr_t)((size_t)(a) & (~(MAX_WP_LENGTH - 1)))
 #define WP_OFFSET(a) ((size_t)(a) & (MAX_WP_LENGTH - 1))

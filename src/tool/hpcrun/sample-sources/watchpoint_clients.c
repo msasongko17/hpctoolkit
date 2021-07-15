@@ -393,6 +393,7 @@ SharedData_t gSharedData = {.counter = 0, .time=0, .wpType = -1, .accessType = U
 
 HashTable_t bulletinBoard = {.counter = 0};
 ReuseHashTable_t reuseBulletinBoard = {.counter = 0};
+AddrHashTable_t addrBulletinBoard;
 
 __thread uint64_t prev_timestamp = 0;
 
@@ -4735,6 +4736,56 @@ void hashInsertwithTime(struct SharedEntry item, uint64_t cur_time, uint64_t pre
   }
 }
 
+bool checkEntryFromAddrBulletinBoard(void * basePC, void * addr, int tid) {
+  int idx = hashCode(addr);
+  void * returnedBasePC = NULL;
+  void * returnedAddress = NULL;
+  int returnedTid = -1;
+  do{
+    int64_t startCounter = addrBulletinBoard.hashTable[idx].counter;
+    if(startCounter & 1)
+      continue; // Some writer is updating
+
+    __sync_synchronize();
+    returnedBasePC = addrBulletinBoard.hashTable[idx].basePC;
+    returnedAddress = addrBulletinBoard.hashTable[idx].dataAddress;
+    returnedTid = addrBulletinBoard.hashTable[idx].tid;
+    __sync_synchronize();
+    int64_t endCounter = addrBulletinBoard.hashTable[idx].counter;
+    if(startCounter == endCounter)
+      break;
+  }while(1);
+  if(returnedBasePC == basePC && returnedAddress == addr && returnedTid == tid) {
+          //fprintf(stderr, "returnedBasePC: %lx, basePC: %lx, returnedAddress: %lx, addr: %lx, tid: %d is found\n", returnedBasePC, basePC, returnedAddress, addr, tid);
+          return true;
+  }
+  //fprintf(stderr, "getEntryFromAccessTypeLengthCache returns false\n");
+  return false;
+  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    //*item_not_found = 1;
+  //return reuseBulletinBoard.hashTable[hashIndex];
+}
+
+void addrHashInsert(void * basePC, void * addr, int tid) {
+    int idx = hashCode(addr);
+    int64_t counter = addrBulletinBoard.hashTable[idx].counter;
+    if((counter & 1) == 0) {
+
+        if(__sync_bool_compare_and_swap(&addrBulletinBoard.hashTable[idx].counter, counter, counter+1)) {
+		if(addrBulletinBoard.hashTable[idx].dataAddress != addr || addrBulletinBoard.hashTable[idx].basePC != basePC || addrBulletinBoard.hashTable[idx].tid != tid) {
+                	addrBulletinBoard.hashTable[idx].basePC = basePC;
+			addrBulletinBoard.hashTable[idx].dataAddress = addr;
+			addrBulletinBoard.hashTable[idx].tid = tid;
+			//fprintf(stderr, "basePC: %lx, address: %lx, tid: %d has been inserted\n", basePC, addr, tid);
+		}
+                addrBulletinBoard.hashTable[idx].counter++;
+        }
+    }
+
+  //if(cacheLineBaseAddress != reuseBulletinBoard.hashTable[hashIndex].cacheLineBaseAddress)
+    //*item_not_found = 1;
+}
+
 /*
    double thread_coefficient(int as_matrix_size) {
    double thread_count = (double) as_matrix_size + 1;
@@ -6087,6 +6138,45 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 					load_count++;
 					//fprintf(stderr, "load sample is detected, load: %d\n", mmap_data->load);
 				}
+
+				bool valid_flag = false;
+
+#if 0
+				void * baseAddress = (void *) ALIGN_TO_16_BYTE((size_t)data_addr);
+                                int addr_not_found = 0;
+                                struct ValidAddrEntry addr_item;
+                                do{
+                                        int64_t startCounter = addrBulletinBoard.counter;
+                                        if(startCounter & 1) {
+                                                continue;
+                                        }
+                                        //__sync_synchronize();
+                                        // entry = BulletinBoard.AtomicGet (key= L1 )
+                                        addr_item = getEntryFromAddrBulletinBoard(baseAddress, &addr_not_found);
+                                        //__sync_synchronize();
+                                        int64_t endCounter = addrBulletinBoard.counter;
+                                        if(startCounter == endCounter) {
+                                                break;
+                                        }
+                                }while(1);
+#endif
+
+				int me = TD_GET(core_profile_trace_data.id);
+				void * basePC = (void *) ALIGN_TO_16_BYTE((size_t)precisePC);
+				if(mmap_data->addr_valid) {
+                                        addr_valid_count++;
+					valid_flag = true;
+					addrHashInsert(basePC, data_addr, me);
+                                        //fprintf(stderr, "valid address is detected, addr_valid: %d, precisePC: %lx, basePC: %lx, data_addr: %lx\n", mmap_data->addr_valid, precisePC, basePC, data_addr);
+				} else {
+					if(checkEntryFromAddrBulletinBoard(basePC, data_addr, me)) {
+						valid_flag = true;
+						//fprintf(stderr, "valid address is not detectedbut entry found, addr_valid: %d, precisePC: %lx, basePC: %lx, data_addr: %lx\n", mmap_data->addr_valid, precisePC, basePC, data_addr);
+					}
+						
+				}
+
+				if(mmap_data->addr_valid) {
 				int metricId = -1;
                             	const void* joinNode;  
                             	int joinNodeIdx = isSamplePointAccurate? E_ACCURATE_JOIN_NODE_IDX : E_INACCURATE_JOIN_NODE_IDX;
@@ -6098,7 +6188,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
                               		storeCurTime = curtime;
 
 
-                            	int me = TD_GET(core_profile_trace_data.id);
+                            	//int me = TD_GET(core_profile_trace_data.id);
                             	int current_core = sched_getcpu();
                             // L1 = getCacheline ( M1 )
                             	void * cacheLineBaseAddressVar = (void *) ALIGN_TO_CACHE_LINE((size_t)data_addr);
@@ -6366,7 +6456,7 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 
                             // if ( A1 is not STORE) or (entry != NULL and M2 has not expired) then
                             if(/*(accessType == LOAD)*/ (sType == ALL_LOAD)  || ((item.cacheLineBaseAddress != -1) && (me == item.tid) && ((curtime - item.time) <= (storeCurTime - storeLastTime)))) {
-                            } else /*if(mmap_data->addr_valid)*/ {
+                            } else /*if(mmap_data->addr_valid)*/{
                               // BulletinBoard.TryAtomicPut(key = L1 , value = < M1 , δ1 , ts1 , T1 >)
                               uint64_t bulletinCounter = bulletinBoard.counter;
                               if((bulletinCounter & 1) == 0) {
@@ -6406,7 +6496,8 @@ SET_FS_WP: ReadSharedDataTransactionally(&localSharedData);
 
                             lastTime = curtime;
                             if( sType == ALL_STORE  /*accessType == STORE || accessType == LOAD_AND_STORE*/)
-                              storeLastTime = storeCurTime; 	
+                              storeLastTime = storeCurTime; 
+		    	}	    
 			}
 			break;
     case WP_COMDETECTIVE: {
