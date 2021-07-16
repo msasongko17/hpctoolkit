@@ -153,18 +153,4 @@ typedef struct hashTableStruct{
 	//struct SharedData * hashTable;
 } HashTable_t;
 
-typedef struct ValidAddrEntry{
-        volatile uint64_t counter __attribute__((aligned(CACHE_LINE_SZ)));
-        void *dataAddress;
-        void *basePC;
-	int tid;
-        char dummy[CACHE_LINE_SZ];
-} ValidAddrEntry_t;
-
-typedef struct addrHashTableStruct{
-        struct ValidAddrEntry hashTable[HASH_TABLE_SIZE];
-        //struct SharedData * hashTable;
-} AddrHashTable_t;
-
 extern HashTable_t bulletinBoard;
-extern AddrHashTable_t addrBulletinBoard;

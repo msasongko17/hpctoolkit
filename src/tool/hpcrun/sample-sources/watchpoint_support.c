@@ -526,9 +526,6 @@ __attribute__((constructor))
       }
       threadDataTable.hashTable[i].os_tid = -1;
       accessTypeLengthCache.table[i].counter = 0;
-      addrBulletinBoard.hashTable[i].counter = 0;
-      addrBulletinBoard.hashTable[i].basePC = -1;
-      addrBulletinBoard.hashTable[i].tid = -1;
       //fprintf(stderr, "accessTypeLengthCache.table[%d].pc: %lx\n", i, accessTypeLengthCache.table[i].pc);
     }
     for(int i = 0; i < MAX_WP_SLOTS; i++) {
