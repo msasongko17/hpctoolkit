@@ -3408,7 +3408,7 @@ static WPTriggerActionType AMDCommWPCallback(WatchPointInfo_t *wpi, int startOff
   int core_id2 = sched_getcpu();  
   int flag = 0;
   // if ts2 > tprev then
-//#if 0
+#if 0
 if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <=  (2 * wpi->sample.expirationPeriod))) { 
     if(wt->accessType == LOAD && wpi->sample.samplerAccessType == LOAD){
       if(wpi->sample.sampleType == ALL_LOAD) {
@@ -3434,17 +3434,17 @@ if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sa
     }
 #endif
 }
-//#endif
+#endif
 
-#if 0
-//if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
+//#if 0
+if((prev_timestamp < wpi->sample.bulletinBoardTimestamp) && ((trapTime - wpi->sample.bulletinBoardTimestamp)  <  wpi->sample.expirationPeriod)) {
   if(wt->accessType == LOAD) {
 	  flag = 1;
   } else if (wt->accessType == STORE || wt->accessType == LOAD_AND_STORE) {
 	  flag = 2;
   }
-//}
-#endif
+}
+//#endif
 
   if (flag == 1) { // Load trap (WAR)
     void * cacheLineBaseAddress = (void *) ALIGN_TO_CACHE_LINE((size_t)wt->va);    
